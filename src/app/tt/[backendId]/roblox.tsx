@@ -4,6 +4,7 @@
  * acquisition from Roblox itself (GET /v1/roblox/analytics/acquisition), 7-day moving averages per join source (`trends`)
  * and how the numbers are calculated. The filter bar's date range doesn't apply; its other filters do.
  */
+import * as Clipboard from "expo-clipboard";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
@@ -14,7 +15,7 @@ import type { BenchmarkPeriod, Filters, RobloxAcquisition, RobloxAcquisitionPeri
 import { LineChart } from "@/charts/LineChart";
 import { Badge, Button, Card, Chips, EmptyState, Field, Icon, List, Segmented, Txt } from "@/components/ui";
 import { ChangeChip, Note, Panel, QueryState } from "@/features/typetorch/bits";
-import { DataTable } from "@/features/typetorch/table";
+import { DataTable, shareTextFile } from "@/features/typetorch/table";
 import { FilterBar, isoDate, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { BENCHMARK_ROWS, CALCULATION_NOTES, CARDS, JOIN_SOURCES_DIFFER, ordinal, periodLabel, SOURCE_COLORS, SOURCE_LABELS, sub, TRENDS, type CardSpec, type Differs } from "@/features/typetorch/roblox-cards";
@@ -195,6 +196,17 @@ function BenchmarkEditor({ value, onSave, onClose }: { value: Benchmarks; onSave
 		onClose();
 	};
 	const set = (key: string, k: "p50" | "p90", text: string) => setDraft((d) => ({ ...d, [key]: { ...(d[key] ?? { p50: "", p90: "" }), [k]: text } }));
+	const [note, setNote] = useState("");
+	/** The draft as benchmarks (what Save would keep). */
+	const current = (): Benchmarks => {
+		const out: Benchmarks = {};
+		for (const c of BENCHMARK_ROWS) {
+			const p50 = Number.parseFloat(draft[c.key]?.p50 ?? "");
+			const p90 = Number.parseFloat(draft[c.key]?.p90 ?? "");
+			if (Number.isFinite(p50) && Number.isFinite(p90) && p50 > 0 && p90 > 0) out[c.key as BenchmarkKey] = { p50, p90 };
+		}
+		return out;
+	};
 	return (
 		<Panel title="Benchmarks" note="Copy the 50th and 90th percentile from your Creator Hub overview. Kept on this phone only, per backend.">
 			{BENCHMARK_ROWS.map((c) => (
@@ -216,6 +228,36 @@ function BenchmarkEditor({ value, onSave, onClose }: { value: Benchmarks; onSave
 				<Button title="Clear" small variant="ghost" onPress={() => setDraft(Object.fromEntries(BENCHMARK_ROWS.map((c) => [c.key, { p50: "", p90: "" }])))} />
 				<Button title="Save" small variant="brand" onPress={save} />
 			</View>
+			<Txt variant="label">Move them between phones and browsers</Txt>
+			<Note>The same JSON as the web explorer keeps (localStorage tt-explorer-benchmarks): copy or share it here, paste it on another phone, or paste one copied from elsewhere.</Note>
+			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+				<Button
+					title={note === "copied" ? "Copied" : "Copy JSON"}
+					small
+					icon="copy-outline"
+					onPress={() => {
+						void Clipboard.setStringAsync(JSON.stringify(current())).then(() => setNote("copied"));
+					}}
+				/>
+				<Button title="Save file" small icon="share-outline" onPress={() => void shareTextFile("typetorch-benchmarks.json", JSON.stringify(current(), null, 2), "application/json", false)} />
+				<Button
+					title="Paste JSON"
+					small
+					icon="clipboard-outline"
+					onPress={async () => {
+						const raw = await Clipboard.getStringAsync().catch(() => "");
+						const read = loadBenchmarks({ getItem: () => raw });
+						const keys = Object.keys(read);
+						if (!keys.length) {
+							setNote("nothing");
+							return;
+						}
+						setDraft((d) => ({ ...d, ...Object.fromEntries(keys.map((k) => [k, { p50: String(read[k as BenchmarkKey]?.p50 ?? ""), p90: String(read[k as BenchmarkKey]?.p90 ?? "") }])) }));
+						setNote(`pasted ${keys.length}`);
+					}}
+				/>
+			</View>
+			{note === "nothing" ? <Note>The clipboard holds no benchmarks JSON ({"{"}"dau": {"{"}"p50": 120, "p90": 900{"}"}, ...{"}"}).</Note> : note.startsWith("pasted") ? <Note>{`Filled in ${note.slice(7)} from the clipboard: Save to keep them.`}</Note> : null}
 		</Panel>
 	);
 }
