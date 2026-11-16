@@ -1,7 +1,8 @@
 /**
  * One player (the web's player detail under the Players list): Roblox headshot and names (GET /v1/identity/<pid>/profile),
  * the range's numbers, funnel progress, then Spending, Playtime, Sessions (query `player-stats`), Timeline (`timeline` +
- * `player-graph`) and Errors (GET /v1/players/<pid>/errors).
+ * `player-graph`, with each session's join data `jd`), Errors (GET /v1/players/<pid>/errors) and Feedback (query
+ * `feedback-list` with the pid).
  */
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
@@ -15,6 +16,8 @@ import { openSessionReplay } from "@/features/recordings/links";
 import { CopyButton, EventItem, FunnelBar, FunnelStepList, Note, Panel, ProductName, productKindLabel, QueryState } from "@/features/typetorch/bits";
 import { ProductId, ProductKind } from "@/features/typetorch/cards";
 import { EventTable } from "@/features/typetorch/event-table";
+import { FeedbackList } from "@/features/typetorch/feedback";
+import { JoinData, joinDataOf } from "@/features/typetorch/join-data";
 import { DataTable, type DataColumn } from "@/features/typetorch/table";
 import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
 import { GraphControls, GraphPanelBody, isFacet, MermaidButton, PathStrip, SparseNote } from "@/features/typetorch/graph";
@@ -26,7 +29,7 @@ import type { ErrorParams } from "@/api/backend";
 import type { Filters } from "@/api/tt/types";
 import { space, useTheme } from "@/theme";
 
-type PlayerView = "spending" | "playtime" | "sessions" | "timeline" | "errors";
+type PlayerView = "spending" | "playtime" | "sessions" | "timeline" | "errors" | "feedback";
 type Show = "chart" | "table";
 
 const VIEWS: { value: PlayerView; label: string }[] = [
@@ -35,7 +38,25 @@ const VIEWS: { value: PlayerView; label: string }[] = [
 	{ value: "sessions", label: "Sessions" },
 	{ value: "timeline", label: "Timeline" },
 	{ value: "errors", label: "Errors" },
+	{ value: "feedback", label: "Feedback" },
 ];
+
+const FEEDBACK_LIMIT = 100;
+
+/** The player's feedback (plans/32) in the range: `feedback-list` with the pid, newest first (web PlayerDetail FeedbackView). */
+function FeedbackView({ backendId, pid }: { backendId: string; pid: string }) {
+	const q = useTTAnalytics(backendId, "feedback-list", { pid, limit: FEEDBACK_LIMIT });
+	return (
+		<QueryState q={q} rows={3} isEmpty={(d) => d.rows.length === 0} empty="No feedback from this player in this range.">
+			{(d) => (
+				<View style={{ gap: space.sm }}>
+					<FeedbackList backendId={backendId} rows={d.rows} showPlayer={false} />
+					{d.more ? <Note>The newest {FEEDBACK_LIMIT} of {d.total}; the Feedback page has the rest.</Note> : null}
+				</View>
+			)}
+		</QueryState>
+	);
+}
 
 export default function PlayerScreen() {
 	const { pid } = useLocalSearchParams<{ pid: string }>();
@@ -59,8 +80,10 @@ function Player({ backendId, pid }: { backendId: string; pid: string }) {
 				<PlayerFunnels backendId={backendId} pid={pid} />
 			</Panel>
 			<Chips options={VIEWS} value={view} onChange={setView} />
-			{stats.data?.window.clamped && view !== "timeline" && view !== "errors" ? <Note>The range is longer than 400 days: these numbers cover its last 400.</Note> : null}
-			{view === "errors" ? (
+			{stats.data?.window.clamped && view !== "timeline" && view !== "errors" && view !== "feedback" ? <Note>The range is longer than 400 days: these numbers cover its last 400.</Note> : null}
+			{view === "feedback" ? (
+				<FeedbackView backendId={backendId} pid={pid} />
+			) : view === "errors" ? (
 				<ErrorsView backendId={backendId} pid={pid} />
 			) : view === "timeline" ? (
 				<TimelineView backendId={backendId} pid={pid} sid={sid} setSid={setSid} />
@@ -448,6 +471,11 @@ function Sessions({ backendId, data, onGraph }: { backendId: string; data: Timel
 							{s.firstSession ? <Button title="Replay (if recorded)" small variant="ghost" icon="videocam-outline" onPress={() => openSessionReplay(backendId, s)} /> : null}
 							<Button title={isOpen ? "Hide events" : `Events (${events.length})`} small variant="ghost" onPress={() => setOpen(isOpen ? null : s.sid)} />
 						</View>
+						{events
+							.filter((e) => e.kind === "session" && e.name === "join" && joinDataOf(e.props))
+							.map((e) => (
+								<JoinData key={`${e.t}|${e.name}`} jd={joinDataOf(e.props)} label={`Join data (${fmtTime(e.time)})`} />
+							))}
 						{isOpen ? (
 							events.length ? (
 								<EventTable backendId={backendId} id="player-events" label={`Events of session ${shortId(s.sid)}`} events={events} urlSync={false} rowId={(e, i) => `${e.t}-${i}`} />

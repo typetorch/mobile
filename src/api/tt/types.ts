@@ -1,4 +1,7 @@
 import type { PerfCompareResult, PerfSeriesResult } from "./perf";
+import type { ChurnResult, DemographicsResult } from "./audience";
+
+export type { ChurnBucket, ChurnPlayer, ChurnResult, DemographicDimension, DemographicRow, DemographicsResult } from "./audience";
 
 /**
  * The analytics server's answers, as the explorer reads them. They mirror `analytics/src/queries/*.ts` and
@@ -97,6 +100,9 @@ export interface RetentionCohort {
 	size: number;
 	kept: Record<string, number | null>;
 	keptPlayers: Record<string, number | null>;
+	/** The day in progress (today, UTC), so far. Only that offset (newer servers). */
+	partial?: Record<string, number>;
+	partialPlayers?: Record<string, number>;
 }
 
 export interface RetentionResult {
@@ -104,6 +110,8 @@ export interface RetentionResult {
 	to: string;
 	days: number[];
 	cohorts: RetentionCohort[];
+	/** How much of today (UTC) is over, 0-1 (newer servers). */
+	todayElapsed?: number;
 	average: Record<string, number | null>;
 }
 
@@ -277,6 +285,43 @@ export interface Comparison {
 	sure: number;
 	method: string;
 	words: string;
+	/** The test's own p-value, and Holm-corrected over the variants (what `sure` and `words` use). Older servers: absent. */
+	pValue?: number;
+	pAdjusted?: number;
+	/** Smallest difference these group sizes find 80% of the time (absolute, the metric's unit); Infinity serializes as null. */
+	mde?: number | null;
+	mdeLift?: number | null;
+	needed?: { control: number; variant: number } | null;
+	/** Days more at the range's traffic until it can tell (0: it can now); null when it can't be told. */
+	days?: number | null;
+}
+
+/** The sample ratio check of one experiment (the `experiment` query, player scope). */
+export interface AssignmentCheck {
+	variants: { variant: string; index: number | null; players: number }[];
+	order: "game" | "names";
+	variantCount: number | null;
+	weights: number[] | null;
+	weightsFrom: "settings" | "even" | null;
+	srm: { expected: number[]; chi2: number | null; df: number; pValue: number; enough: boolean; mismatch: boolean } | null;
+	note?: string;
+}
+
+/** POST /v1/experiments/<key>/change: the signed CLI command that applies the change (nothing is applied by the server). */
+export interface ExperimentChangeRequest {
+	action: "start" | "stop" | "split" | "settle" | "clear";
+	weights?: number[];
+	variant?: string;
+	variants?: string[];
+}
+
+export interface PreparedExperimentChange {
+	experiment: string;
+	action: ExperimentChangeRequest["action"];
+	command: string;
+	dryRun: string;
+	effect: string;
+	notes: string[];
 }
 
 export type ExperimentResult =
@@ -288,6 +333,10 @@ export type ExperimentResult =
 			variants: VariantStats[];
 			comparisons: Comparison[];
 			mixedPlayers: number;
+			/** Players the settings forced (left out of the numbers). Older servers: absent. */
+			forcedPlayers?: number;
+			assignment?: AssignmentCheck | null;
+			rangeDays?: number;
 	  };
 
 /** One experiment's override, as the server's settings file has it (GET /v1/experiments). */
@@ -822,7 +871,13 @@ export interface BenchmarksResult {
 }
 
 export interface RealtimeWindow {
+	/** Sessions that started in the window (players, newPlayers, running and playtime go by start too; newer servers). */
 	sessions: number;
+	players?: number;
+	newPlayers?: number;
+	running?: number;
+	playtimeMinutes?: number;
+	playtimePerPlayer?: number | null;
 	avgSessionMinutes: number | null;
 	clientErrors: number;
 	errorsPerSession: number | null;
@@ -835,6 +890,59 @@ export interface RealtimeResult {
 	current: RealtimeWindow;
 	previous: RealtimeWindow;
 	ccu: { now: number; series: { hour: string; avg: number; peak: number }[]; currentAvg: number; previousAvg: number; currentPeak: number; previousPeak: number };
+	/** Concurrent players by device class, from sessions: live now, and per hour the average and peak minute (newer servers). */
+	devices?: { now: Record<string, number>; names: string[]; series: { hour: string; avg: Record<string, number>; peak: Record<string, number> }[] };
+}
+
+// Session time explorer (query session-time) -------------------------------------------------------------------------
+
+export interface SessionTimeDevice {
+	sessions: number;
+	avgMinutes: number | null;
+	playtimeMinutes: number;
+}
+
+export interface SessionTimeBucket {
+	/** Bucket start (unix ms and ISO). */
+	t: number;
+	time: string;
+	sessions: number;
+	/** Weighted average length of the sessions counted in the bucket; null when empty. */
+	avgMinutes: number | null;
+	/** The unweighted mean of the device averages (unknown left out); null when empty. */
+	robloxTotal: number | null;
+	playtimeMinutes: number;
+	players: number;
+	playtimePerPlayer: number | null;
+	byDevice: Record<string, SessionTimeDevice>;
+}
+
+export interface SessionTimeSummary {
+	sessions: number;
+	players: number;
+	avgMinutes: number | null;
+	medianMinutes: number | null;
+	/** Mean over non-empty buckets of robloxTotal (Creator Hub's headline). */
+	robloxHeadline: number | null;
+	/** Mean over non-empty buckets of the weighted average. */
+	weightedMinuteMean: number | null;
+	playtimeMinutes: number;
+	playtimePerPlayer: number | null;
+	running: number;
+}
+
+export interface SessionTimeResult {
+	from: string;
+	to: string;
+	bucketMinutes: number;
+	mergeGapMinutes: number;
+	by: "end" | "start";
+	devices: string[];
+	buckets: SessionTimeBucket[];
+	summary: SessionTimeSummary;
+	previous: SessionTimeSummary;
+	histogram: { label: string; fromSeconds: number; toSeconds: number | null; count: number }[];
+	truncated: boolean;
 }
 
 export interface TrendValues {
@@ -851,9 +959,12 @@ export interface TrendsResult {
 	from: string;
 	to: string;
 	window: number;
+	/** 24 (days), 12 or 6 (newer servers). */
+	bucketHours?: number;
 	creatorShare: number;
 	sources: string[];
-	days: { date: string; total: TrendValues; bySource: Record<string, TrendValues> }[];
+	/** `date`: YYYY-MM-DD for days, the bucket's ISO start for 6 / 12 h; `partial`: the running bucket. */
+	days: { date: string; partial?: boolean; total: TrendValues; bySource: Record<string, TrendValues> }[];
 }
 
 export interface EconomyDay {
@@ -1009,6 +1120,10 @@ export interface QueryResults {
 	overview: OverviewResult;
 	roblox: RobloxResult;
 	retention: RetentionResult;
+	ltv: LtvResult;
+	churn: ChurnResult;
+	demographics: DemographicsResult;
+	explain: ExplainResult;
 	funnel: FunnelResult;
 	"funnel-progress": FunnelProgressResult;
 	"playtime-funnel": PlaytimeFunnelResult;
@@ -1034,6 +1149,7 @@ export interface QueryResults {
 	benchmarks: BenchmarksResult;
 	realtime: RealtimeResult;
 	trends: TrendsResult;
+	"session-time": SessionTimeResult;
 	"perf-client": PerfSeriesResult;
 	"perf-server": PerfSeriesResult;
 	"perf-compare": PerfCompareResult;
@@ -1041,6 +1157,8 @@ export interface QueryResults {
 	monetization: MonetizationResult;
 	"monetization-players": MonetizationPlayers;
 	"monetization-purchases": MonetizationPurchases;
+	"feedback-summary": FeedbackSummaryResult;
+	"feedback-list": FeedbackListResult;
 	"map-positions": MapPositionsResult;
 }
 
@@ -2083,6 +2201,8 @@ export interface BackendStats {
 	minutes: StatsBucket[];
 	window: StatsWindow;
 	routes: RouteStats[];
+	/** Ingest backpressure (missing on servers before it): 503 busy refusals since start, requests in flight now. */
+	ingest?: IngestPressure;
 }
 
 /** One entry of the audit log (GET /v1/admin/audit): who did what on the admin side. */
@@ -2209,4 +2329,220 @@ export interface MapPositionsResult {
 	names: { name: string; events: number }[];
 	cells: { map: string; event: string; x: number; z: number; y: number | null; ylo: number | null; n: number }[];
 	truncated: boolean;
+}
+
+// Revenue per cohort (query ltv) --------------------------------------------------------------------------------------------
+
+/** One cell of the `ltv` query: the cohort's numbers from its join day through day N. */
+export interface LtvCell {
+	/** Robux paid (gross). */
+	robux: number;
+	robuxPerPlayer: number;
+	/** What the creator keeps per player (robuxPerPlayer x creatorShare). */
+	revenuePerPlayer: number;
+	payers: number;
+	payerShare: number;
+	/** Today (UTC), so far. */
+	partial?: true;
+	/** The average row: the new players it is weighted over. */
+	players?: number;
+}
+
+export interface LtvCohort {
+	date: string;
+	size: number;
+	/** offset -> numbers; null while that day hasn't started. */
+	days: Record<string, LtvCell | null>;
+}
+
+/** The `ltv` query: revenue per join-day cohort. */
+export interface LtvResult {
+	from: string;
+	to: string;
+	days: number[];
+	creatorShare: number;
+	cohorts: LtvCohort[];
+	average: Record<string, LtvCell | null>;
+	todayElapsed: number;
+}
+
+// Player feedback (plans/32) ------------------------------------------------------------------------------------------------
+
+/** One scale's distribution (`legacy_faces5`: the older custom/feedback rows, mapped). */
+export interface FeedbackScaleSummary {
+	scale: string;
+	/** thumbs | stars | scale (anything else renders as a scale). */
+	type: string;
+	steps: number;
+	legacy: boolean;
+	n: number;
+	rated: number;
+	textOnly: number;
+	/** Every step of the scale (thumbs 0 / 1, else 1..steps) with its label when known. */
+	counts: { r: number; label: string | null; n: number }[];
+	labels: Record<string, string>;
+	avgR: number | null;
+	avgNorm: number | null;
+	firstAt: string | null;
+	lastAt: string | null;
+}
+
+export interface FeedbackTrendPoint {
+	at: string;
+	t: number;
+	n: number;
+	rated: number;
+	withText: number;
+	avgNorm: number | null;
+}
+
+export interface FeedbackSummaryResult {
+	from: string;
+	to: string;
+	total: number;
+	withText: number;
+	players: number;
+	rated: number;
+	legacy: number;
+	avgNorm: number | null;
+	scales: FeedbackScaleSummary[];
+	thumbs: { up: number; down: number; upShare: number } | null;
+	bucket: "hour" | "day";
+	trend: FeedbackTrendPoint[];
+}
+
+export interface FeedbackRow {
+	t: number;
+	at: string;
+	pid: string;
+	sid: string;
+	dev: string | null;
+	state: string | null;
+	scale: string;
+	type: string;
+	steps: number;
+	r: number | null;
+	norm: number | null;
+	label: string | null;
+	text: string | null;
+	len: number;
+	topic: string | null;
+	ctx: Record<string, string | number | boolean> | null;
+	play_s: number | null;
+	legacy: boolean;
+	uid?: number;
+	name?: string;
+	displayName?: string;
+}
+
+export interface FeedbackListResult {
+	total: number;
+	offset: number;
+	more: boolean;
+	rows: FeedbackRow[];
+}
+
+// Roblox's Demographics (GET /v1/roblox/demographics) ---------------------------------------------------------------------
+
+export type RobloxDemographicBreakdown = "AgeGroupV2" | "Gender" | "Locale" | "Country" | "Platform" | "OperatingSystem";
+
+export interface RobloxDemographicRow {
+	value: string;
+	label: string;
+	users: number;
+	share: number;
+}
+
+/** GET /v1/roblox/demographics: Creator Hub's Demographics cards (DailyActiveUsers per breakdown). */
+export interface RobloxDemographics {
+	source: "roblox";
+	window: { from: string; to: string; days: number; note?: string };
+	metric: "DailyActiveUsers";
+	applied: { filter: "device" | "players" | "country"; dimension: "Platform" | "IsNewUser" | "Country"; values: string[] }[];
+	notApplied: { filter: "device" | "players" | "country"; reason: string }[];
+	breakdowns: Record<RobloxDemographicBreakdown, { rows: RobloxDemographicRow[]; total: number } | { error: string }>;
+	fetchedAt: string;
+	cached: boolean;
+}
+
+// Ingest pressure and migration (owner cards) -------------------------------------------------------------------------------
+
+export interface IngestPressure {
+	/** 503 busy refusals since the process started. */
+	busy: number;
+	/** Ingest requests in flight now. */
+	inflight: number;
+	/** Unix ms of the last busy refusal, or null. */
+	lastBusyAt: number | null;
+}
+
+export type MigrateState = "idle" | "running" | "paused" | "waiting" | "done" | "failed" | "cancelled" | "needs_decision";
+
+/** GET /v1/admin/migrate, the part the history-importing banner reads (the Settings migration card is the admin group's). */
+export interface MigrateStatus {
+	state: MigrateState;
+	direction: "from-backend" | "from-basin" | "to-basin" | null;
+	source: { kind: "backend"; url: string } | { kind: "basin"; bucket: string; namespace: string } | { kind: "local" } | null;
+	startedAt: number | null;
+	finishedAt: number | null;
+	rowsPerSecond: number;
+	rowsDone: number;
+	rowsTotal: number;
+	waitingFor: string | null;
+	error: string | null;
+}
+
+// Explain this change (the `explain` query) ---------------------------------------------------------------------------------
+
+export type ExplainDimension = "device" | "country" | "language" | "accountAge" | "premium" | "source" | "build" | "branch" | "playerType";
+export type ExplainMetric =
+	| "players"
+	| "dau"
+	| "newPlayers"
+	| "returningPlayers"
+	| "sessions"
+	| "playtime"
+	| "playtimePerPlayer"
+	| "sessionsPerPlayer"
+	| "avgSession"
+	| "d1"
+	| "payerConversion"
+	| "robuxPerPlayer"
+	| "revenuePerPlayer";
+export type ExplainUnit = "players" | "sessions" | "hours" | "minutes" | "share" | "robux" | "number";
+
+export interface ExplainWithin {
+	dimension: ExplainDimension;
+	value: string | null;
+}
+
+export interface ExplainSegment {
+	/** null = not sent (or the `other` row). */
+	value: string | null;
+	other?: true;
+	segments?: number;
+	baseline: { players: number; value: number | null; share: number };
+	current: { players: number; value: number | null; share: number };
+	contribution: number;
+	/** The segment itself got better or worse (counts: its whole change). */
+	rate: number;
+	/** Its share of players changed (0 for counts). */
+	mix: number;
+	shareOfChange: number | null;
+	/** Fewer than minPlayers in a window: shown, not to be trusted. */
+	small: boolean;
+}
+
+/** The `explain` query: a metric in two windows, split by segment into rate and mix effects. */
+export interface ExplainResult {
+	metric: ExplainMetric;
+	kind: "ratio" | "count";
+	unit: ExplainUnit;
+	within: ExplainWithin | null;
+	minPlayers: number;
+	current: { from: string; to: string; value: number; players: number };
+	baseline: { from: string; to: string; value: number; players: number };
+	change: number;
+	relative: number | null;
+	dimensions: { dimension: ExplainDimension; segments: ExplainSegment[]; total: number }[];
 }

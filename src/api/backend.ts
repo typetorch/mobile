@@ -18,8 +18,12 @@ import type {
 	ErrorList,
 	ErrorPlayers,
 	PlayerErrors,
+	ExperimentChangeRequest,
 	ExperimentOverrides,
 	ExperimentPlayers,
+	MigrateStatus,
+	PreparedExperimentChange,
+	RobloxDemographics,
 	Filters,
 	FleetAlert,
 	FleetReports,
@@ -252,6 +256,12 @@ export function createApi(options: ApiOptions) {
 		/** The players in one experiment (at most 200; one variant or all), under the filter bar's range and filters. */
 		experimentPlayers: (experiment: string, filters: Filters = {}, options: { variant?: string; limit?: number } = {}, signal?: AbortSignal) =>
 			get<ExperimentPlayers>(`/v1/experiments/${encodeURIComponent(experiment)}/players${experimentPlayerQuery(filters, options)}`, signal),
+		/**
+		 * Owners: the signed CLI command that would start / stop / clear / re-split / settle an experiment (the server
+		 * applies nothing; the person runs the command in the game's folder).
+		 */
+		experimentChange: (experiment: string, change: ExperimentChangeRequest, signal?: AbortSignal) =>
+			post<PreparedExperimentChange>(`/v1/experiments/${encodeURIComponent(experiment)}/change`, change, signal),
 		/** The live SSE stream's URL (EventSource sends the session cookie; the dev proxy adds the token). */
 		liveUrl: (topics: string[] = []) => `${base}/v1/live${qs({ topics: topics.join(",") })}`,
 		/** What the server keeps on disk (measured at most every 30 s). */
@@ -278,6 +288,9 @@ export function createApi(options: ApiOptions) {
 		 * before (the backend asks Open Cloud's Analytics Query API; 409 while the key lacks universe.analytics:read).
 		 */
 		robloxAcquisition: (days: number, signal?: AbortSignal) => get<RobloxAcquisition>(`/v1/roblox/analytics/acquisition${qs({ days })}`, signal),
+		/** Creator Hub's Demographics cards (daily active users per breakdown; 409 while the key lacks universe.analytics:read). */
+		robloxDemographics: (params: { from?: string; to?: string; dev?: string; players?: string; country?: string }, signal?: AbortSignal) =>
+			get<RobloxDemographics>(`/v1/roblox/demographics${qs(params)}`, signal),
 		robloxServerLogs: (job: string, params: { search?: string; order?: "asc" | "desc"; pageToken?: string; placeId?: number; placeVersion?: number } = {}, signal?: AbortSignal) =>
 			get<RobloxServerLogs>(`/v1/roblox/servers/${encodeURIComponent(job)}/logs${qs(params)}`, signal),
 		fleetServers: (branch?: string, signal?: AbortSignal) => get<FleetServers>(`/v1/fleet/servers${qs({ branch })}`, signal),
@@ -299,6 +312,8 @@ export function createApi(options: ApiOptions) {
 		alertRules: (signal?: AbortSignal) => get<AlertRulesStatus>("/v1/admin/alert-rules", signal),
 		/** The server's own metrics (the Backend stats page): rates, latency, memory, per route group over `window`. */
 		backendStats: (window: StatsWindow, signal?: AbortSignal) => get<BackendStats>(`/v1/admin/stats${qs({ window })}`, signal),
+		/** Owners: a move from another server or Basin (the history-importing banner reads its state). */
+		migrateStatus: (signal?: AbortSignal) => get<MigrateStatus>("/v1/admin/migrate", signal),
 		/** The audit log (owners only): newest first, a page at a time; `facets` adds the actors and actions to filter by. */
 		audit: (filters: AuditFilters & { facets?: boolean } = {}, signal?: AbortSignal) =>
 			get<AuditPage>(`/v1/admin/audit${qs({ actor: filters.actor, action: filters.action, outcome: filters.outcome, before: filters.before, limit: filters.limit, facets: filters.facets ? 1 : undefined })}`, signal),
