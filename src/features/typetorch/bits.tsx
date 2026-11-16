@@ -382,3 +382,36 @@ export function Panel({ title, note, right, children }: { title: string; note?: 
 }
 
 export { shortId };
+
+/** What a players list knows about one player: the pid, and the Roblox names when the server has them. */
+export interface NamedPlayer {
+	pid: string;
+	uid?: number;
+	name?: string;
+	displayName?: string;
+}
+
+/** "Display (@name)", "@name", or the short pid when the server knows no name. */
+export function playerLabel(x: NamedPlayer): string {
+	if (!x.name) return shortId(x.pid, 10);
+	return x.displayName && x.displayName !== x.name ? `${x.displayName} (@${x.name})` : `@${x.name}`;
+}
+
+/** One player in a list (Funnels, Experiments, Monetization): the name or pid, the UserId, a detail line; a tap opens them. */
+export function NamedPlayerRow({ backendId, row, detail, right }: { backendId: string; row: NamedPlayer; detail?: string; right?: ReactNode }) {
+	const p = useTheme();
+	return (
+		<Pressable onPress={() => openPlayer(backendId, row.pid)} android_ripple={{ color: p.accent }} style={({ pressed }) => [{ paddingVertical: 8, paddingHorizontal: space.md, flexDirection: "row", alignItems: "center", gap: 8 }, pressed && { backgroundColor: p.accent }]}>
+			<View style={{ flex: 1, gap: 2 }}>
+				<Txt style={{ fontWeight: "600" }} numberOfLines={1}>
+					{playerLabel(row)}
+				</Txt>
+				<Txt variant="small" numberOfLines={2}>
+					{[row.name ? shortId(row.pid, 8) : null, row.uid !== undefined ? `UserId ${row.uid}` : "not linked", detail].filter(Boolean).join(" · ")}
+				</Txt>
+			</View>
+			{right}
+			<Icon name="chevron-forward" size={14} color={p.mutedForeground} />
+		</Pressable>
+	);
+}

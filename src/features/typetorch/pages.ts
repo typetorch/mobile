@@ -24,8 +24,8 @@ export const TT_PAGES: TTPage[] = [
 	// Phase 2 (ported after phase 1; see README TODO):
 	{ key: "roblox", title: "Roblox", icon: "logo-electron", description: "Creator Hub numbers via the backend", status: "todo" },
 	{ key: "retention", title: "Retention", icon: "repeat-outline", description: "Cohorts by day", status: "ready" },
-	{ key: "funnels", title: "Funnels", icon: "funnel-outline", description: "Step conversion", status: "todo" },
-	{ key: "players", title: "Players", icon: "people-outline", description: "Player list and profiles", status: "todo" },
+	{ key: "funnels", title: "Funnels", icon: "funnel-outline", description: "Step conversion", status: "ready" },
+	{ key: "players", title: "Players", icon: "people-outline", description: "Player list and profiles", status: "ready" },
 	{ key: "flow", title: "Flow", icon: "git-network-outline", description: "Where players go", status: "ready" },
 	{ key: "experiments", title: "Experiments", icon: "flask-outline", description: "A/B tests", status: "todo" },
 	{ key: "first-session", title: "First session", icon: "footsteps-outline", description: "New players' first minutes", status: "ready" },
