@@ -5,7 +5,7 @@
  *     `deploy` events refetch what changed and go into a short log. The app's query keys, not the web's: `server` →
  *     the Fleet lists (["fleet", "servers" | "gone"]); `alert` / `alert_ack` → every ["alerts", …] query (the overview's
  *     recent alerts); `report` / `deploy` → the deploy lists and pages (["deploys", …], ["deploy", seq]). The Fleet
- *     screen opens it without `?branch`: its branch chips filter on the phone, so the stream carries every branch.
+ *     screen opens it with its `branch` filter, like the web.
  *   - Errors (web pages/Errors.tsx useErrorStream): GET /v1/live?topics=error; an `error` event refetches the error lists
  *     (debounced).
  *
@@ -37,8 +37,8 @@ export const FLEET_REFETCH: Record<string, readonly (readonly string[])[]> = {
 	],
 	alert: [["alerts"]],
 	alert_ack: [["alerts"]],
-	report: [["deploys"], ["deploy"]],
-	deploy: [["deploys"], ["deploy"]],
+	report: [["deploys"], ["deploy"], ["fleet", "report"]],
+	deploy: [["deploys"], ["deploy"], ["fleet", "report"]],
 };
 
 /** One line for a fleet event (web describe). */
