@@ -1,0 +1,45 @@
+/**
+ * The TypeTorch dashboard's pages (the explorer web app's sidebar). Adding a page = a screen file under
+ * src/app/tt/[backendId]/<key>.tsx + flipping its entry here to `ready` (the menu and the project tab read this list).
+ */
+import type { IconName } from "@/components/ui";
+
+export interface TTPage {
+	key: string;
+	title: string;
+	icon: IconName;
+	description: string;
+	/** ready: has a native screen; todo: still to port (shown greyed out). */
+	status: "ready" | "todo";
+	/** Only the admin role sees it (the web hides it for viewers too). */
+	adminOnly?: boolean;
+}
+
+export const TT_PAGES: TTPage[] = [
+	{ key: "overview", title: "Overview", icon: "speedometer-outline", description: "Players, sessions, playtime", status: "ready" },
+	{ key: "fleet", title: "Fleet", icon: "server-outline", description: "Live servers, health, versions", status: "ready" },
+	{ key: "deploys", title: "Deploys", icon: "rocket-outline", description: "Release history and outcomes", status: "ready" },
+	{ key: "errors", title: "Errors", icon: "bug-outline", description: "Error kinds, stacks, where they hit", status: "ready" },
+	{ key: "settings", title: "Settings", icon: "options-outline", description: "Backend settings, app sessions", status: "ready" },
+	// Phase 2 (ported after phase 1; see README TODO):
+	{ key: "roblox", title: "Roblox", icon: "logo-electron", description: "Creator Hub numbers via the backend", status: "todo" },
+	{ key: "retention", title: "Retention", icon: "repeat-outline", description: "Cohorts by day", status: "todo" },
+	{ key: "funnels", title: "Funnels", icon: "funnel-outline", description: "Step conversion", status: "todo" },
+	{ key: "players", title: "Players", icon: "people-outline", description: "Player list and profiles", status: "todo" },
+	{ key: "flow", title: "Flow", icon: "git-network-outline", description: "Where players go", status: "todo" },
+	{ key: "experiments", title: "Experiments", icon: "flask-outline", description: "A/B tests", status: "todo" },
+	{ key: "first-session", title: "First session", icon: "footsteps-outline", description: "New players' first minutes", status: "todo" },
+	{ key: "events", title: "Events", icon: "list-outline", description: "Raw events", status: "todo" },
+	{ key: "server-history", title: "Server history", icon: "time-outline", description: "Closed and lost servers", status: "todo" },
+	{ key: "performance", title: "Performance", icon: "pulse-outline", description: "FPS, memory, ping, TPS", status: "todo" },
+	{ key: "economy", title: "Economy", icon: "cash-outline", description: "Currency sources and sinks", status: "todo" },
+	{ key: "monetization", title: "Monetization", icon: "card-outline", description: "Purchases and products", status: "todo" },
+	{ key: "query", title: "Query", icon: "code-slash-outline", description: "Named queries and SQL", status: "todo" },
+	{ key: "audit", title: "Audit log", icon: "document-text-outline", description: "Who changed what", status: "todo", adminOnly: true },
+	{ key: "backend-stats", title: "Backend stats", icon: "hardware-chip-outline", description: "The server's own metrics", status: "todo", adminOnly: true },
+];
+
+/** The route of a page (overview is the backend's index). */
+export function pageHref(backendId: string, key: string): string {
+	return key === "overview" ? `/tt/${backendId}` : `/tt/${backendId}/${key}`;
+}

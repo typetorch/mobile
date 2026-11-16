@@ -24,19 +24,19 @@ export default function TabsLayout() {
 		>
 			<Tabs.Screen
 				name="index"
-				options={{ title: "Projects", tabBarIcon: ({ color, size, focused }) => <Ionicons name={focused ? "grid" : "grid-outline"} size={size - 2} color={color} /> }}
+				options={{ title: "Projects", tabBarIcon: ({ color, size, focused }) => <Ionicons name={focused ? "grid" : "grid-outline"} size={size - 2} color={color as string} /> }}
 			/>
 			<Tabs.Screen
 				name="backends"
 				options={{
 					title: "Backends",
 					tabBarBadge: signedOut ? signedOut : undefined,
-					tabBarIcon: ({ color, size, focused }) => <Ionicons name={focused ? "flame" : "flame-outline"} size={size - 2} color={color} />,
+					tabBarIcon: ({ color, size, focused }) => <Ionicons name={focused ? "flame" : "flame-outline"} size={size - 2} color={color as string} />,
 				}}
 			/>
 			<Tabs.Screen
 				name="settings"
-				options={{ title: "Settings", tabBarIcon: ({ color, size, focused }) => <Ionicons name={focused ? "settings" : "settings-outline"} size={size - 2} color={color} /> }}
+				options={{ title: "Settings", tabBarIcon: ({ color, size, focused }) => <Ionicons name={focused ? "settings" : "settings-outline"} size={size - 2} color={color as string} /> }}
 			/>
 		</Tabs>
 	);

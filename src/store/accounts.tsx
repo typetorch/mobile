@@ -12,6 +12,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 import { createApi, type Api } from "@/api/backend";
 import { logout as backendLogout, needsRefresh, refreshToken, type MobileToken } from "@/api/backend-auth";
+import { HttpError } from "@/api/http";
 import { introspectKey, OpenCloud, type KeyInfo } from "@/api/opencloud";
 import type { AuthRole, AuthUser } from "@/api/tt/types";
 import type { Appearance } from "@/theme";
@@ -121,38 +122,37 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
 				const t = await SecureStore.getItemAsync(tokenKey(b.id)).catch(() => null);
 				if (t) tokens.current.set(b.id, t);
 			}
-			if (cancelled) return;
-			setPrefsState(p);
-			setOcKey(key);
-			setBackends(list);
-			setTokenVersion((v) => v + 1);
-			setReady(true);
-			// Refresh tokens that end within 15 days (quietly; a failure leaves the old token until it ends).
-			const refreshed: BackendAccount[] = [];
+			// Refresh tokens that end within 15 days BEFORE any screen uses them: the backend revokes the old token the
+			// moment it answers a refresh, so the new one is saved first. A failed refresh keeps the old token.
+			const loaded: BackendAccount[] = [];
 			for (const b of list) {
 				const t = tokens.current.get(b.id);
 				if (!t || b.signedOut || !needsRefresh(b.expiresAt)) {
-					refreshed.push(b);
+					loaded.push(b);
 					continue;
 				}
 				try {
 					const next = await refreshToken(b.url, t);
 					await SecureStore.setItemAsync(tokenKey(b.id), next.token);
 					tokens.current.set(b.id, next.token);
-					refreshed.push({ ...b, tokenId: next.id || b.tokenId, expiresAt: next.expiresAt, role: next.role, user: next.user ?? b.user });
-				} catch {
-					refreshed.push(b);
+					loaded.push({ ...b, tokenId: next.id || b.tokenId, expiresAt: next.expiresAt, role: next.role, user: next.user ?? b.user });
+				} catch (error) {
+					// A dead token (401) stays dead: show it as signed out instead of retrying.
+					loaded.push(error instanceof HttpError && error.status === 401 ? { ...b, signedOut: true } : b);
 				}
 			}
-			if (!cancelled && refreshed.some((b, i) => b !== list[i])) {
-				await persistBackends(refreshed);
-				setTokenVersion((v) => v + 1);
-			}
+			if (loaded.some((b, i) => b !== list[i])) await SecureStore.setItemAsync(KEY_BACKENDS, JSON.stringify(loaded)).catch(() => undefined);
+			if (cancelled) return;
+			setPrefsState(p);
+			setOcKey(key);
+			setBackends(loaded);
+			setTokenVersion((v) => v + 1);
+			setReady(true);
 		})();
 		return () => {
 			cancelled = true;
 		};
-	}, [persistBackends]);
+	}, []);
 
 	const keyQuery = useQuery({
 		queryKey: ["oc-introspect", ocKey ? ocKey.slice(-6) : null],
@@ -264,8 +264,13 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
 				createApi({
 					base: b.url,
 					token: t,
+					// A 401 on a mobile token (code mobile_token_dead) means revoked / expired / replaced: sign in again.
 					onUnauthorized: () => {
-						setBackends((list) => list.map((x) => (x.id === b.id ? { ...x, signedOut: true } : x)));
+						setBackends((list) => {
+							const next = list.map((x) => (x.id === b.id ? { ...x, signedOut: true } : x));
+							SecureStore.setItemAsync(KEY_BACKENDS, JSON.stringify(next)).catch(() => undefined);
+							return next;
+						});
 					},
 				}),
 			);
