@@ -4,7 +4,7 @@
  */
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
-import { View } from "react-native";
+import { Switch, View } from "react-native";
 
 import type { FleetAlert } from "@/api/tt/types";
 import { BarChart } from "@/charts/LineChart";
@@ -106,6 +106,14 @@ export function TTHome({ backendId, poll = true }: { backendId: string; poll?: b
 	const dayStart = Date.parse(`${dayRange(days).from}T00:00:00Z`);
 	const markRange = useMemo(() => ({ from: dayStart, to: dayStart + days * 86_400_000 }), [dayStart, days]);
 	const marksQ = useDeployMarks(backendId, markRange, undefined, { enabled: !!overview.data });
+	// "vs previous period": the same number of days right before, drawn dashed over the bars (the web's DayBars `previous`).
+	const [vsPrev, setVsPrev] = useState(false);
+	const prevFrom = new Date(dayStart - days * 86_400_000).toISOString().slice(0, 10);
+	const prevTo = new Date(dayStart - 86_400_000).toISOString().slice(0, 10);
+	const prevQ = useTTQuery(backendId, ["query", "overview", "prev", prevFrom, prevTo], (api, s) => api.query("overview", { from: prevFrom, to: prevTo }, {}, s), { staleTime: 60_000, enabled: vsPrev });
+	const shift = days * 86_400_000;
+	const prevDays = useMemo(() => new Map((prevQ.data?.days ?? []).map((d) => [Date.parse(d.date) + shift, d.players])), [prevQ.data, shift]);
+	const prevSteps = useMemo(() => new Map((prevQ.data?.buckets ?? []).map((b) => [b.t + shift, b.players])), [prevQ.data, shift]);
 	const card = useMarkCard(backendId);
 	if (!account) return null;
 
@@ -144,13 +152,28 @@ export function TTHome({ backendId, poll = true }: { backendId: string; poll?: b
 						{o.days.length > 1 ? (
 							<Card style={{ gap: 6 }}>
 								<Txt variant="label">Players per day</Txt>
-								<BarChart points={o.days.map((d) => ({ t: Date.parse(d.date), v: d.players }))} format={compact} marks={chartMarks(p, marksQ.marks)} onMarkPress={card.open} />
+								<BarChart
+									points={o.days.map((d) => ({ t: Date.parse(d.date), v: d.players }))}
+									format={compact}
+									marks={chartMarks(p, marksQ.marks)}
+									onMarkPress={card.open}
+									{...(vsPrev && prevQ.data ? { previous: o.days.map((d) => prevDays.get(Date.parse(d.date)) ?? null) } : {})}
+								/>
+								<PrevToggle on={vsPrev} onChange={setVsPrev} />
 								<DeployMarksToggle {...marksQ} />
 							</Card>
 						) : o.buckets?.length ? (
 							<Card style={{ gap: 6 }}>
 								<Txt variant="label">Players per step</Txt>
-								<BarChart points={o.buckets.map((b) => ({ t: b.t, v: b.players }))} format={compact} timeLabel={(t) => new Date(t).toISOString().slice(11, 16)} marks={chartMarks(p, marksQ.marks)} onMarkPress={card.open} />
+								<BarChart
+									points={o.buckets.map((b) => ({ t: b.t, v: b.players }))}
+									format={compact}
+									timeLabel={(t) => new Date(t).toISOString().slice(11, 16)}
+									marks={chartMarks(p, marksQ.marks)}
+									onMarkPress={card.open}
+									{...(vsPrev && prevQ.data ? { previous: o.buckets.map((b) => prevSteps.get(b.t) ?? null) } : {})}
+								/>
+								<PrevToggle on={vsPrev} onChange={setVsPrev} />
 								<DeployMarksToggle {...marksQ} />
 							</Card>
 						) : null}
@@ -196,6 +219,17 @@ export function TTHome({ backendId, poll = true }: { backendId: string; poll?: b
 			<PageMenu account={account} />
 			<Txt variant="small" style={{ textAlign: "center", color: p.mutedForeground }}>
 				Pull to refresh · live numbers update every 15 s
+			</Txt>
+		</View>
+	);
+}
+
+function PrevToggle({ on, onChange }: { on: boolean; onChange(on: boolean): void }) {
+	return (
+		<View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+			<Switch value={on} onValueChange={onChange} />
+			<Txt variant="small" style={{ flex: 1 }}>
+				vs previous period (dashed)
 			</Txt>
 		</View>
 	);

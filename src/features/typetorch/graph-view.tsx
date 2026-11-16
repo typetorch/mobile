@@ -314,61 +314,61 @@ function Canvas({ laid, height, selected, onSelect }: { laid: GraphLayout; heigh
 		const nx = ox - cx * (1 - scale);
 		const ny = oy - cy * (1 - scale);
 		if (animate) {
-			s.value = withTiming(scale);
-			tx.value = withTiming(nx);
-			ty.value = withTiming(ny);
+			s.set(withTiming(scale));
+			tx.set(withTiming(nx));
+			ty.set(withTiming(ny));
 		} else {
-			s.value = scale;
-			tx.value = nx;
-			ty.value = ny;
+			s.set(scale);
+			tx.set(nx);
+			ty.set(ny);
 		}
 	};
 	// biome-ignore lint/correctness/useExhaustiveDependencies: fit again when the graph or the box changes
 	useEffect(() => fitView(false), [laid, box.w, box.h]);
 
 	const zoomBy = (factor: number) => {
-		const next = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, s.value * factor));
+		const next = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, s.get() * factor));
 		// Keep the box's centre where it is.
 		const fx = box.w / 2;
 		const fy = box.h / 2;
-		const gx = (fx - tx.value - cx) / s.value + cx;
-		const gy = (fy - ty.value - cy) / s.value + cy;
-		s.value = withTiming(next);
-		tx.value = withTiming(fx - cx - next * (gx - cx));
-		ty.value = withTiming(fy - cy - next * (gy - cy));
+		const gx = (fx - tx.get() - cx) / s.get() + cx;
+		const gy = (fy - ty.get() - cy) / s.get() + cy;
+		s.set(withTiming(next));
+		tx.set(withTiming(fx - cx - next * (gx - cx)));
+		ty.set(withTiming(fy - cy - next * (gy - cy)));
 	};
 
 	const pan = usePanGesture({
 		minDistance: 4,
 		onUpdate: (e) => {
 			"worklet";
-			tx.value += e.changeX;
-			ty.value += e.changeY;
+			tx.set(tx.get() + e.changeX);
+			ty.set(ty.get() + e.changeY);
 		},
 	});
 	const pinch = usePinchGesture({
 		onUpdate: (e) => {
 			"worklet";
-			const before = s.value;
+			const before = s.get();
 			const next = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, before * e.scaleChange));
-			const gx = (e.focalX - tx.value - cx) / before + cx;
-			const gy = (e.focalY - ty.value - cy) / before + cy;
-			s.value = next;
-			tx.value = e.focalX - cx - next * (gx - cx);
-			ty.value = e.focalY - cy - next * (gy - cy);
+			const gx = (e.focalX - tx.get() - cx) / before + cx;
+			const gy = (e.focalY - ty.get() - cy) / before + cy;
+			s.set(next);
+			tx.set(e.focalX - cx - next * (gx - cx));
+			ty.set(e.focalY - cy - next * (gy - cy));
 		},
 	});
 	const tap = useTapGesture({
 		runOnJS: true,
 		onActivate: (e) => {
-			const gx = (e.x - tx.value - cx) / s.value + cx;
-			const gy = (e.y - ty.value - cy) / s.value + cy;
+			const gx = (e.x - tx.get() - cx) / s.get() + cx;
+			const gy = (e.y - ty.get() - cy) / s.get() + cy;
 			const hit = laid.nodes.find((n) => gx >= n.x - 4 && gx <= n.x + n.width + 4 && gy >= n.y - 4 && gy <= n.y + n.height + 4);
 			onSelect(hit && hit.kind !== "start" && hit.kind !== "left" ? hit.state : null);
 		},
 	});
 	const gestures = useSimultaneousGestures(pan, pinch, tap);
-	const style = useAnimatedStyle(() => ({ transform: [{ translateX: tx.value }, { translateY: ty.value }, { scale: s.value }] }));
+	const style = useAnimatedStyle(() => ({ transform: [{ translateX: tx.get() }, { translateY: ty.get() }, { scale: s.get() }] }));
 
 	return (
 		<View style={{ height, borderRadius: radius.lg, borderWidth: StyleSheet.hairlineWidth, borderColor: p.border, overflow: "hidden", backgroundColor: p.background }} onLayout={(e: LayoutChangeEvent) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
