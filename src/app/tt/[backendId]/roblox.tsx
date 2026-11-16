@@ -1,25 +1,30 @@
 /**
  * Roblox: Creator Hub's experience overview from your own events (query `benchmarks`): benchmark cards (period over
  * period, against the 50th / 90th you copy from Creator Hub, kept on this phone), realtime (`realtime` + the live fleet),
- * acquisition from Roblox itself (GET /v1/roblox/analytics/acquisition), 7-day moving averages per join source (`trends`)
- * and how the numbers are calculated. The filter bar's date range doesn't apply; its other filters do.
+ * concurrent players by device (`realtime` devices, `devCcu`), acquisition from Roblox itself (GET
+ * /v1/roblox/analytics/acquisition), trends per join source every 6 h / 12 h / day / 7-day average over 0 to 90 days
+ * (`trends`; `trend`, `trendDays`, `trendWindow`) and how the numbers are calculated. The filter bar's branch, artifact,
+ * device, players and variant apply; its date range sets the Realtime window only (`period` = the cards' days).
  */
 import * as Clipboard from "expo-clipboard";
 import * as SecureStore from "expo-secure-store";
+import { router } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
 
 import { ApiError } from "@/api/backend";
 import { barMax, change, estimatePercentile, loadBenchmarks, type Benchmark, type BenchmarkKey, type Benchmarks } from "@/api/tt/benchmarks";
-import type { BenchmarkPeriod, Filters, RobloxAcquisition, RobloxAcquisitionPeriod, TrendValues } from "@/api/tt/types";
-import { LineChart } from "@/charts/LineChart";
+import { groupLabel } from "@/api/tt/perf";
+import type { BenchmarkPeriod, Filters, RealtimeResult, RobloxAcquisition, RobloxAcquisitionPeriod, TrendValues } from "@/api/tt/types";
+import { Legend, LineChart } from "@/charts/LineChart";
 import { Badge, Button, Card, Chips, EmptyState, Field, Icon, List, Segmented, Txt } from "@/components/ui";
 import { ChangeChip, Note, Panel, QueryState } from "@/features/typetorch/bits";
 import { DataTable, shareTextFile } from "@/features/typetorch/table";
-import { FilterBar, isoDate, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
+import { FilterBar, isoDate, useTTAnalytics, useTTFilters, type FilterState } from "@/features/typetorch/filters";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { BENCHMARK_ROWS, CALCULATION_NOTES, CARDS, JOIN_SOURCES_DIFFER, ordinal, periodLabel, SOURCE_COLORS, SOURCE_LABELS, sub, TRENDS, type CardSpec, type Differs } from "@/features/typetorch/roblox-cards";
 import { TTScreen } from "@/features/typetorch/screen";
+import { usePageParam } from "@/features/typetorch/view-link";
 import { fmtInt, fmtMinutes, fmtNum, fmtPct } from "@/lib/format";
 import { radius, space, useTheme } from "@/theme";
 
@@ -62,14 +67,18 @@ function useNoRange(backendId: string): Filters {
 
 function Roblox({ backendId }: { backendId: string }) {
 	const filters = useNoRange(backendId);
-	const [days, setDays] = useState(7);
+	const [period, setPeriod] = usePageParam("period", "7");
+	const days = [7, 14, 28].includes(Number(period)) ? Number(period) : 7;
+	const setDays = (d: number) => setPeriod(String(d));
 	const [bench, saveBench] = useBenchmarks(backendId);
 	const [editing, setEditing] = useState(false);
 	const q = useTTAnalytics(backendId, "benchmarks", { days }, { filters });
 	return (
 		<>
-			<FilterBar backendId={backendId} ranges={[]} />
-			<Note>Creator Hub's overview, from your own events and computed the way Creator Hub defines it: the last {days} full UTC days against the {days} days before.</Note>
+			<FilterBar backendId={backendId} />
+			<Note>
+				Creator Hub's overview, from your own events and computed the way Creator Hub defines it: the last {days} full UTC days against the {days} days before. The filter bar's branch, artifact, device, players and variant apply; its date range sets the Realtime window only.
+			</Note>
 			<View style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }}>
 				<Segmented
 					options={[7, 14, 28].map((d) => ({ value: d, label: `${d} days` }))}
@@ -98,6 +107,7 @@ function Roblox({ backendId }: { backendId: string }) {
 				}
 			</QueryState>
 			<Realtime backendId={backendId} filters={filters} />
+			<DeviceCcu backendId={backendId} filters={filters} />
 			<Acquisition backendId={backendId} days={days} {...(bench.playThrough ? { bench: bench.playThrough } : {})} onSet={() => setEditing(true)} />
 			<Trends backendId={backendId} filters={filters} />
 			<HowCalculated />
@@ -279,13 +289,53 @@ function RealtimeRow({ label, info, value, current, previous, lowerIsBetter = fa
 	);
 }
 
+const RANGE_HOURS: Partial<Record<FilterState["range"], number>> = { "1h": 1, "6h": 6, "1d": 24, "3d": 72, "7d": 168, "30d": 720, "90d": 2160 };
+
+/** The Realtime window: the filter bar's range in hours (a custom range: its length in days), 1 h to 90 days. */
+export function realtimeHours(state: FilterState, now = Date.now()): number {
+	const preset = RANGE_HOURS[state.range];
+	if (preset) return preset;
+	if (state.range === "deploy") return state.sinceMs !== undefined ? Math.min(2160, Math.max(1, Math.ceil((now - state.sinceMs) / 3_600_000))) : 24;
+	if (state.range === "custom" && state.from && state.to) {
+		const d = Math.round((Date.parse(state.to) - Date.parse(state.from)) / 86_400_000) + 1;
+		if (Number.isFinite(d) && d > 0) return Math.min(2160, d * 24);
+	}
+	return 24;
+}
+
+/** "1 hour", "6 hours", "24 hours", "7 days". */
+export function windowLabel(hours: number): string {
+	if (hours === 1) return "1 hour";
+	if (hours < 48 || hours % 24 !== 0) return `${hours} hours`;
+	return `${hours / 24} days`;
+}
+
+/** Hours and minutes for a playtime total ("3 h 20 min", "45 min"). */
+function fmtPlaytime(minutes: number | undefined): string {
+	if (minutes === undefined) return "n/a";
+	if (minutes < 60) return fmtMinutes(minutes);
+	const h = Math.floor(minutes / 60);
+	const m = Math.round(minutes % 60);
+	return m ? `${fmtInt(h)} h ${m} min` : `${fmtInt(h)} h`;
+}
+
+/** The `realtime` query for the filter bar's window (Realtime and Concurrent players by device share it). */
+function useRealtime(backendId: string, filters: Filters) {
+	const { state } = useTTFilters(backendId);
+	const hours = realtimeHours(state);
+	const q = useTTAnalytics(backendId, "realtime", { hours, ccuDays: Math.min(30, Math.max(7, Math.ceil((hours * 2) / 24))) }, { filters });
+	return { q, hours };
+}
+
 function Realtime({ backendId, filters }: { backendId: string; filters: Filters }) {
 	const p = useTheme();
-	const q = useTTAnalytics(backendId, "realtime", { hours: 24, ccuDays: 7 }, { filters });
+	const { q, hours } = useRealtime(backendId, filters);
+	const span = windowLabel(hours);
+	const short = hours < 48 || hours % 24 !== 0 ? `${hours} h` : `${hours / 24} d`;
 	const branch = typeof filters.branch === "string" ? filters.branch : undefined;
 	const live = useTTQuery(backendId, ["fleet", "servers", branch ?? ""], (api, s) => api.fleetServers(branch, s), { refetchInterval: 30_000 });
 	return (
-		<Panel title="Realtime" note="Last 24 hours vs the 24 before.">
+		<Panel title="Realtime" note={`Last ${span} vs the ${span} before. Follows the filter bar's date range.`} right={<Button title="Explore session time" small variant="ghost" icon="hourglass-outline" onPress={() => router.push(`/tt/${backendId}/session-time`)} />}>
 			<QueryState q={q} rows={4}>
 				{(r) => {
 					const now = live.data?.players ?? r.ccu.now;
@@ -306,7 +356,7 @@ function Realtime({ backendId, filters }: { backendId: string; filters: Filters 
 									height={110}
 									series={[
 										{ label: "Peak", points: r.ccu.series.map((x) => ({ t: Date.parse(x.hour), v: x.peak })), color: p.chart[0] },
-										{ label: "Hourly average", points: r.ccu.series.map((x) => ({ t: Date.parse(x.hour), v: x.avg })), color: p.chart[1] },
+										{ label: "Hourly average", points: r.ccu.series.map((x) => ({ t: Date.parse(x.hour), v: x.avg })), color: p.chart[1], dashed: true },
 									]}
 									timeLabel={(t) => new Date(t).toISOString().slice(5, 13).replace("T", " ")}
 								/>
@@ -315,17 +365,105 @@ function Realtime({ backendId, filters }: { backendId: string; filters: Filters 
 							)}
 							<Tip
 								label="What this is"
-								text="Players on live servers now (fleet API). The line is each UTC hour's peak minute over 7 days, as Creator Hub's peak concurrent players (and the hourly average), from the servers' heartbeats: players per minute, summed over servers. Studio play tests don't count. An estimate: a heartbeat is about once a minute per server."
+								text="Players on live servers now (fleet API). The line is each UTC hour's peak minute over 7 days, as Creator Hub's peak concurrent players (dashed: the hourly average), from the servers' heartbeats: players per minute, summed over servers. Studio play tests don't count. An estimate: from heartbeats about once a minute per server, a player who stays under a minute, or a server that stops sending, can be missed. Creator Hub counts every connection."
 							/>
 							<List>
-								<RealtimeRow label="Peak concurrent users" info="The highest minute of the last 24 h (Creator Hub's peak concurrent players), from the servers' heartbeats." value={fmtInt(r.ccu.currentPeak)} current={r.ccu.currentPeak} previous={r.ccu.previousPeak} />
-								<RealtimeRow label="Average concurrent users" info="The mean of the last 24 h's per-minute player counts (Creator Hub's average concurrent players); minutes without a heartbeat count as 0." value={fmtNum(r.ccu.currentAvg, 1)} current={r.ccu.currentAvg} previous={r.ccu.previousAvg} />
-								<RealtimeRow label="Session time" info="Average length of the sessions that started in the window and are over (first to last event; Studio play tests left out)." value={r.current.avgSessionMinutes === null ? "n/a" : fmtMinutes(r.current.avgSessionMinutes)} current={r.current.avgSessionMinutes} previous={r.previous.avgSessionMinutes} />
+								<RealtimeRow label="Peak concurrent users" info={`The highest minute of the last ${short} (Creator Hub's peak concurrent players), from the servers' heartbeats.`} value={fmtInt(r.ccu.currentPeak)} current={r.ccu.currentPeak} previous={r.ccu.previousPeak} />
+								<RealtimeRow label="Average concurrent users" info={`The mean of the last ${short}'s per-minute player counts (Creator Hub's average concurrent players); minutes without a heartbeat count as 0.`} value={fmtNum(r.ccu.currentAvg, 1)} current={r.ccu.currentAvg} previous={r.ccu.previousAvg} />
+								{r.current.players !== undefined ? <RealtimeRow label="Players" info="Distinct players who started a session in the window (Studio play tests left out)." value={fmtInt(r.current.players)} current={r.current.players} previous={r.previous.players ?? null} /> : null}
+								{r.current.newPlayers !== undefined ? <RealtimeRow label="New players" info="Of those, players whose first-ever session started in the window (the SDK marks a player's first join)." value={fmtInt(r.current.newPlayers)} current={r.current.newPlayers} previous={r.previous.newPlayers ?? null} /> : null}
+								{r.current.playtimeMinutes !== undefined ? <RealtimeRow label="Playtime" info="Total playtime of the sessions that started in the window (first to last event); sessions still running count so far." value={fmtPlaytime(r.current.playtimeMinutes)} current={r.current.playtimeMinutes} previous={r.previous.playtimeMinutes ?? null} /> : null}
+								{r.current.playtimePerPlayer !== undefined ? <RealtimeRow label="Playtime per player" info="Playtime divided by players, for the window." value={r.current.playtimePerPlayer === null ? "n/a" : fmtMinutes(r.current.playtimePerPlayer)} current={r.current.playtimePerPlayer} previous={r.previous.playtimePerPlayer ?? null} /> : null}
+								<RealtimeRow
+									label="Session time"
+									info="Average length of the sessions that ended in the window, full length (first to last event, even when they started before it): counted when they end, as Creator Hub's Session time chart does. A session ends with a leave row or after 10 minutes without events; Studio play tests left out. Running sessions count in Playtime. Explore splits it by device and time step."
+									value={r.current.avgSessionMinutes === null ? "n/a" : fmtMinutes(r.current.avgSessionMinutes)}
+									current={r.current.avgSessionMinutes}
+									previous={r.previous.avgSessionMinutes}
+								/>
 								<RealtimeRow label="Client error rate" info="Script errors clients reported (tech/error) per session. Games can't see crashes, so this is errors, not crashes." value={r.current.errorsPerSession === null ? "n/a" : `${fmtNum(r.current.errorsPerSession, 2)} / session`} current={r.current.errorsPerSession} previous={r.previous.errorsPerSession} lowerIsBetter />
 								<RealtimeRow label="Client frame rate" info="Average of the fps clients report every minute (tech/client)." value={r.current.clientFps === null ? "n/a" : `${fmtNum(r.current.clientFps, 0)} fps`} current={r.current.clientFps} previous={r.previous.clientFps} />
 								<RealtimeRow label="Server memory" info="Average of the memory servers report every minute (tech/server, MB)." value={r.current.serverMemoryMb === null ? "n/a" : `${fmtInt(r.current.serverMemoryMb)} MB`} current={r.current.serverMemoryMb} previous={r.previous.serverMemoryMb} lowerIsBetter />
 							</List>
-							<Note>{fmtInt(r.current.sessions)} sessions in the last 24 h.</Note>
+							<Note>
+								{fmtInt(r.current.sessions)} sessions in the last {span}
+								{r.current.running !== undefined ? `, ${fmtInt(r.current.running)} still running` : ""}.
+							</Note>
+						</View>
+					);
+				}}
+			</QueryState>
+		</Panel>
+	);
+}
+
+// Concurrent players by device ------------------------------------------------------------------------------------------
+
+type DeviceSeries = NonNullable<RealtimeResult["devices"]>["series"];
+
+/** The device rows for one hour's map: names in order, 0 when absent (the last `hours`). */
+export function deviceRows(series: DeviceSeries, names: string[], pick: "avg" | "peak", hours: number) {
+	const from = Date.now() - hours * 3_600_000;
+	return series.filter((x) => Date.parse(x.hour) + 3_600_000 > from).map((x) => ({ hour: x.hour, values: Object.fromEntries(names.map((n) => [n, x[pick][n] ?? 0])) as Record<string, number> }));
+}
+
+function DeviceCcu({ backendId, filters }: { backendId: string; filters: Filters }) {
+	const p = useTheme();
+	const { q, hours } = useRealtime(backendId, filters);
+	const [pick, setPick] = usePageParam("devCcu", "avg");
+	const metric = pick === "peak" ? "peak" : "avg";
+	const span = Math.max(24, Math.min(hours, 30 * 24));
+	const color = (i: number) => p.chart[i % p.chart.length] ?? p.brand;
+	return (
+		<Panel
+			title="Concurrent players by device"
+			note={`Live now, and per hour over the last ${windowLabel(span)}: the ${metric === "avg" ? "average" : "peak minute"} per device class. Follows the filter bar (at least 24 hours).`}
+			right={<Badge label="Ours" />}
+		>
+			<Segmented
+				options={[
+					{ value: "avg", label: "Average" },
+					{ value: "peak", label: "Peak" },
+				]}
+				value={metric}
+				onChange={setPick}
+			/>
+			<QueryState q={q} isEmpty={(r) => !r.devices || r.devices.names.length === 0} empty="No player sessions in this range." rows={3}>
+				{(r) => {
+					const d = r.devices as NonNullable<RealtimeResult["devices"]>;
+					const names = d.names;
+					const liveTotal = Object.values(d.now).reduce((a, b) => a + b, 0);
+					const rows = deviceRows(d.series, names, metric, span);
+					return (
+						<View style={{ gap: space.sm }}>
+							<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+								<Badge label={`Live now: ${fmtInt(liveTotal)}`} tone="brand" />
+								{names.map((n, i) => {
+									const v = d.now[n] ?? 0;
+									return (
+										<View key={n} style={{ flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: p.border, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 }}>
+											<View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color(i) }} />
+											<Txt variant="small" color={p.foreground}>
+												{groupLabel("dev", n)}: {fmtInt(v)}
+											</Txt>
+											{liveTotal > 0 ? <Txt variant="small">({fmtPct(v / liveTotal, 0)})</Txt> : null}
+										</View>
+									);
+								})}
+							</View>
+							<LineChart
+								area={false}
+								height={200}
+								format={(v) => fmtNum(v, metric === "avg" ? 1 : 0)}
+								axisFormat={(v) => fmtNum(v, 0)}
+								timeLabel={(t) => {
+									const iso = new Date(t).toISOString();
+									return `${iso.slice(5, 10)} ${iso.slice(11, 13)}h`;
+								}}
+								series={names.map((n, i) => ({ label: groupLabel("dev", n), color: color(i), points: rows.map((x) => ({ t: Date.parse(x.hour), v: x.values[n] ?? 0 })) }))}
+							/>
+							<Legend items={names.map((n, i) => ({ label: groupLabel("dev", n), color: color(i) }))} />
+							<Tip label="Ours" text="From player sessions (first to last event) and the device class the client reported, not from the servers' heartbeats: totals can differ a little from Concurrent users." />
 						</View>
 					);
 				}}
@@ -410,39 +548,90 @@ function AcquisitionBody({ r, bench, onSet }: { r: RobloxAcquisition; bench?: Be
 	);
 }
 
-// 7-day moving averages ---------------------------------------------------------------------------------------------------
+// Trends per join source ---------------------------------------------------------------------------------------------------
+
+/** The chart's ranges in days back (0 = today). */
+export const TREND_RANGES = [0, 3, 7, 14, 28, 56, 90];
+
+/** The granularity choice (`trendWindow`): 6 h / 12 h buckets, each day, or the 7-day moving average. */
+export function trendStep(choice: string, days: number): { key: string; bucketHours: number; window: number; title: string; description: string } {
+	const key = days === 0 && (choice === "1" || choice === "7") ? "6h" : ["6h", "12h", "1", "7"].includes(choice) ? choice : "7";
+	const sources = "total and per join source (where the player's first session in it came from)";
+	if (key === "6h" || key === "12h") {
+		const h = key === "6h" ? 6 : 12;
+		return { key, bucketHours: h, window: 1, title: `Every ${h} hours`, description: `Per ${h} hours (UTC), ${sources}. The running ${h} hours show too, marked "so far".` };
+	}
+	if (key === "1") return { key, bucketHours: 24, window: 1, title: "Daily values", description: `Per UTC day, ${sources}: each day's own value. Today shows so far.` };
+	return {
+		key,
+		bucketHours: 24,
+		window: 7,
+		title: "Snapshot of 7-day moving averages",
+		description: `Per UTC day, ${sources}. Counts are averaged over the 7 days; ratios are the mean of the 7 daily values. The last point includes today so far.`,
+	};
+}
+
+/** "11-13" for a day, "11-13 06:00" for a 6 / 12 h bucket. */
+function trendTick(t: number, hours: number): string {
+	const iso = new Date(t).toISOString();
+	return hours < 24 ? `${iso.slice(5, 10)} ${iso.slice(11, 16)}` : iso.slice(5, 10);
+}
 
 function Trends({ backendId, filters }: { backendId: string; filters: Filters }) {
 	const p = useTheme();
-	const [metric, setMetric] = useState<string>("d1");
-	const [days, setDays] = useState(28);
+	const [metric, setMetric] = usePageParam("trend", "d1");
+	const [range, setRange] = usePageParam("trendDays", "28");
+	const [smooth, setSmooth] = usePageParam("trendWindow", "7");
+	const days = TREND_RANGES.includes(Number(range)) ? Number(range) : 28;
+	// Today has no full day yet: a daily view of it shows 6-hour buckets instead.
+	const step = trendStep(smooth, days);
+	// From `days` UTC days back (0 = today's midnight), up to now: the running day / bucket is the last point ("so far").
 	const from = isoDate(Date.now() - days * 86_400_000);
-	const q = useTTAnalytics(backendId, "trends", { window: 7 }, { filters: { ...filters, from } });
+	const q = useTTAnalytics(backendId, "trends", { window: step.window, ...(step.bucketHours !== 24 ? { bucketHours: step.bucketHours } : {}) }, { filters: { ...filters, from } });
 	const spec = TRENDS.find((t) => t.key === metric) ?? (TRENDS[0] as (typeof TRENDS)[number]);
 	return (
-		<Panel title="Snapshot of 7-day moving averages" note="Per full UTC day, total and per join source (where the player's first session that day came from). Counts are averaged over the 7 days; ratios are the mean of the 7 daily values.">
+		<Panel title={step.title} note={step.description} right={<Badge label="Ours" />}>
+			<Chips
+				options={[
+					{ value: "6h", label: "Every 6 hours" },
+					{ value: "12h", label: "Every 12 hours" },
+					...(days === 0
+						? []
+						: [
+								{ value: "1", label: "Daily" },
+								{ value: "7", label: "7-day average" },
+							]),
+				]}
+				value={step.key}
+				onChange={setSmooth}
+			/>
+			<Chips options={TREND_RANGES.map((d) => ({ value: String(d), label: d === 0 ? "Today" : `Last ${d} days` }))} value={String(days)} onChange={setRange} />
 			<Chips options={TRENDS.map((t) => ({ value: t.key as string, label: t.label }))} value={spec.key} onChange={setMetric} />
-			<Segmented options={[14, 28, 56, 90].map((d) => ({ value: d, label: `${d} d` }))} value={days} onChange={setDays} />
 			<QueryState q={q} isEmpty={(r) => r.days.every((d) => d.total.dau === 0)} empty="No players in this range yet." rows={3}>
 				{(r) => {
 					const pick = (v: TrendValues | undefined) => (v ? v[spec.key] : null);
-					const t = (d: string) => Date.parse(`${d}T00:00:00Z`);
-					if (!r.days.some((d) => {
-						const v = pick(d.total);
-						return typeof v === "number" && v > 0;
-					})) {
+					const hoursPer = r.bucketHours ?? step.bucketHours;
+					const t = (d: string) => (d.length > 10 ? Date.parse(d) : Date.parse(`${d}T00:00:00Z`));
+					if (spec.key === "d1" && step.bucketHours !== 24) return <Txt variant="muted">D1 retention is a per-day measure: pick Daily or 7-day average.</Txt>;
+					if (
+						!r.days.some((d) => {
+							const v = pick(d.total);
+							return typeof v === "number" && v > 0;
+						})
+					) {
 						return <Txt variant="muted">{spec.key === "d1" ? "No D1 values yet: a join day counts once the day after it is over." : `No ${spec.label.toLowerCase()} in this range yet.`}</Txt>;
 					}
+					const last = r.days[r.days.length - 1];
+					const series = [
+						{ label: "Total", points: r.days.map((d) => ({ t: t(d.date), v: pick(d.total) })), color: p.foreground },
+						...r.sources.map((s) => ({ label: SOURCE_LABELS[s] ?? s, points: r.days.map((d) => ({ t: t(d.date), v: pick(d.bySource[s]) })), color: p.chart[SOURCE_COLORS[s] ?? 7] ?? p.brand })),
+					];
 					return (
-						<LineChart
-							area={false}
-							height={200}
-							format={spec.format}
-							series={[
-								{ label: "Total", points: r.days.map((d) => ({ t: t(d.date), v: pick(d.total) })), color: p.foreground },
-								...r.sources.map((s) => ({ label: SOURCE_LABELS[s] ?? s, points: r.days.map((d) => ({ t: t(d.date), v: pick(d.bySource[s]) })), color: p.chart[SOURCE_COLORS[s] ?? 7] ?? p.brand })),
-							]}
-						/>
+						<View style={{ gap: 6 }}>
+							<LineChart area={false} height={200} format={spec.format} timeLabel={(x) => trendTick(x, hoursPer)} series={series} />
+							<Legend items={series.map((x) => ({ label: x.label, color: x.color }))} />
+							{last?.partial ? <Note>The last point is the running {hoursPer < 24 ? `${hoursPer} hours` : "day"}, so far.</Note> : null}
+						</View>
 					);
 				}}
 			</QueryState>
