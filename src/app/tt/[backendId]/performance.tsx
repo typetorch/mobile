@@ -47,7 +47,8 @@ import { absoluteFlag, REGRESSION_PCT, regression, thresholdText, type Flag, typ
 import type { Filters } from "@/api/tt/types";
 import { LineChart, type ChartSeries as LineSeries } from "@/charts/LineChart";
 import { Button, Card, Chips, Dot, EmptyState, ErrorState, List, Segmented, SkeletonList, Stat, StatGrid, Txt } from "@/components/ui";
-import { ChangeChip, MiniTable, Note, Panel, QueryState, type Column } from "@/features/typetorch/bits";
+import { ChangeChip, Note, Panel, QueryState } from "@/features/typetorch/bits";
+import { DataTable, type DataColumn } from "@/features/typetorch/table";
 import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { TTScreen } from "@/features/typetorch/screen";
@@ -299,23 +300,25 @@ function GroupTable({ result, metricKeys, pct }: { result: PerfSeriesResult; met
 	const [all, setAll] = useState(false);
 	const side = result.side;
 	const pcts = all ? PERCENTILES : [pct];
-	const columns: Column<GroupRow>[] = [
-		{ key: "group", header: GROUP_BY_LABELS[result.by], width: 120, render: (g) => g.label },
-		{ key: "samples", header: "Samples", width: 70, align: "right", render: (g) => fmtInt(g.samples) },
+	const columns: DataColumn<GroupRow>[] = [
+		{ id: "group", header: GROUP_BY_LABELS[result.by], width: 120, accessor: (g) => g.label },
+		{ id: "samples", header: "Samples", width: 74, accessor: (g) => g.samples, cell: (g) => fmtInt(g.samples) },
 		...(side === "client"
 			? [
-					{ key: "sessions", header: "Sessions", width: 70, align: "right" as const, render: (g: GroupRow) => fmtInt(g.sessions) },
-					{ key: "players", header: "Players", width: 64, align: "right" as const, render: (g: GroupRow) => fmtInt(g.players) },
+					{ id: "sessions", header: "Sessions", width: 74, accessor: (g: GroupRow) => g.sessions, cell: (g: GroupRow) => fmtInt(g.sessions) },
+					{ id: "players", header: "Players", width: 68, accessor: (g: GroupRow) => g.players, cell: (g: GroupRow) => fmtInt(g.players) },
 				]
-			: [{ key: "servers", header: "Servers", width: 64, align: "right" as const, render: (g: GroupRow) => fmtInt(g.servers) }]),
+			: [{ id: "servers", header: "Servers", width: 68, accessor: (g: GroupRow) => g.servers, cell: (g: GroupRow) => fmtInt(g.servers) }]),
 		...metricKeys.flatMap((k) =>
 			pcts.map(
-				(x): Column<GroupRow> => ({
-					key: `${k}-${x}`,
+				(x): DataColumn<GroupRow> => ({
+					id: `${k}-${x}`,
 					header: `${metricLabel(side, k)} ${percentileName(x)}`,
-					width: 92,
-					align: "right",
-					render: (g) => {
+					width: 96,
+					type: "number",
+					accessor: (g) => g.metrics[k]?.[x] ?? null,
+					format: (v) => fmtMetric(k, typeof v === "number" ? v : null),
+					cell: (g) => {
 						const v = g.metrics[k]?.[x];
 						const f = absoluteFlag(side, k, x, v, g.metrics[k]?.n);
 						return (
@@ -334,7 +337,7 @@ function GroupTable({ result, metricKeys, pct }: { result: PerfSeriesResult; met
 	const lines = metricKeys.map((k) => thresholdText(side, k, pct)).filter(Boolean);
 	return (
 		<View style={{ gap: 6 }}>
-			<MiniTable columns={columns} rows={grouped ? groups : [overall]} {...(grouped ? { pinned: [overall] } : {})} rowKey={(g) => g.key} />
+			<DataTable id={`perf-${side}-groups`} label={`${side === "client" ? "Client" : "Server"} percentiles by ${GROUP_BY_LABELS[result.by].toLowerCase()}`} columns={columns} data={grouped ? groups : [overall]} {...(grouped ? { pinnedRows: [overall] } : {})} rowId={(g) => g.key} />
 			<View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
 				<Button title={all ? "Only the picked percentile" : "All percentiles"} small variant="ghost" onPress={() => setAll((a) => !a)} />
 			</View>
@@ -529,15 +532,17 @@ function CompareTable({ result }: { result: PerfCompareResult }) {
 	const { pinned, rows } = useMemo(() => compareRows(result), [result]);
 	const order = changeOrder(result);
 	const fmt = (r: CompareRow, v: number | null | undefined) => (r.key === "samples" ? fmtInt(v) : fmtMetric(r.key, v));
-	const columns: Column<CompareRow>[] = [
-		{ key: "metric", header: "Metric", width: 130, render: (r) => r.label },
+	const columns: DataColumn<CompareRow>[] = [
+		{ id: "metric", header: "Metric", width: 130, accessor: (r) => r.label },
 		...result.periods.map(
-			(x, i): Column<CompareRow> => ({
-				key: `p${i}`,
+			(x, i): DataColumn<CompareRow> => ({
+				id: `p${i}`,
 				header: comparePeriodLabel(result, x),
-				width: 96,
-				align: "right",
-				render: (r) => (
+				width: 100,
+				type: "number",
+				accessor: (r) => r.values[i] ?? null,
+				format: (_v, r) => fmt(r, r.values[i]),
+				cell: (r) => (
 					<Txt variant="small" color={flagColor(p, r.flags[i]) ?? p.foreground} style={r.flags[i] ? { fontWeight: "700" } : undefined}>
 						{fmt(r, r.values[i])}
 					</Txt>
@@ -547,11 +552,13 @@ function CompareTable({ result }: { result: PerfCompareResult }) {
 		...(order
 			? [
 					{
-						key: "change",
+						id: "change",
 						header: result.mode === "around" ? "Change (after vs before)" : "Change (newer vs older)",
-						width: 110,
-						align: "right" as const,
-						render: (r: CompareRow) => {
+						width: 116,
+						type: "number" as const,
+						accessor: (r: CompareRow) => (r.key === "samples" || !r.change ? null : r.change.pct),
+						format: (_v: unknown, r: CompareRow) => (r.key === "samples" ? "" : `${fmtDelta(r.change)}${r.change && r.change.better !== null ? ` ${r.change.better ? "better" : "worse"}` : ""}`),
+						cell: (r: CompareRow) => {
 							if (r.key === "samples") return "";
 							const reg = r.regression;
 							const text = `${fmtDelta(r.change)}${r.change && r.change.better !== null ? ` ${r.change.better ? "better" : "worse"}` : ""}`;
@@ -569,7 +576,7 @@ function CompareTable({ result }: { result: PerfCompareResult }) {
 	];
 	return (
 		<View style={{ gap: 6 }}>
-			<MiniTable columns={columns} rows={rows} pinned={pinned} rowKey={(r) => r.id} />
+			<DataTable id={`perf-compare-${result.mode}`} label="Compare" columns={columns} data={rows} pinnedRows={pinned} rowId={(r) => r.id} />
 			{order ? <Note>Orange is worse by over {REGRESSION_PCT.warning}%, red by over {REGRESSION_PCT.critical}%, green is better.</Note> : null}
 		</View>
 	);

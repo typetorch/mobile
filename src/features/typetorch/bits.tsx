@@ -6,15 +6,16 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
 import { useState, type ReactNode } from "react";
-import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, View } from "react-native";
 
 import type { Api } from "@/api/backend";
 import type { FunnelProgress, RobloxProductInfo } from "@/api/tt/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Icon, SkeletonList, Txt } from "@/components/ui";
 import { compactJson, fmtPct, fmtTime, prettyJson, shortId } from "@/lib/format";
 import { useBackend } from "@/store/accounts";
-import { radius, space, toneColor, useTheme, type Tone } from "@/theme";
+import { space, toneColor, useTheme, type Tone } from "@/theme";
 
+import { PlayerCardSheet, PlayerHover } from "./cards";
 import { useTTQuery } from "./hooks";
 
 /** Loading, error and empty states around a query's data (the web's QueryState). */
@@ -80,77 +81,6 @@ export function ShareRow({ label, value, share, sub, tone, onPress }: { label: R
 	);
 }
 
-export interface Column<T> {
-	key: string;
-	header: string;
-	width?: number;
-	align?: "left" | "right" | "center";
-	render: (row: T, index: number) => ReactNode;
-	mono?: boolean;
-}
-
-/** A compact table that scrolls sideways (wide breakdowns, query results). Cells are text unless render gives a node. */
-export function MiniTable<T>({
-	columns,
-	rows,
-	rowKey,
-	onRowPress,
-	max,
-	pinned,
-}: {
-	columns: Column<T>[];
-	rows: readonly T[];
-	rowKey?: (row: T, i: number) => string;
-	onRowPress?: (row: T) => void;
-	/** Show at most this many rows, with a "Show all" button. */
-	max?: number;
-	/** Rows drawn first, bold (an average or a total). */
-	pinned?: readonly T[];
-}) {
-	const p = useTheme();
-	const [all, setAll] = useState(false);
-	const shown = max && !all ? rows.slice(0, max) : rows;
-	const cell = (c: Column<T>, content: ReactNode, header = false, bold = false) => (
-		<View key={c.key} style={{ width: c.width ?? 90, paddingHorizontal: 6, paddingVertical: 7, justifyContent: "center", alignItems: c.align === "right" ? "flex-end" : c.align === "center" ? "center" : "flex-start" }}>
-			{typeof content === "string" || typeof content === "number" ? (
-				<Txt variant={header ? "label" : c.mono ? "mono" : "small"} color={header ? undefined : p.foreground} numberOfLines={header ? 2 : 3} style={bold ? { fontWeight: "700" } : undefined}>
-					{content}
-				</Txt>
-			) : (
-				content
-			)}
-		</View>
-	);
-	const line = (row: T, i: number, bold: boolean) => {
-		const content = <View style={{ flexDirection: "row" }}>{columns.map((c) => cell(c, c.render(row, i), false, bold))}</View>;
-		return (
-			<View key={rowKey ? rowKey(row, i) : String(i)} style={{ borderTopWidth: StyleSheet.hairlineWidth, borderColor: p.border, backgroundColor: bold ? p.muted : undefined }}>
-				{onRowPress && !bold ? (
-					<Pressable onPress={() => onRowPress(row)} android_ripple={{ color: p.accent }} style={({ pressed }) => [pressed && { backgroundColor: p.accent }]}>
-						{content}
-					</Pressable>
-				) : (
-					content
-				)}
-			</View>
-		);
-	};
-	return (
-		<View style={{ gap: space.sm }}>
-			<View style={{ backgroundColor: p.card, borderColor: p.border, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.lg, overflow: "hidden" }}>
-				<ScrollView horizontal showsHorizontalScrollIndicator nestedScrollEnabled>
-					<View>
-						<View style={{ flexDirection: "row" }}>{columns.map((c) => cell(c, c.header, true))}</View>
-						{(pinned ?? []).map((r, i) => line(r, -1 - i, true))}
-						{shown.map((r, i) => line(r, i, false))}
-					</View>
-				</ScrollView>
-			</View>
-			{max && rows.length > max ? <Button title={all ? "Show fewer" : `Show all ${rows.length}`} small variant="ghost" onPress={() => setAll((a) => !a)} style={{ alignSelf: "flex-start" }} /> : null}
-		</View>
-	);
-}
-
 /** A retention-style heat cell: the share kept, darker = more; "–" while the day isn't over. */
 export function HeatCell({ rate, kept }: { rate: number | null | undefined; kept?: number | null }) {
 	const p = useTheme();
@@ -174,14 +104,15 @@ export function openPlayer(backendId: string, pid: string) {
 	router.push(`/tt/${backendId}/player/${encodeURIComponent(pid)}`);
 }
 
-export function PidLink({ backendId, pid, keep = 8 }: { backendId: string; pid: string; keep?: number }) {
+/** A pid that opens the player on a tap; a long press shows the player card (the web's PlayerHover). */
+export function PidLink({ backendId, pid, keep = 8, uid, name, displayName }: { backendId: string; pid: string; keep?: number; uid?: number; name?: string; displayName?: string }) {
 	const p = useTheme();
 	return (
-		<Pressable onPress={() => openPlayer(backendId, pid)} hitSlop={6}>
+		<PlayerHover backendId={backendId} pid={pid} {...(uid !== undefined ? { uid } : {})} {...(name ? { name } : {})} {...(displayName ? { displayName } : {})}>
 			<Txt variant="mono" color={p.brand}>
-				{shortId(pid, keep)}
+				{name ? `@${name}` : shortId(pid, keep)}
 			</Txt>
-		</Pressable>
+		</PlayerHover>
 	);
 }
 
@@ -400,19 +331,35 @@ export function playerLabel(x: NamedPlayer): string {
 /** One player in a list (Funnels, Experiments, Monetization): the name or pid, the UserId, a detail line; a tap opens them. */
 export function NamedPlayerRow({ backendId, row, detail, right }: { backendId: string; row: NamedPlayer; detail?: string; right?: ReactNode }) {
 	const p = useTheme();
+	const [card, setCard] = useState(false);
 	return (
-		<Pressable onPress={() => openPlayer(backendId, row.pid)} android_ripple={{ color: p.accent }} style={({ pressed }) => [{ paddingVertical: 8, paddingHorizontal: space.md, flexDirection: "row", alignItems: "center", gap: 8 }, pressed && { backgroundColor: p.accent }]}>
-			<View style={{ flex: 1, gap: 2 }}>
-				<Txt style={{ fontWeight: "600" }} numberOfLines={1}>
-					{playerLabel(row)}
-				</Txt>
-				<Txt variant="small" numberOfLines={2}>
-					{[row.name ? shortId(row.pid, 8) : null, row.uid !== undefined ? `UserId ${row.uid}` : "not linked", detail].filter(Boolean).join(" · ")}
-				</Txt>
-			</View>
-			{right}
-			<Icon name="chevron-forward" size={14} color={p.mutedForeground} />
-		</Pressable>
+		<>
+			<Pressable
+				onPress={() => openPlayer(backendId, row.pid)}
+				onLongPress={() => setCard(true)}
+				delayLongPress={350}
+				android_ripple={{ color: p.accent }}
+				style={({ pressed }) => [{ paddingVertical: 8, paddingHorizontal: space.md, flexDirection: "row", alignItems: "center", gap: 8 }, pressed && { backgroundColor: p.accent }]}
+			>
+				<View style={{ flex: 1, gap: 2 }}>
+					<Txt style={{ fontWeight: "600" }} numberOfLines={1}>
+						{playerLabel(row)}
+					</Txt>
+					<Txt variant="small" numberOfLines={2}>
+						{[row.name ? shortId(row.pid, 8) : null, row.uid !== undefined ? `UserId ${row.uid}` : "not linked", detail].filter(Boolean).join(" · ")}
+					</Txt>
+				</View>
+				{right}
+				<Icon name="chevron-forward" size={14} color={p.mutedForeground} />
+			</Pressable>
+			<PlayerCardSheet
+				backendId={backendId}
+				pid={row.pid}
+				known={{ ...(row.uid !== undefined ? { uid: row.uid } : {}), ...(row.name ? { name: row.name } : {}), ...(row.displayName ? { displayName: row.displayName } : {}) }}
+				open={card}
+				onClose={() => setCard(false)}
+			/>
+		</>
 	);
 }
 

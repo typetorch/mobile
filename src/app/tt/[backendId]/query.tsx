@@ -10,7 +10,8 @@ import type { Api } from "@/api/backend";
 import { SAVED_QUERY_CHARTS, type SavedQuery, type SavedQueryChart, type SqlResult } from "@/api/tt/types";
 import { LineChart, ShareBars } from "@/charts/LineChart";
 import { Button, Card, Chips, ErrorState, Field, Segmented, Txt, confirm } from "@/components/ui";
-import { CopyButton, JsonBlock, MiniTable, Note, Panel } from "@/features/typetorch/bits";
+import { CopyButton, JsonBlock, Note, Panel } from "@/features/typetorch/bits";
+import { DataTable, typeFromSql, type DataColumn } from "@/features/typetorch/table";
 import { FilterBar, useTTFilters } from "@/features/typetorch/filters";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { TTScreen } from "@/features/typetorch/screen";
@@ -246,17 +247,21 @@ function ResultChart({ result, chart }: { result: SqlResult; chart: "bar" | "lin
 function SqlResultView({ data, chart }: { data: SqlResult; chart: SavedQueryChart | null }) {
 	const columns = useMemo(
 		() =>
-			data.columns.map((c, i) => ({
-				key: `${c.name}-${i}`,
-				header: c.name,
-				width: NUMERIC.test(c.type.toUpperCase()) ? 90 : 150,
-				align: NUMERIC.test(c.type.toUpperCase()) ? ("right" as const) : ("left" as const),
-				mono: true,
-				render: (row: unknown[]) => cellText(row[i]),
-			})),
+			data.columns.map(
+				(c, i): DataColumn<unknown[]> => ({
+					id: `${c.name}-${i}`,
+					header: c.name,
+					hint: c.type.toLowerCase(),
+					width: NUMERIC.test(c.type.toUpperCase()) ? 96 : 150,
+					...(typeFromSql(c.type) ? { type: typeFromSql(c.type) } : {}),
+					mono: true,
+					accessor: (row) => row[i],
+					format: (v) => cellText(v),
+					filter: typeFromSql(c.type) ? undefined : "text",
+				}),
+			),
 		[data.columns],
 	);
-	const csv = useMemo(() => [data.columns.map((c) => c.name).join("\t"), ...data.rows.map((r) => r.map(cellText).join("\t"))].join("\n"), [data]);
 	return (
 		<Panel title={`${fmtInt(data.rows.length)} row${data.rows.length === 1 ? "" : "s"}${data.truncated ? " (more exist: raise the limit or narrow the query)" : ""}`} note={`${data.ms} ms on the server`}>
 			{chart && chart !== "table" ? (
@@ -264,8 +269,7 @@ function SqlResultView({ data, chart }: { data: SqlResult; chart: SavedQueryChar
 					<ResultChart result={data} chart={chart} />
 				</Card>
 			) : null}
-			<MiniTable columns={columns} rows={data.rows} max={100} />
-			<CopyButton text={csv} title="Copy as TSV" />
+			<DataTable id="query-sql" label="SQL result" columns={columns} data={data.rows} pageSize={100} rowJson={(row) => Object.fromEntries(data.columns.map((c, i) => [c.name, row[i]]))} />
 		</Panel>
 	);
 }

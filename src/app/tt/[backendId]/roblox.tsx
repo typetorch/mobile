@@ -13,7 +13,8 @@ import { barMax, change, estimatePercentile, loadBenchmarks, type Benchmark, typ
 import type { BenchmarkPeriod, Filters, RobloxAcquisition, RobloxAcquisitionPeriod, TrendValues } from "@/api/tt/types";
 import { LineChart } from "@/charts/LineChart";
 import { Badge, Button, Card, Chips, EmptyState, Field, Icon, List, Segmented, Txt } from "@/components/ui";
-import { ChangeChip, MiniTable, Note, Panel, QueryState } from "@/features/typetorch/bits";
+import { ChangeChip, Note, Panel, QueryState } from "@/features/typetorch/bits";
+import { DataTable } from "@/features/typetorch/table";
 import { FilterBar, isoDate, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { BENCHMARK_ROWS, CALCULATION_NOTES, CARDS, JOIN_SOURCES_DIFFER, ordinal, periodLabel, SOURCE_COLORS, SOURCE_LABELS, sub, TRENDS, type CardSpec, type Differs } from "@/features/typetorch/roblox-cards";
@@ -346,15 +347,18 @@ function AcquisitionBody({ r, bench, onSet }: { r: RobloxAcquisition; bench?: Be
 				);
 			})}
 			{r.sources.length ? (
-				<MiniTable
+				<DataTable
+					id="roblox-acquisition-sources"
+					label="Acquisition by source"
+					search={false}
 					columns={[
-						{ key: "source", header: "Source", width: 130, render: (s) => s.label },
-						{ key: "imp", header: "Users with impressions", width: 96, align: "right", render: (s) => fmtInt(s.impressions) },
-						{ key: "qp", header: "Users with qualified plays", width: 96, align: "right", render: (s) => fmtInt(s.qualifiedPlays) },
-						{ key: "rate", header: "Qualified plays per impression", width: 96, align: "right", render: (s) => fmtPct(s.rate, 2) },
+						{ id: "source", header: "Source", width: 130, accessor: (s) => s.label },
+						{ id: "impressions", header: "Users with impressions", width: 100, accessor: (s) => s.impressions, cell: (s) => fmtInt(s.impressions) },
+						{ id: "qualifiedPlays", header: "Users with qualified plays", width: 100, accessor: (s) => s.qualifiedPlays, cell: (s) => fmtInt(s.qualifiedPlays) },
+						{ id: "rate", header: "Qualified plays per impression", width: 100, accessor: (s) => s.rate, cell: (s) => fmtPct(s.rate, 2) },
 					]}
-					rows={r.sources}
-					rowKey={(s) => s.source}
+					data={r.sources}
+					rowId={(s) => s.source}
 				/>
 			) : null}
 			<Note>

@@ -11,7 +11,8 @@ import { Linking, Pressable, View } from "react-native";
 import type { Facet, PlayerStatsResult, TimelineEvent, TimelineResult } from "@/api/tt/types";
 import { BarChart, type ChartPoint } from "@/charts/LineChart";
 import { Badge, Button, Card, Chips, EmptyState, Icon, List, Segmented, Skeleton, Txt } from "@/components/ui";
-import { CopyButton, EventItem, FunnelBar, FunnelStepList, MiniTable, Note, Panel, ProductName, productKindLabel, QueryState } from "@/features/typetorch/bits";
+import { CopyButton, EventItem, FunnelBar, FunnelStepList, Note, Panel, ProductName, productKindLabel, QueryState } from "@/features/typetorch/bits";
+import { DataTable } from "@/features/typetorch/table";
 import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
 import { GraphControls, MermaidButton, PathStrip, SparseNote, StateList } from "@/features/typetorch/graph";
 import { useTTQuery } from "@/features/typetorch/hooks";
@@ -203,6 +204,7 @@ function Numbers({ items }: { items: [string, string][] }) {
 const bucketLabel = (start: string, bucket: PlayerStatsResult["window"]["bucket"]) => (bucket === "day" ? start.slice(0, 10) : `${start.slice(0, 10)} ${start.slice(11, 16)}`);
 
 type MetricKey = "robux" | "minutes" | "sessions" | "purchases";
+const TABLE_IDS: Record<MetricKey, string> = { robux: "player-spending", minutes: "player-playtime", sessions: "player-sessions-per", purchases: "player-purchases-per" };
 
 /** A player's numbers per bucket: bars, or the same numbers as a table. */
 function Series({ stats, metric, format, columns, show, onShow, title, empty }: { stats: PlayerStatsResult; metric: MetricKey; format(v: number): string; columns: { key: MetricKey; label: string; format(v: number): string }[]; show: Show; onShow(s: Show): void; title: string; empty: string }) {
@@ -216,14 +218,17 @@ function Series({ stats, metric, format, columns, show, onShow, title, empty }: 
 			) : show === "chart" ? (
 				<BarChart points={points} format={format} timeLabel={(t) => (bucket === "day" ? new Date(t).toISOString().slice(5, 10) : new Date(t).toISOString().slice(11, 16))} />
 			) : (
-				<MiniTable
+				<DataTable
+					id={TABLE_IDS[metric]}
+					label={title}
+					density="compact"
+					defaultSort={[{ id: "start", desc: true }]}
 					columns={[
-						{ key: "start", header: bucket === "day" ? "Day (UTC)" : `${bucket} (UTC)`, width: 130, render: (b) => bucketLabel(b.start, bucket) },
-						...columns.map((c) => ({ key: c.key, header: c.label, width: 90, align: "right" as const, render: (b: PlayerStatsResult["series"][number]) => c.format(b[c.key]) })),
+						{ id: "start", header: bucket === "day" ? "Day (UTC)" : `${bucket} (UTC)`, width: 130, type: "date", accessor: (b) => b.start, format: (_v, b) => bucketLabel(b.start, bucket) },
+						...columns.map((c) => ({ id: c.key, header: c.label, width: 90, type: "number" as const, accessor: (b: PlayerStatsResult["series"][number]) => b[c.key], format: (v: unknown) => c.format(Number(v)) })),
 					]}
-					rows={[...stats.series].reverse()}
-					rowKey={(b) => b.start}
-					max={30}
+					data={stats.series}
+					rowId={(b) => b.start}
 				/>
 			)}
 		</Panel>

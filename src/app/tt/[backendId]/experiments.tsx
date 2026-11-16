@@ -7,7 +7,8 @@ import { Pressable, View } from "react-native";
 
 import type { ExperimentOverride, ExperimentOverrides, ExperimentPlayer, ExperimentResult } from "@/api/tt/types";
 import { Badge, Button, Chips, List, Segmented, Txt } from "@/components/ui";
-import { MiniTable, NamedPlayerRow, Note, Panel, QueryState, ShareBar } from "@/features/typetorch/bits";
+import { NamedPlayerRow, Note, Panel, QueryState, ShareBar } from "@/features/typetorch/bits";
+import { DataTable } from "@/features/typetorch/table";
 import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { TTScreen } from "@/features/typetorch/screen";
@@ -206,13 +207,18 @@ function ResultsView({ data, onOpenVariant, selectedVariant }: { data: Results; 
 				title={data.scope === "server" ? "Per server: pinned artifacts vs unpinned servers" : `Variants of ${data.experiment}`}
 				note={`${data.control ? `Compared with the control variant "${data.control}".` : "No control variant."}${data.mixedPlayers ? ` ${plural(data.mixedPlayers, "player")} seen in more than one variant are left out.` : ""}${onOpenVariant ? " Tap a variant for its players." : ""}`}
 			>
-				<MiniTable<Variant>
+				<DataTable<Variant>
+					id="experiment-variants"
+					label={`Variants of ${data.experiment}`}
+					search={false}
 					columns={[
 						{
-							key: "variant",
+							id: "variant",
 							header: "Variant",
 							width: 120,
-							render: (v) => (
+							accessor: (v) => v.variant,
+							filter: false,
+							cell: (v) => (
 								<View style={{ gap: 2 }}>
 									<Txt variant="small" color={selectedVariant === v.variant ? p.brand : p.foreground} style={{ fontWeight: "600" }}>
 										{v.variant}
@@ -221,15 +227,16 @@ function ResultsView({ data, onOpenVariant, selectedVariant }: { data: Results; 
 								</View>
 							),
 						},
-						{ key: "players", header: "Players", width: 70, align: "right", render: (v) => fmtInt(v.players) },
-						{ key: "returned", header: "Came back", width: 100, align: "right", render: (v) => rate(v.returned) },
-						{ key: "payers", header: "Paid", width: 90, align: "right", render: (v) => rate(v.payers) },
-						{ key: "playtime", header: "Playtime / player", width: 90, align: "right", render: (v) => `${fmtNum(v.playtimeMinutes, 1)} min` },
-						{ key: "robux", header: "Robux / player", width: 80, align: "right", render: (v) => fmtNum(v.robuxPerPlayer) },
-						{ key: "sessions", header: "Sessions / player", width: 80, align: "right", render: (v) => fmtNum(v.sessionsPerPlayer) },
+						{ id: "players", header: "Players", width: 74, accessor: (v) => v.players, cell: (v) => fmtInt(v.players) },
+						{ id: "returned", header: "Came back", width: 104, accessor: (v) => v.returned.rate, cell: (v) => rate(v.returned) },
+						{ id: "payers", header: "Paid", width: 94, accessor: (v) => v.payers.rate, cell: (v) => rate(v.payers) },
+						{ id: "playtime", header: "Playtime / player", width: 94, accessor: (v) => v.playtimeMinutes, cell: (v) => `${fmtNum(v.playtimeMinutes, 1)} min` },
+						{ id: "robux", header: "Robux / player", width: 84, accessor: (v) => v.robuxPerPlayer, cell: (v) => fmtNum(v.robuxPerPlayer) },
+						{ id: "sessions", header: "Sessions / player", width: 84, accessor: (v) => v.sessionsPerPlayer, cell: (v) => fmtNum(v.sessionsPerPlayer) },
 					]}
-					rows={data.variants}
-					rowKey={(v) => v.variant}
+					data={data.variants}
+					rowId={(v) => v.variant}
+					{...(selectedVariant ? { isRowSelected: (v: Variant) => v.variant === selectedVariant } : {})}
 					{...(onOpenVariant ? { onRowPress: (v: Variant) => onOpenVariant(v.variant) } : {})}
 				/>
 			</Panel>

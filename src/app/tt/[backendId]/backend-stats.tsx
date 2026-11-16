@@ -11,7 +11,8 @@ import { View } from "react-native";
 import type { BackendStats, RouteGroup, StatsBucket, StatsWindow } from "@/api/tt/types";
 import { LineChart, type ChartSeries } from "@/charts/LineChart";
 import { Button, Card, EmptyState, ErrorState, KV, Segmented, SkeletonList, Stat, StatGrid, Txt } from "@/components/ui";
-import { MiniTable, Note, Panel } from "@/features/typetorch/bits";
+import { Note, Panel } from "@/features/typetorch/bits";
+import { DataTable } from "@/features/typetorch/table";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { MarkList, useDeployMarks } from "@/features/typetorch/marks";
 import { TTScreen } from "@/features/typetorch/screen";
@@ -154,19 +155,24 @@ function Stats({ backendId }: { backendId: string }) {
 					>
 						<Segmented options={WINDOWS} value={window} onChange={setWindow} />
 						{data.routes.length ? (
-							<MiniTable
+							<DataTable
+								id="backend-routes"
+								label="Requests by route group"
+								search={false}
+								pageSize={20}
+								defaultSort={[{ id: "requests", desc: true }]}
 								columns={[
-									{ key: "group", header: "Route group", width: 150, render: (r) => ROUTE_LABELS[r.group] ?? r.group },
-									{ key: "requests", header: "Requests", width: 76, align: "right", render: (r) => fmtInt(r.requests) },
-									{ key: "errors", header: "5xx", width: 50, align: "right", render: (r) => (r.errors ? <Txt variant="small" color={p.destructive}>{fmtInt(r.errors)}</Txt> : "0") },
-									{ key: "p50", header: "p50", width: 70, align: "right", render: (r) => ms(r.latency.p50) },
-									{ key: "p90", header: "p90", width: 70, align: "right", render: (r) => ms(r.latency.p90) },
-									{ key: "p99", header: "p99", width: 70, align: "right", render: (r) => ms(r.latency.p99) },
-									{ key: "max", header: "Max", width: 70, align: "right", render: (r) => ms(r.latency.max) },
-									{ key: "avg", header: "Avg", width: 70, align: "right", render: (r) => ms(r.latency.avg) },
+									{ id: "group", header: "Route group", width: 150, accessor: (r) => ROUTE_LABELS[r.group] ?? r.group },
+									{ id: "requests", header: "Requests", width: 80, accessor: (r) => r.requests, cell: (r) => fmtInt(r.requests) },
+									{ id: "errors", header: "5xx", width: 56, accessor: (r) => r.errors, cell: (r) => (r.errors ? <Txt variant="small" color={p.destructive}>{fmtInt(r.errors)}</Txt> : "0") },
+									{ id: "p50", header: "p50", width: 72, accessor: (r) => r.latency.p50, format: (v) => ms(v as number) },
+									{ id: "p90", header: "p90", width: 72, accessor: (r) => r.latency.p90, format: (v) => ms(v as number) },
+									{ id: "p99", header: "p99", width: 72, accessor: (r) => r.latency.p99, format: (v) => ms(v as number) },
+									{ id: "max", header: "Max", width: 72, accessor: (r) => r.latency.max, format: (v) => ms(v as number) },
+									{ id: "avg", header: "Avg", width: 72, accessor: (r) => r.latency.avg, format: (v) => ms(v as number) },
 								]}
-								rows={[...data.routes].sort((a, b) => b.requests - a.requests)}
-								rowKey={(r) => r.group}
+								data={data.routes}
+								rowId={(r) => r.group}
 							/>
 						) : (
 							<Txt variant="muted">No requests in this window yet.</Txt>
