@@ -3,7 +3,7 @@
  * (Overview) body that both /tt/<id> and the project's TypeTorch tab show.
  */
 import { router } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View } from "react-native";
 
 import type { FleetAlert } from "@/api/tt/types";
@@ -14,6 +14,7 @@ import { useAccounts, useBackend, type BackendAccount } from "@/store/accounts";
 import { useTheme } from "@/theme";
 
 import { dayRange, useTTQuery } from "./hooks";
+import { chartMarks, DeployMarksToggle, useDeployMarks, useMarkCard } from "./marks";
 import { pageHref, TT_PAGES } from "./pages";
 
 export function SignedOutNotice({ account }: { account: BackendAccount }) {
@@ -101,6 +102,11 @@ export function TTHome({ backendId, poll = true }: { backendId: string; poll?: b
 	const errors = useTTQuery(backendId, ["errors", "24h", ""], (api, s) => api.errors({ window: "24h", limit: 5 }, s), { staleTime: 60_000 });
 	const deploys = useTTQuery(backendId, ["deploys", "latest"], (api, s) => api.fleetDeploys({ limit: 1 }, s), { staleTime: 60_000 });
 	const alerts = useTTQuery(backendId, ["alerts", "recent"], (api, s) => api.fleetAlerts({ limit: 5 }, s), { staleTime: 30_000 });
+	// Deploy marks on the players chart (a tap opens a mark's card).
+	const dayStart = Date.parse(`${dayRange(days).from}T00:00:00Z`);
+	const markRange = useMemo(() => ({ from: dayStart, to: dayStart + days * 86_400_000 }), [dayStart, days]);
+	const marksQ = useDeployMarks(backendId, markRange, undefined, { enabled: !!overview.data });
+	const card = useMarkCard(backendId);
 	if (!account) return null;
 
 	const unhealthy = fleet.data ? fleet.data.servers.filter((s) => (s.reasons?.length ?? 0) > 0 || (s.health && s.health !== "ok")).length : null;
@@ -138,12 +144,14 @@ export function TTHome({ backendId, poll = true }: { backendId: string; poll?: b
 						{o.days.length > 1 ? (
 							<Card style={{ gap: 6 }}>
 								<Txt variant="label">Players per day</Txt>
-								<BarChart points={o.days.map((d) => ({ t: Date.parse(d.date), v: d.players }))} format={compact} />
+								<BarChart points={o.days.map((d) => ({ t: Date.parse(d.date), v: d.players }))} format={compact} marks={chartMarks(p, marksQ.marks)} onMarkPress={card.open} />
+								<DeployMarksToggle {...marksQ} />
 							</Card>
 						) : o.buckets?.length ? (
 							<Card style={{ gap: 6 }}>
 								<Txt variant="label">Players per step</Txt>
-								<BarChart points={o.buckets.map((b) => ({ t: b.t, v: b.players }))} format={compact} timeLabel={(t) => new Date(t).toISOString().slice(11, 16)} />
+								<BarChart points={o.buckets.map((b) => ({ t: b.t, v: b.players }))} format={compact} timeLabel={(t) => new Date(t).toISOString().slice(11, 16)} marks={chartMarks(p, marksQ.marks)} onMarkPress={card.open} />
+								<DeployMarksToggle {...marksQ} />
 							</Card>
 						) : null}
 					</>
@@ -184,6 +192,7 @@ export function TTHome({ backendId, poll = true }: { backendId: string; poll?: b
 				</Section>
 			) : null}
 
+			{card.sheet}
 			<PageMenu account={account} />
 			<Txt variant="small" style={{ textAlign: "center", color: p.mutedForeground }}>
 				Pull to refresh · live numbers update every 15 s

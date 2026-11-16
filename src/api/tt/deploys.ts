@@ -87,7 +87,8 @@ export function markDeploySeq(m: Pick<DeployMark, "id" | "seq">): number | null 
 }
 
 /** The short label on a chart marker: "#42 prod", "kernel 0.4.0". */
-export function markLabel(m: Pick<DeployMark, "kind" | "seq" | "branch" | "kernel">): string {
+export function markLabel(m: Pick<DeployMark, "kind" | "seq" | "branch" | "kernel"> & { message?: string | null }): string {
+	if (m.kind === "event") return m.message ?? "live event";
 	if (m.kind === "kernel") return `kernel${m.kernel ? ` ${m.kernel}` : ""}`;
 	return [m.seq !== null ? `#${m.seq}` : m.kind, m.branch].filter(Boolean).join(" ");
 }

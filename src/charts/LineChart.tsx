@@ -2,7 +2,7 @@
  * Small charts drawn with react-native-svg (ships in Expo Go). A LineChart takes one or more time series, measures
  * its width, and shows the values under the finger (touch and drag to scrub).
  */
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { View, type LayoutChangeEvent } from "react-native";
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from "react-native-svg";
 
@@ -22,7 +22,38 @@ export interface ChartSeries {
 	dashed?: boolean;
 }
 
+/** A vertical mark (a deploy, a live event): drawn dashed with a small flag; a tap near it calls `onMarkPress`. */
+export interface ChartMark {
+	t: number;
+	color?: string;
+	/** SVG dash pattern ("2,3"); default "2,3". */
+	dash?: string;
+	/** Short text beside the flag ("#42 prod"), drawn while a chart has at most 6 marks. */
+	label?: string;
+	/** Anything the tap handler needs (the deploy marks of this line). */
+	data?: unknown;
+}
+
 const PAD = { top: 10, right: 8, bottom: 20, left: 40 };
+/** How close (points) a tap must land to a mark to pick it instead of scrubbing. */
+const MARK_HIT = 14;
+const MAX_LABELLED = 6;
+
+/** The dashed line, a flag on top and the label beside it. */
+function MarkLine({ x, top, bottom, mark, fallback, labels, muted }: { x: number; top: number; bottom: number; mark: ChartMark; fallback: string; labels: boolean; muted: string }) {
+	const color = mark.color ?? fallback;
+	return (
+		<G>
+			<Line x1={x} x2={x} y1={top} y2={bottom} stroke={color} strokeWidth={1.25} strokeDasharray={mark.dash ?? "2,3"} opacity={0.9} />
+			<Path d={`M${x - 4},${top} L${x + 4},${top} L${x},${top + 6} Z`} fill={color} />
+			{labels && mark.label ? (
+				<SvgText x={x + 6} y={top + 8} fontSize={9} fill={muted}>
+					{mark.label}
+				</SvgText>
+			) : null}
+		</G>
+	);
+}
 
 export function niceMax(max: number): number {
 	if (max <= 0) return 1;
@@ -54,6 +85,7 @@ export function LineChart({
 	timeLabel = dayLabel,
 	area = true,
 	marks,
+	onMarkPress,
 }: {
 	series: ChartSeries[];
 	height?: number;
@@ -62,7 +94,9 @@ export function LineChart({
 	timeLabel?: (t: number) => string;
 	area?: boolean;
 	/** Dashed vertical lines at these times (deploys, releases), drawn when inside the chart's span. */
-	marks?: { t: number; color?: string }[];
+	marks?: ChartMark[];
+	/** A tap on (near) a mark. */
+	onMarkPress?: (mark: ChartMark) => void;
 }) {
 	const p = useTheme();
 	const [width, setWidth] = useState(0);
@@ -83,6 +117,31 @@ export function LineChart({
 	const y = (v: number) => PAD.top + plotH - ((v - minV) / (maxV - minV || 1)) * plotH;
 
 	const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
+	const t0 = times[0];
+	const t1 = times[times.length - 1];
+	const inMarks = times.length > 1 && t0 !== undefined && t1 !== undefined ? (marks ?? []).filter((m) => m.t >= t0 && m.t <= t1) : [];
+	const touch = useRef<{ x: number; moved: boolean } | null>(null);
+	const markAt = (px: number) => {
+		let best: ChartMark | undefined;
+		let bestD = MARK_HIT;
+		for (const m of inMarks) {
+			const d = Math.abs(x(m.t) - px);
+			if (d <= bestD) {
+				bestD = d;
+				best = m;
+			}
+		}
+		return best;
+	};
+	const release = () => {
+		const start = touch.current;
+		touch.current = null;
+		setHover(null);
+		if (start && !start.moved && onMarkPress) {
+			const m = markAt(start.x);
+			if (m) onMarkPress(m);
+		}
+	};
 	const scrub = (px: number) => {
 		if (!times.length) return;
 		let best = 0;
@@ -108,10 +167,19 @@ export function LineChart({
 				style={{ height }}
 				onStartShouldSetResponder={() => true}
 				onMoveShouldSetResponder={() => true}
-				onResponderGrant={(e) => scrub(e.nativeEvent.locationX)}
-				onResponderMove={(e) => scrub(e.nativeEvent.locationX)}
-				onResponderRelease={() => setHover(null)}
-				onResponderTerminate={() => setHover(null)}
+				onResponderGrant={(e) => {
+					touch.current = { x: e.nativeEvent.locationX, moved: false };
+					scrub(e.nativeEvent.locationX);
+				}}
+				onResponderMove={(e) => {
+					if (touch.current && Math.abs(e.nativeEvent.locationX - touch.current.x) > 6) touch.current.moved = true;
+					scrub(e.nativeEvent.locationX);
+				}}
+				onResponderRelease={release}
+				onResponderTerminate={() => {
+					touch.current = null;
+					setHover(null);
+				}}
 			>
 				{width > 0 ? (
 					<Svg width={width} height={height}>
@@ -133,11 +201,9 @@ export function LineChart({
 								</SvgText>
 							</>
 						) : null}
-						{times.length > 1
-							? (marks ?? [])
-									.filter((m) => m.t >= (times[0] as number) && m.t <= (times[times.length - 1] as number))
-									.map((m, i) => <Line key={`m${i}`} x1={x(m.t)} x2={x(m.t)} y1={PAD.top} y2={PAD.top + plotH} stroke={m.color ?? p.warning} strokeWidth={1} strokeDasharray="2,3" opacity={0.8} />)
-							: null}
+						{inMarks.map((m, i) => (
+							<MarkLine key={`m${i}`} x={x(m.t)} top={PAD.top} bottom={PAD.top + plotH} mark={m} fallback={p.warning} labels={inMarks.length <= MAX_LABELLED} muted={p.mutedForeground} />
+						))}
 						{series.map((s, si) => {
 							const pts = s.points.filter((pt) => pt.v !== null).sort((a, b) => a.t - b.t);
 							if (!pts.length) return null;
@@ -201,7 +267,11 @@ export function Legend({ items }: { items: { label: string; color: string }[] })
 	);
 }
 
-/** Vertical bars over time (counts per bucket). `onPick`: called with the bar under the finger when it lifts. */
+/**
+ * Vertical bars over time (counts per bucket; the web's DayBars). `onPick`: called with the bar under the finger when it
+ * lifts. `previous`: the period before, one value per bar (its first step over the first bar), drawn as a dashed line.
+ * `marks`: each on the bar it falls in (bars run from their time to the next bar's); a tap near one calls `onMarkPress`.
+ */
 export function BarChart({
 	points,
 	height = 120,
@@ -209,6 +279,10 @@ export function BarChart({
 	format = shortNumber,
 	timeLabel = dayLabel,
 	onPick,
+	previous,
+	previousLabel = "Previous period",
+	marks,
+	onMarkPress,
 }: {
 	points: ChartPoint[];
 	height?: number;
@@ -216,22 +290,71 @@ export function BarChart({
 	format?: (v: number) => string;
 	timeLabel?: (t: number) => string;
 	onPick?: (point: ChartPoint) => void;
+	previous?: (number | null)[];
+	previousLabel?: string;
+	marks?: ChartMark[];
+	onMarkPress?: (mark: ChartMark) => void;
 }) {
 	const p = useTheme();
 	const [width, setWidth] = useState(0);
 	const [hover, setHover] = useState<number | null>(null);
-	const max = niceMax(Math.max(0, ...points.map((pt) => pt.v ?? 0)));
+	const touch = useRef<{ x: number; moved: boolean } | null>(null);
+	const max = niceMax(Math.max(0, ...points.map((pt) => pt.v ?? 0), ...(previous ?? []).map((v) => v ?? 0)));
 	const plotW = Math.max(1, width - PAD.left - PAD.right);
 	const plotH = height - PAD.top - PAD.bottom;
 	const slot = points.length ? plotW / points.length : plotW;
 	const barW = Math.max(1, slot * 0.72);
 	const c = color ?? p.brand;
-	const pick = (px: number) => setHover(points.length ? Math.max(0, Math.min(points.length - 1, Math.floor((px - PAD.left) / slot))) : null);
+	const indexAt = (px: number) => (points.length ? Math.max(0, Math.min(points.length - 1, Math.floor((px - PAD.left) / slot))) : null);
+	const pick = (px: number) => setHover(indexAt(px));
 	const hp = hover !== null ? points[hover] : undefined;
+	const starts = points.map((pt) => pt.t);
+	// One line per bar that has marks (the bar's last mark's style; the tap gets them all through `data`).
+	const placed = useMemo(() => {
+		const out = new Map<number, ChartMark>();
+		if (!marks?.length || !points.length) return out;
+		const last = starts[starts.length - 1] as number;
+		const step = starts.length > 1 ? last - (starts[starts.length - 2] as number) : 86_400_000;
+		for (const m of marks) {
+			if (!(m.t >= (starts[0] as number)) || m.t >= last + step) continue;
+			let i = 0;
+			while (i + 1 < starts.length && (starts[i + 1] as number) <= m.t) i++;
+			out.set(i, m);
+		}
+		return out;
+	}, [marks, points]);
+	const barX = (i: number) => PAD.left + i * slot + slot / 2;
+	const markNear = (px: number) => {
+		let best: ChartMark | undefined;
+		let bestD = MARK_HIT;
+		for (const [i, m] of placed) {
+			const d = Math.abs(barX(i) - px);
+			if (d <= bestD) {
+				bestD = d;
+				best = m;
+			}
+		}
+		return best;
+	};
 	const release = () => {
-		if (onPick && hp) onPick(hp);
+		const start = touch.current;
+		touch.current = null;
+		const m = start && !start.moved && onMarkPress ? markNear(start.x) : undefined;
+		if (m && onMarkPress) onMarkPress(m);
+		else if (onPick && hp) onPick(hp);
 		setHover(null);
 	};
+	const prevPath = previous
+		? previous
+				.map((v, i) => (v === null || v === undefined || i >= points.length ? null : `${barX(i).toFixed(1)},${(PAD.top + plotH - (v / max) * plotH).toFixed(1)}`))
+				.reduce<string[]>((parts, pt, i, all) => {
+					if (pt === null) return parts;
+					parts.push(`${i > 0 && all[i - 1] !== null ? "L" : "M"}${pt}`);
+					return parts;
+				}, [])
+				.join(" ")
+		: "";
+	const prevAt = hover !== null && previous ? previous[hover] : undefined;
 	return (
 		<View style={{ gap: 6 }}>
 			<View
@@ -239,10 +362,19 @@ export function BarChart({
 				onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
 				onStartShouldSetResponder={() => true}
 				onMoveShouldSetResponder={() => true}
-				onResponderGrant={(e) => pick(e.nativeEvent.locationX)}
-				onResponderMove={(e) => pick(e.nativeEvent.locationX)}
+				onResponderGrant={(e) => {
+					touch.current = { x: e.nativeEvent.locationX, moved: false };
+					pick(e.nativeEvent.locationX);
+				}}
+				onResponderMove={(e) => {
+					if (touch.current && Math.abs(e.nativeEvent.locationX - touch.current.x) > 6) touch.current.moved = true;
+					pick(e.nativeEvent.locationX);
+				}}
 				onResponderRelease={release}
-				onResponderTerminate={() => setHover(null)}
+				onResponderTerminate={() => {
+					touch.current = null;
+					setHover(null);
+				}}
 			>
 				{width > 0 ? (
 					<Svg width={width} height={height}>
@@ -261,6 +393,10 @@ export function BarChart({
 							const h = ((pt.v ?? 0) / max) * plotH;
 							return <Rect key={i} x={PAD.left + i * slot + (slot - barW) / 2} y={PAD.top + plotH - h} width={barW} height={Math.max(h, pt.v ? 1 : 0)} rx={Math.min(2, barW / 2)} fill={c} opacity={hover === null || hover === i ? 1 : 0.45} />;
 						})}
+						{prevPath ? <Path d={prevPath} stroke={p.mutedForeground} strokeWidth={1.5} strokeDasharray="4,3" fill="none" /> : null}
+						{[...placed].map(([i, m]) => (
+							<MarkLine key={`m${i}`} x={barX(i)} top={PAD.top} bottom={PAD.top + plotH} mark={m} fallback={p.warning} labels={placed.size <= MAX_LABELLED} muted={p.mutedForeground} />
+						))}
 						{points.length ? (
 							<>
 								<SvgText x={PAD.left} y={height - 4} fontSize={font.xs - 1} fill={p.mutedForeground}>
@@ -277,7 +413,15 @@ export function BarChart({
 			{hp ? (
 				<Txt variant="small">
 					{timeLabel(hp.t)}: {hp.v === null ? "–" : format(hp.v)}
+					{previous ? ` · ${previousLabel.toLowerCase()} ${prevAt === null || prevAt === undefined ? "–" : format(prevAt)}` : ""}
 				</Txt>
+			) : previous ? (
+				<Legend
+					items={[
+						{ label: "This period", color: c },
+						{ label: `${previousLabel} (dashed)`, color: p.mutedForeground },
+					]}
+				/>
 			) : null}
 		</View>
 	);

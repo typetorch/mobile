@@ -5,12 +5,13 @@
  * commands are web-only for now.)
  */
 import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View } from "react-native";
 
 import { LineChart } from "@/charts/LineChart";
 import { Badge, Card, Dot, ErrorState, Icon, KV, List, Row, Section, Segmented, Skeleton, Stat, StatGrid, Txt } from "@/components/ui";
 import { healthTone, useTTQuery } from "@/features/typetorch/hooks";
+import { chartMarks, DeployMarksToggle, useDeployMarks, useMarkCard } from "@/features/typetorch/marks";
 import { TTScreen } from "@/features/typetorch/screen";
 import { lifeStart, lifetimeMs, offlineText, timelineEvents, type TimelineEvent } from "@/api/tt/server-history";
 import { compact, fmtAgo, fmtBytes, fmtDuration, fmtInt, fmtNum, fmtTime, shortId } from "@/lib/format";
@@ -41,6 +42,11 @@ function Server({ backendId, job, admin }: { backendId: string; job: string; adm
 	const since = hours === 0 ? (life ?? Date.now() - 24 * 3_600_000) : Math.floor((Date.now() - hours * 3_600_000) / 60_000) * 60_000;
 	const metrics = useTTQuery(backendId, ["server", job, "metrics", hours, hours === 0 ? since : 0], (api, s) => api.serverMetrics(job, since, s), { refetchInterval: 15_000, retry: false, enabled: hours !== 0 || !!detail.data });
 	const errors = useTTQuery(backendId, ["server", job, "errors"], (api, s) => api.serverErrors(job, { window: "24h" }, s), { staleTime: 30_000, retry: false });
+	// Deploy marks on the status charts (this server's branch and the place-wide ones); a tap opens a mark's card.
+	const markRange = useMemo(() => ({ from: since, to: Math.ceil(Date.now() / 60_000) * 60_000 }), [since]);
+	const deploys = useDeployMarks(backendId, markRange, detail.data?.server?.branch ?? undefined, { enabled: !!detail.data });
+	const card = useMarkCard(backendId);
+	const chartMarkList = chartMarks(p, deploys.marks);
 
 	if (detail.error) return <ErrorState error={detail.error} onRetry={() => detail.refetch()} />;
 	if (!detail.data) return <Skeleton height={200} />;
@@ -113,6 +119,8 @@ function Server({ backendId, job, admin }: { backendId: string; job: string; adm
 								]}
 								timeLabel={timeLabel}
 								height={130}
+								marks={chartMarkList}
+								onMarkPress={card.open}
 							/>
 						</Card>
 						<Card style={{ gap: 6 }}>
@@ -124,12 +132,16 @@ function Server({ backendId, job, admin }: { backendId: string; job: string; adm
 								]}
 								timeLabel={timeLabel}
 								height={130}
+								marks={chartMarkList}
+								onMarkPress={card.open}
 							/>
 						</Card>
 						<Card style={{ gap: 6 }}>
 							<Txt variant="label">Players</Txt>
-							<LineChart series={[{ label: "Players", points: pts.map((x) => ({ t: x.t, v: x.players })) }]} timeLabel={timeLabel} height={110} />
+							<LineChart series={[{ label: "Players", points: pts.map((x) => ({ t: x.t, v: x.players })) }]} timeLabel={timeLabel} height={110} marks={chartMarkList} onMarkPress={card.open} />
 						</Card>
+						<DeployMarksToggle {...deploys} />
+						{card.sheet}
 					</>
 				) : (
 					<Txt variant="muted">{hours === 0 ? "No metrics kept for this server (kernel 0.4.2+ sends them; raw points go after a day, 5-minute rollups later)." : "No metrics in this window (kernel 0.4.2+ sends them)."}</Txt>

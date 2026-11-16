@@ -53,6 +53,7 @@ import type {
 import { decodeGeometry, type ExportStatus, type MapGeometry, type MapOverride, type MapsView, type Vec3 } from "@/features/maps/maps";
 import { openEventStream, type SseConnection, type SseHandlers } from "./tt/sse";
 import type { DeployMark, PerfServer, ServerMetricPoint } from "./tt/perf";
+import type { LiftReport, LiveEvent, LiveEventInput, LiveEventsView, SignCommands } from "./tt/live-events";
 import type { DeployDetail, DeployPage } from "./tt/deploys";
 import { deadline } from "./http";
 
@@ -314,6 +315,12 @@ export function createApi(options: ApiOptions) {
 		/** Chart marks: releases, kernel publishes and backup refreshes in a window, oldest first (GET /v1/fleet/marks). */
 		fleetMarks: (params: { since?: number; until?: number; branch?: string; kinds?: string; limit?: number } = {}, signal?: AbortSignal) =>
 			get<{ marks: DeployMark[] }>(`/v1/fleet/marks${qs(params)}`, signal).then((r) => r.marks),
+		/** Scheduled live events and the signed schedule (`refresh`: read the servers' schedule again). */
+		liveEvents: (refresh = false, signal?: AbortSignal) => get<LiveEventsView>(`/v1/live-events${qs({ refresh: refresh ? 1 : undefined })}`, signal),
+		createLiveEvent: (input: LiveEventInput, signal?: AbortSignal) => post<{ event: LiveEvent; commands: SignCommands }>("/v1/live-events", input, signal),
+		cancelLiveEvent: (id: string, signal?: AbortSignal) => post<{ event: LiveEvent; commands: SignCommands }>(`/v1/live-events/${encodeURIComponent(id)}/cancel`, {}, signal),
+		liveEventLift: (id: string, params: { weeks?: number; afterDays?: number } = {}, signal?: AbortSignal) =>
+			get<{ event: LiveEvent; report: LiftReport; cached: boolean }>(`/v1/live-events/${encodeURIComponent(id)}/lift${qs(params)}`, signal),
 		/** The deploy history, newest first, one page (`before`: the last page's `next`). */
 		fleetDeploys: (params: { branch?: string; before?: number; limit?: number } = {}, signal?: AbortSignal) => get<DeployPage>(`/v1/fleet/deploys${qs(params)}`, signal),
 		/** One release: its outcome, its report while the reports are kept, its alerts, the releases before and after it. */

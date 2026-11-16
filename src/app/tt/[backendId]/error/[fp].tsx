@@ -1,14 +1,17 @@
 /** One error kind: its stack, occurrences over the window, and where it hits (builds, branches, realms, servers). */
 import * as Clipboard from "expo-clipboard";
 import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ScrollView } from "react-native";
 
 import { BarChart, ShareBars } from "@/charts/LineChart";
 import { Button, Card, ErrorState, KV, List, Row, Section, Segmented, Skeleton, Stat, StatGrid, Txt } from "@/components/ui";
 import { useTTQuery } from "@/features/typetorch/hooks";
+import { chartMarks, DeployMarksToggle, useDeployMarks, useMarkCard } from "@/features/typetorch/marks";
 import { TTScreen } from "@/features/typetorch/screen";
+import { usePageParam } from "@/features/typetorch/view-link";
 import { compact, fmtAgo, fmtTime, shortId } from "@/lib/format";
+import { useTheme } from "@/theme";
 
 const WINDOWS = [
 	{ value: "24h", label: "24 h" },
@@ -17,15 +20,22 @@ const WINDOWS = [
 ];
 
 export default function ErrorScreen() {
-	const { fp, window } = useLocalSearchParams<{ fp: string; window?: string }>();
+	const { fp } = useLocalSearchParams<{ fp: string }>();
 	const id = decodeURIComponent(String(fp ?? ""));
-	return <TTScreen title="Error">{({ backendId }) => <ErrorKindView backendId={backendId} fp={id} initialWindow={window && ["24h", "7d", "30d"].includes(window) ? window : "24h"} />}</TTScreen>;
+	return <TTScreen title="Error">{({ backendId }) => <ErrorKindView backendId={backendId} fp={id} />}</TTScreen>;
 }
 
-function ErrorKindView({ backendId, fp, initialWindow }: { backendId: string; fp: string; initialWindow: string }) {
-	const [window, setWindow] = useState(initialWindow);
+function ErrorKindView({ backendId, fp }: { backendId: string; fp: string }) {
+	const p = useTheme();
+	// The window is a route parameter (the web's `window`), so it travels in a link.
+	const [windowParam, setWindow] = usePageParam("window", "24h");
+	const window = ["24h", "7d", "30d"].includes(windowParam) ? windowParam : "24h";
 	const [copied, setCopied] = useState(false);
 	const q = useTTQuery(backendId, ["error", fp, window], (api, s) => api.errorKind(fp, { window }, s));
+	// Deploy marks on the bar each release falls in (a tap opens its card and deploy).
+	const markRange = useMemo(() => (q.data ? { from: Date.parse(q.data.window.from), to: Date.parse(q.data.window.to) } : null), [q.data]);
+	const deploys = useDeployMarks(backendId, markRange);
+	const card = useMarkCard(backendId);
 	if (q.error) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
 	if (!q.data) return <Skeleton height={240} />;
 	const d = q.data;
@@ -63,11 +73,15 @@ function ErrorKindView({ backendId, fp, initialWindow }: { backendId: string; fp
 			</StatGrid>
 			<Card style={{ gap: 6 }}>
 				<Txt variant="label">Occurrences</Txt>
+				<DeployMarksToggle {...deploys} />
 				<BarChart
 					points={d.series.map((x) => ({ t: Date.parse(x.t), v: x.n }))}
+					marks={chartMarks(p, deploys.marks)}
+					onMarkPress={card.open}
 					color="#e66767"
 					timeLabel={(t) => (d.window.bucketSeconds < 86_400 ? new Date(t).toISOString().slice(5, 16).replace("T", " ") : new Date(t).toISOString().slice(5, 10))}
 				/>
+				{card.sheet}
 			</Card>
 			<Card>
 				<KV label="First seen" value={`${fmtTime(d.kind.firstAt)}`} />

@@ -5,11 +5,12 @@
  * build or compares before vs after), "vs previous period", live servers with their history, and builds compared side by
  * side (`perf-compare`). Possible problems are orange or red (src/api/tt/perf-thresholds.ts).
  */
-import { useMemo, useState } from "react";
+import { createContext, useContext, useMemo, useState } from "react";
 import { Pressable, Switch, View } from "react-native";
 
 import { ApiError } from "@/api/backend";
 import { change } from "@/api/tt/benchmarks";
+import { markDeploySeq } from "@/api/tt/deploys";
 import { previousPeriod, withPrevious, type PreviousPeriod } from "@/api/tt/compare";
 import {
 	AROUND_HOURS,
@@ -45,13 +46,15 @@ import {
 } from "@/api/tt/perf";
 import { absoluteFlag, REGRESSION_PCT, regression, thresholdText, type Flag, type Regression } from "@/api/tt/perf-thresholds";
 import type { Filters } from "@/api/tt/types";
-import { LineChart, type ChartSeries as LineSeries } from "@/charts/LineChart";
+import { LineChart, type ChartMark, type ChartSeries as LineSeries } from "@/charts/LineChart";
 import { Button, Card, Chips, Dot, EmptyState, ErrorState, List, Segmented, SkeletonList, Stat, StatGrid, Txt } from "@/components/ui";
 import { ChangeChip, Note, Panel, QueryState } from "@/features/typetorch/bits";
 import { DataTable, type DataColumn } from "@/features/typetorch/table";
 import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
 import { useTTQuery } from "@/features/typetorch/hooks";
+import { chartMarks, markColor, openMark, useDeployMarks, useMarkCard } from "@/features/typetorch/marks";
 import { TTScreen } from "@/features/typetorch/screen";
+import { usePageParam, usePageParams } from "@/features/typetorch/view-link";
 import { fmtInt, shortId } from "@/lib/format";
 import { space, useTheme, type Palette } from "@/theme";
 
@@ -59,24 +62,6 @@ const STEP_MINUTES = [1, 5, 15, 60, 360, 1440];
 const stepChoices = (spanMs: number) => STEP_MINUTES.filter((m) => m * 60_000 * 2 <= spanMs && spanMs / (m * 60_000) <= 400);
 const windowBucketMs = (span: number) => (span <= 65 * 60_000 ? 60_000 : span <= 6.5 * 3_600_000 ? 300_000 : span <= 26 * 3_600_000 ? 3_600_000 : 86_400_000);
 const seriesOptions = (by: PerfGroupBy, stepMinutes: number | undefined) => ({ by, maxGroups: 8, ...(stepMinutes ? { bucketMinutes: stepMinutes } : {}) });
-
-/** A mark kind's color on the phone palette (the web's MARK_STYLE uses CSS variables). */
-function markColor(p: Palette, kind: DeployMark["kind"]): string {
-	switch (kind) {
-		case "rollback":
-			return p.destructive;
-		case "kernel":
-			return p.chart[3] ?? p.warning;
-		case "backup":
-			return p.chart[2] ?? p.warning;
-		case "resign":
-			return p.mutedForeground;
-		case "promote":
-			return p.chart[6] ?? p.warning;
-		default:
-			return p.chart[0] ?? p.warning;
-	}
-}
 
 function flagColor(p: Palette, flag: Flag | null | undefined): string | undefined {
 	return flag ? (flag.level === "critical" ? p.destructive : p.warning) : undefined;
@@ -90,16 +75,39 @@ interface MarkProps {
 	marks: DeployMark[];
 }
 
+/** A tap on a chart's mark opens its card (one sheet for the page). */
+const MarkCardContext = createContext<(mark: ChartMark) => void>(() => undefined);
+
 function Performance({ backendId }: { backendId: string }) {
 	const p = useTheme();
 	const { state, apiFilters, set } = useTTFilters(backendId);
-	const [by, setBy] = useState<PerfGroupBy>("none");
-	const [pct, setPct] = useState<Percentile>("p50");
-	const [step, setStep] = useState(0);
-	const [showMarks, setShowMarks] = useState(true);
-	const [markId, setMarkId] = useState("");
-	const [compareOn, setCompareOn] = useState(false);
-	const [cmp, setCmp] = useState<{ mode: "builds" | "around"; arts: string[]; around: string; hours: number }>({ mode: "builds", arts: [], around: "", hours: 24 });
+	// The web's URL parameters: by, pct, step, mark, vs (and cmode / cmp / around / hours, job below).
+	const [byParam, setBy] = usePageParam("by", "none");
+	const by = (CLIENT_GROUPS as string[]).includes(byParam) ? (byParam as PerfGroupBy) : "none";
+	const [pctParam, setPct] = usePageParam("pct", "p50");
+	const pct = (PERCENTILES as string[]).includes(pctParam) ? (pctParam as Percentile) : "p50";
+	const [stepParam, setStepParam] = usePageParam("step", "auto");
+	const step = Number(stepParam) || 0;
+	const setStep = (m: number) => setStepParam(m ? String(m) : "auto");
+	const [markId, setMarkId] = usePageParam("mark");
+	const [vs, setVs] = usePageParam("vs");
+	const compareOn = vs === "prev";
+	const setCompareOn = (on: boolean) => setVs(on ? "prev" : "");
+	const [cmode, setCmode] = usePageParam("cmode", "builds");
+	const [cmpArts, setCmpArts] = usePageParam("cmp");
+	const [aroundId, setAroundId] = usePageParam("around");
+	const [hoursParam, setHoursParam] = usePageParam("hours", "24");
+	const cmp: CompareState = {
+		mode: cmode === "around" ? "around" : "builds",
+		arts: cmpArts ? cmpArts.split(",").filter(Boolean).slice(0, 6) : [],
+		around: aroundId,
+		hours: AROUND_HOURS.includes(Number(hoursParam)) ? Number(hoursParam) : 24,
+	};
+	const setCmp = (fn: (c: CompareState) => CompareState) => {
+		const next = fn(cmp);
+		setPage({ cmode: next.mode === "builds" ? null : next.mode, cmp: next.arts.join(",") || null, around: next.around || null, hours: next.hours === 24 ? null : String(next.hours) });
+	};
+	const [, setPage] = usePageParams();
 	const range = useMemo(() => {
 		const now = Math.ceil(Date.now() / 60_000) * 60_000;
 		return rangeMs({ ...(apiFilters.from ? { from: apiFilters.from } : {}), ...(apiFilters.to ? { to: apiFilters.to } : {}) }, now);
@@ -108,16 +116,18 @@ function Performance({ backendId }: { backendId: string }) {
 	const steps = stepChoices(span);
 	const stepMinutes = steps.includes(step) ? step : undefined;
 	const branch = typeof apiFilters.branch === "string" ? apiFilters.branch : undefined;
-	const marksQ = useTTQuery(backendId, ["fleet", "marks", range.from, range.to, branch ?? ""], (api, s) => api.fleetMarks({ since: range.from, until: range.to, ...(branch ? { branch } : {}), limit: 1000 }, s), { retry: false });
-	const allMarks = marksQ.data ?? [];
-	const marks = showMarks ? allMarks : [];
+	const deploys = useDeployMarks(backendId, range, branch);
+	const allMarks = deploys.all;
+	const marks = deploys.marks;
 	const selected = allMarks.find((m) => m.id === markId);
 	const seqOf = useMemo(() => new Map(allMarks.filter((m) => m.artifact && m.seq !== null && m.kind !== "backup").map((m) => [m.artifact as string, m.seq as number])), [allMarks]);
 	const before = useMemo(() => previousPeriod(state), [state]);
 	const period = compareOn ? before : undefined;
 	const markProps: MarkProps = { marks };
+	const card = useMarkCard(backendId);
 	return (
-		<>
+		<MarkCardContext.Provider value={card.open}>
+			{card.sheet}
 			<FilterBar backendId={backendId} />
 			<Note>
 				Frame rate, memory and ping on players' devices, and TPS and memory on the servers, {describeRange(state)}. p90 and p99 are on the bad side (p99 is the worst case); p10 is the low end.
@@ -137,7 +147,7 @@ function Performance({ backendId }: { backendId: string }) {
 					</Txt>
 				</View>
 			</View>
-			<MarkLegend marks={allMarks} error={marksQ.error} shown={showMarks} onToggle={() => setShowMarks((s) => !s)} selected={markId} onPick={(m) => setMarkId(m.id === markId ? "" : m.id)} />
+			<MarkLegend marks={allMarks} error={deploys.error} shown={deploys.shown} onToggle={() => deploys.setShown(!deploys.shown)} selected={markId} onPick={(m) => setMarkId(m.id === markId ? "" : m.id)} />
 			{selected ? (
 				<Card style={{ gap: 6, borderLeftWidth: 4, borderLeftColor: markColor(p, selected.kind) }}>
 					<Txt style={{ fontWeight: "600" }}>{markTitle(selected)}</Txt>
@@ -147,6 +157,7 @@ function Performance({ backendId }: { backendId: string }) {
 							<Button title={apiFilters.art === selected.artifact ? "Filtered to this build" : "Filter to this build"} small variant="brand" disabled={apiFilters.art === selected.artifact} onPress={() => set({ art: selected.artifact as string })} />
 						) : null}
 						<Button title="Before vs after" small onPress={() => setCmp((c) => ({ ...c, mode: "around", around: selected.id }))} />
+						{markDeploySeq(selected) !== null ? <Button title={`Open deploy #${markDeploySeq(selected)}`} small icon="rocket-outline" onPress={() => openMark(backendId, selected)} /> : null}
 						<Button
 							title="Clear"
 							small
@@ -163,7 +174,7 @@ function Performance({ backendId }: { backendId: string }) {
 			<ServerSection backendId={backendId} by={by} pct={pct} filters={apiFilters} stepMinutes={stepMinutes} period={period} {...markProps} />
 			<LiveServers backendId={backendId} branch={branch} since={range.from} {...markProps} />
 			<CompareSection backendId={backendId} filters={apiFilters} marks={allMarks} seqOf={seqOf} cmp={cmp} setCmp={setCmp} />
-		</>
+		</MarkCardContext.Provider>
 	);
 }
 
@@ -257,6 +268,7 @@ function PeriodTiles({ result, previous, metricKeys, pct }: { result: PerfSeries
 /** One metric over time: a line per group (or the one line, plus the previous period dashed). */
 function MetricChart({ result, metric, pct, previous, marks, title, about }: { result: PerfSeriesResult; metric: string; pct: Percentile | "players"; previous?: PreviousSeries | undefined; marks: DeployMark[]; title: string; about: string }) {
 	const p = useTheme();
+	const card = { open: useContext(MarkCardContext) };
 	const series = seriesOf(result);
 	let rows: ChartRow[] = pivot(result, metric, pct);
 	const lines: LineSeries[] = series.map((s, i) => ({ label: s.label, points: rows.map((r) => ({ t: r.t, v: r[s.id] ?? null })), color: p.chart[i % p.chart.length] }));
@@ -275,7 +287,8 @@ function MetricChart({ result, metric, pct, previous, marks, title, about }: { r
 				area={false}
 				height={150}
 				format={(v) => fmtMetric(metric === "" ? "players" : metric, v)}
-				marks={marks.map((m) => ({ t: m.at, color: markColor(p, m.kind) }))}
+				marks={chartMarks(p, marks)}
+				onMarkPress={card.open}
 				timeLabel={(t) => (span <= 26 * 3_600_000 ? new Date(t).toISOString().slice(11, 16) : new Date(t).toISOString().slice(5, 10))}
 			/>
 		</Card>
@@ -391,26 +404,27 @@ const toMs = (t: number) => (t < 1e11 ? t * 1000 : t);
 
 function ServerHistory({ backendId, job, since, marks }: { backendId: string; job: string; since: number } & MarkProps) {
 	const p = useTheme();
+	const card = { open: useContext(MarkCardContext) };
 	const q = useTTQuery(backendId, ["fleet", "server-metrics", job, since], (api, s) => api.serverMetrics(job, since, s), { retry: false });
 	if (q.error) return q.error instanceof ApiError && q.error.notFound ? <Note>This backend keeps no per-server history yet (it came with kernel 0.4.2's heartbeat metrics).</Note> : <ErrorState error={q.error} />;
 	if (!q.data) return <SkeletonList rows={2} />;
 	if (!q.data.length) return <Note>No history for this server in this range.</Note>;
 	const pts = [...q.data].map((x) => ({ ...x, t: toMs(x.t) })).sort((a, b) => a.t - b.t);
-	const m = marks.map((x) => ({ t: x.at, color: markColor(p, x.kind) }));
+	const m = chartMarks(p, marks);
 	const time = (t: number) => new Date(t).toISOString().slice(5, 16).replace("T", " ");
 	return (
 		<View style={{ gap: space.sm }}>
 			<Card style={{ gap: 6 }}>
 				<Txt variant="label">TPS</Txt>
-				<LineChart area={false} height={120} marks={m} timeLabel={time} series={[{ label: "TPS", points: pts.map((x) => ({ t: x.t, v: x.tps })) }, { label: "TPS (min)", points: pts.map((x) => ({ t: x.t, v: x.tpsMin })) }]} />
+				<LineChart area={false} height={120} marks={m} onMarkPress={card.open} timeLabel={time} series={[{ label: "TPS", points: pts.map((x) => ({ t: x.t, v: x.tps })) }, { label: "TPS (min)", points: pts.map((x) => ({ t: x.t, v: x.tpsMin })) }]} />
 			</Card>
 			<Card style={{ gap: 6 }}>
 				<Txt variant="label">Memory (MB)</Txt>
-				<LineChart area={false} height={120} marks={m} timeLabel={time} series={[{ label: "Memory", points: pts.map((x) => ({ t: x.t, v: x.memMb })) }, { label: "Lua heap", points: pts.map((x) => ({ t: x.t, v: x.luaMb })) }]} />
+				<LineChart area={false} height={120} marks={m} onMarkPress={card.open} timeLabel={time} series={[{ label: "Memory", points: pts.map((x) => ({ t: x.t, v: x.memMb })) }, { label: "Lua heap", points: pts.map((x) => ({ t: x.t, v: x.luaMb })) }]} />
 			</Card>
 			<Card style={{ gap: 6 }}>
 				<Txt variant="label">Players</Txt>
-				<LineChart height={100} marks={m} timeLabel={time} series={[{ label: "Players", points: pts.map((x) => ({ t: x.t, v: x.players })) }]} />
+				<LineChart height={100} marks={m} onMarkPress={card.open} timeLabel={time} series={[{ label: "Players", points: pts.map((x) => ({ t: x.t, v: x.players })) }]} />
 			</Card>
 		</View>
 	);
@@ -418,7 +432,7 @@ function ServerHistory({ backendId, job, since, marks }: { backendId: string; jo
 
 function LiveServers({ backendId, branch, since, marks }: { backendId: string; branch: string | undefined; since: number } & MarkProps) {
 	const p = useTheme();
-	const [job, setJob] = useState("");
+	const [job, setJob] = usePageParam("job");
 	const q = useTTQuery(backendId, ["fleet", "perf-servers", branch ?? ""], (api, s) => api.perfServers(branch, s), { refetchInterval: 30_000, retry: false });
 	const val = (s: PerfServer, key: string, metric: "tps" | "physFps" | "mem", v: number | null | undefined) => {
 		const f = metric === "tps" && key === "tpsMin" ? null : absoluteFlag("server", metric, null, v);

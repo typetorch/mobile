@@ -14,7 +14,7 @@ import { Button, Card, EmptyState, ErrorState, KV, Segmented, SkeletonList, Stat
 import { Note, Panel } from "@/features/typetorch/bits";
 import { DataTable } from "@/features/typetorch/table";
 import { useTTQuery } from "@/features/typetorch/hooks";
-import { MarkList, useDeployMarks } from "@/features/typetorch/marks";
+import { chartMarks, DeployMarksToggle, MarkList, useDeployMarks, useMarkCard } from "@/features/typetorch/marks";
 import { TTScreen } from "@/features/typetorch/screen";
 import { fmtBytes, fmtDuration, fmtInt, fmtNum, fmtTime } from "@/lib/format";
 import { useTheme } from "@/theme";
@@ -109,15 +109,17 @@ function Stats({ backendId }: { backendId: string }) {
 	const rows = useMemo(() => (data ? timeline(data, history) : []), [data, history]);
 	const span = history === "seconds" ? 2 * 60_000 : 60 * 60_000;
 	const now = data?.now ?? Date.now();
-	const deploys = useDeployMarks(backendId, now - span, now);
-	const marks = (deploys.data ?? []).map((m) => ({ t: m.at, color: p.warning }));
+	const markRange = useMemo(() => ({ from: Math.floor((now - span) / 60_000) * 60_000, to: Math.ceil(now / 60_000) * 60_000 }), [Math.floor(now / 60_000), span]);
+	const deploys = useDeployMarks(backendId, markRange);
+	const marks = chartMarks(p, deploys.marks);
+	const card = useMarkCard(backendId);
 	const chart = (title: string, note: string, series: [string, string][], format: (v: number) => string) => {
 		const s: ChartSeries[] = series.map(([id, label]) => ({ label, points: rows.map((r) => ({ t: r.t, v: r[id] ?? null })) }));
 		return (
 			<Card style={{ gap: 6 }}>
 				<Txt variant="label">{title}</Txt>
 				<Note>{note}</Note>
-				<LineChart series={s} format={format} area={false} height={140} marks={marks} timeLabel={(t) => new Date(t).toISOString().slice(11, history === "seconds" ? 19 : 16)} />
+				<LineChart series={s} format={format} area={false} height={140} marks={marks} onMarkPress={card.open} timeLabel={(t) => new Date(t).toISOString().slice(11, history === "seconds" ? 19 : 16)} />
 			</Card>
 		);
 	};
@@ -148,7 +150,9 @@ function Stats({ backendId }: { backendId: string }) {
 					{chart("DuckDB statement latency", historyTitle, [["duckP50", "p50"], ["duckP99", "p99"]], ms)}
 					{chart("Memory", `${historyTitle}. RSS is the whole process; the heap is JavaScript's.`, [["rss", "RSS"], ["heap", "Heap used"], ["external", "Native, buffers"]], mb)}
 					{chart("CPU and event loop lag", `${historyTitle}. Lag: how late the once-a-second tick came (the worst in the bucket).`, [["cpu", "CPU %"], ["lag", "Loop lag ms"]], (v) => fmtNum(v, 1))}
-					<MarkList backendId={backendId} marks={deploys.data} />
+					<DeployMarksToggle {...deploys} />
+					<MarkList backendId={backendId} marks={deploys.all} />
+					{card.sheet}
 					<Panel
 						title="By route group"
 						note={`Requests and latency per kind of route over the last ${WINDOWS.find((w) => w.value === window)?.label ?? window}. Overall: p50 ${ms(data.latency.window.p50)}, p99 ${ms(data.latency.window.p99)} over ${fmtInt(data.latency.window.count)} requests.`}
