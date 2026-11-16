@@ -31,8 +31,11 @@ Part of TypeTorch. Read `../TypeTorch.md` (hub) and `../plans/07-web-mobile.md` 
     products / badges.
   - **TypeTorch** (only when a backend is connected for that universe): the backend's dashboard, native, inside the app:
     every page of the web explorer (Overview, Roblox, Demographics, Session time, Retention (players back and revenue /
-    LTV), Funnels, Players + a player page, Flow, Experiments, Live events, Feedback, First session, Events, Fleet + server pages with their offline history and debug bundles, Server history, Deploys,
-    Errors, Performance, Economy, Monetization, Query, Settings; owners also Audit log and Backend stats). The web's
+    LTV), Funnels, Players + a player page, Flow, Experiments, Live events, Notifications, Feedback, First session, Events,
+    Fleet + server pages with their offline history, debug bundles and (owners) the remote debug session, Server
+    history, Deploys, Errors (+ drop rules), Performance, Economy, Monetization, Query, Settings (owners: runtime
+    settings, alert rules, backups, migration); owners also Audit log and Backend stats), grouped like the web's
+    sidebar, with the server status dot, a command palette and Find player in every TypeTorch header. The web's
     filter bar (range, branch, artifact, device, new / returning, variant) is one state per backend that follows you from
     page to page; Roblox benchmarks are kept on the phone per backend.
 - **Backends**: connect TypeTorch backends by URL (several at once), sign in with the browser or the admin token.
@@ -107,6 +110,14 @@ PATCH, DELETE `/<id>`), `/v1/experiments`, `/v1/experiments/<e>/players`, `/v1/i
 `/<pid>/profile`), `/v1/players/<pid>/errors`, `/v1/roblox/products`, `/v1/roblox/analytics/acquisition`,
 `/v1/fleet/marks`, `/v1/fleet/bundles/<id>`, `/v1/admin/audit`, `/v1/admin/stats`.
 
+Ops pages add: `/v1/notify/status`, `/v1/notify/config`, POST `/v1/notify/test`, `/v1/notify/user`, `/v1/notify/recent`,
+`/v1/notify/users[?format=csv]`, POST `/v1/query/notify-funnel|notify-optin|notify-queue`, POST
+`/v1/fleet/servers/<job>/watch`, POST `/v1/fleet/servers/<job>/commands`, `/v1/fleet/servers/<job>/commands/<id>`,
+`/v1/fleet/servers/<job>/streams`, `/v1/fleet/debug/audit`, `/v1/roblox/servers/<job>/logs`, `/v1/fleet/columns`,
+`/v1/fleet/reports`, `/v1/fleet/stream?branch`, `/v1/errors/drop-rules` (+ POST `/preview`), PATCH `/v1/admin/settings`,
+POST `/v1/admin/settings/test-alert`, `/v1/admin/alert-rules`, `/v1/admin/devices` (+ DELETE `/<id>`),
+`/v1/admin/backups` (+ POST, POST `/download`), `/v1/admin/migrate` (+ POST), `/v1/place`, `/healthz`.
+
 ## Code layout
 
 ```
@@ -115,7 +126,7 @@ src/app/                 expo-router routes
   project/[universeId]/  index (tabs) + datastores, datastore, entry, ordered, memory, messaging, bans, monetization
   tt/[backendId]/        TypeTorch dashboard: index (Overview), fleet, server/[job], bundle/[id], server-history, deploys,
                          deploy/[seq], errors, error/[fp], settings, roblox, demographics, session-time, retention,
-                         funnels, players, player/[pid], flow, experiments, live-events, feedback, first-session, events,
+                         funnels, players, player/[pid], flow, experiments, live-events, notifications, feedback, first-session, events,
                          performance, economy, monetization, query, audit, backend-stats
   backend/connect.tsx    connect / sign in again
 src/api/                 http.ts, opencloud.ts, roblox-public.ts, backend.ts, backend-auth.ts, tt/ (web types and pure
@@ -174,5 +185,4 @@ that reaches the same Metro dev server; the share sheet says so and also offers 
 the installed app; Roblox benchmarks are kept per backend on the phone (secure store), with copy /
 paste / file export of the web's JSON.
 
-Also not yet in the app: remote debug commands on the server page, changing runtime settings (read only here),
-deploy notifications (push needs a dev build), place versions (no Open Cloud read API).
+Also not yet in the app: deploy notifications (push needs a dev build), place versions (no Open Cloud read API).

@@ -13,7 +13,7 @@ import { useCallback, useMemo, useState } from "react";
 import { ScrollView, View } from "react-native";
 
 import { LineChart } from "@/charts/LineChart";
-import { Badge, Card, Dot, ErrorState, Icon, KV, List, Row, Section, Segmented, Skeleton, Stat, StatGrid, Txt } from "@/components/ui";
+import { Badge, Button, Card, Dot, ErrorState, Icon, KV, List, Row, Section, Segmented, Skeleton, Stat, StatGrid, Txt } from "@/components/ui";
 import { Pressable } from "react-native";
 import type { DebugStatus, FleetServerDetail, RemotePlayers, RemoteStatus } from "@/api/tt/types";
 import { useServerStreams } from "@/features/maps/live-streams";
@@ -296,12 +296,12 @@ function Server({ backendId, job, admin, readOnly }: { backendId: string; job: s
 								return (
 									<Pressable
 										key={t.id}
-										onPress={() => (t.id === "map" ? router.push(`/tt/${backendId}/server-map/${encodeURIComponent(job)}`) : setTab(t.id))}
+										onPress={() => (t.id === "map" && !readOnly ? router.push(`/tt/${backendId}/server-map/${encodeURIComponent(job)}`) : setTab(t.id))}
 										style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: on ? p.brand : p.border, backgroundColor: on ? p.brand : p.card }}
 									>
 										<Txt variant="small" color={on ? p.brandForeground : p.foreground} style={{ fontWeight: "600" }}>
 											{t.label}
-											{t.id === "map" ? " ↗" : ""}
+											{t.id === "map" && !readOnly ? " ↗" : ""}
 										</Txt>
 									</Pressable>
 								);
@@ -317,6 +317,13 @@ function Server({ backendId, job, admin, readOnly }: { backendId: string; job: s
 							<PlayersTab active={tab === "players"} players={players} onLogs={showLogs} />
 						</View>
 						{tab === "game" ? readOnly ? <Txt variant="muted">{READ_ONLY_TEXT}</Txt> : <GameTab streams={streams} /> : null}
+						{tab === "map" ? (
+							readOnly ? (
+								<Txt variant="muted">{READ_ONLY_TEXT}</Txt>
+							) : (
+								<Button title="Open the live map" small icon="locate-outline" onPress={() => router.push(`/tt/${backendId}/server-map/${encodeURIComponent(job)}`)} style={{ alignSelf: "flex-start" }} />
+							)
+						) : null}
 						<View style={{ display: tab === "state" ? "flex" : "none" }}>
 							<StateTab active={tab === "state"} />
 						</View>

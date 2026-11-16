@@ -21,11 +21,11 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 
 | Item | Web file | Route(s) | Role | App |
 | --- | --- | --- | --- | --- |
-| Sidebar from one config, 5 groups (Overview; Players & gameplay; Observe & troubleshoot; Data; Admin), collapsible, phone drawer | `lib/nav.ts`, `components/SidebarNav.tsx`, `lib/nav-state.ts` | – | owner items hidden for `web` role | partial: `features/typetorch/pages.ts` is a flat list; Demographics, Session time, Live events and Feedback added (analytics); missing Notifications (Maps and Live map added by maps-live, Recordings by recordings); no groups |
-| Header: page title, server status dot (GET `/healthz` every 30 s, 502/503/504 wording), theme menu, user menu / sign out | `components/AppShell.tsx` (`ServerStatus`, `ThemeToggle`, `UserMenu`) | `/healthz`, POST `/v1/auth/logout` | all | partial: health only on `tt/settings.tsx`; theme is app-wide (`(tabs)/settings.tsx`); no status dot in the TT header |
-| Place card (icon, name, live players, link to roblox.com) and tab title "<page> \| <place>" | `components/PlaceCard.tsx` | GET `/v1/place` | all | partial: name used in `app/backend/connect.tsx`; no card / live count in `features/typetorch/components.tsx` `BackendHeader` |
-| Top-bar "Find player" (pid, part of pid or UserId → Players) | `components/Identity.tsx` `FindPlayer` | GET `/v1/identity?uid=` | all | partial: only the Players page search (`tt/players.tsx`) |
-| Command palette (Ctrl/Cmd+K, fuzzy, recent first): every page, every range preset, Clear filters, Copy link to this view, Refresh data, Toggle / system theme, Sign out, "Open player <id>", page commands (`players:copy-pid`) | `components/CommandPalette.tsx`, `lib/commands.ts` | – | pages filtered by role | missing |
+| Sidebar from one config, 5 groups (Overview; Players & gameplay; Observe & troubleshoot; Data; Admin), collapsible, phone drawer | `lib/nav.ts`, `components/SidebarNav.tsx`, `lib/nav-state.ts` | – | owner items hidden for `web` role | present (ops): `features/typetorch/pages.ts` has the web's groups (`TT_GROUPS`, `visiblePages`), every web page incl. Notifications; the menu (`components.tsx` `PageMenu`) lists them per group, owner-only pages hidden for the `web` role. Differences: Server history is also its own page (Observe); Settings stays in every role's menu (it also holds this phone's token and app sessions), its runtime settings show for owners only |
+| Header: page title, server status dot (GET `/healthz` every 30 s, 502/503/504 wording), theme menu, user menu / sign out | `components/AppShell.tsx` (`ServerStatus`, `ThemeToggle`, `UserMenu`) | `/healthz`, POST `/v1/auth/logout` | all | present (ops): every TypeTorch header has the status dot (`features/typetorch/shell.tsx` `HealthDot`, every 30 s, "server down" / "no admin token" / "connected · n live rows", a tap shows the detail); theme and Sign out are in the command palette (Sign out = this backend's token revoked and forgotten, behind a confirm); the app-wide theme also in the app's Settings |
+| Place card (icon, name, live players, link to roblox.com) and tab title "<page> \| <place>" | `components/PlaceCard.tsx` | GET `/v1/place` | all | present (ops): `shell.tsx` `PlaceCard` under the backend header (Overview and the project's TypeTorch tab): icon (rbxcdn only), name, live count ("from your servers' heartbeats" when `playingFrom: fleet`), every minute, a tap opens roblox.com; the tab title is n/a on a phone |
+| Top-bar "Find player" (pid, part of pid or UserId → Players) | `components/Identity.tsx` `FindPlayer` | GET `/v1/identity?uid=` | all | present (ops): a Find player box in the backend header and "Find player" / "Open player <id>" in the command palette, both open `tt/players?find=` (the Players page resolves a UserId through GET `/v1/identity?uid=`) |
+| Command palette (Ctrl/Cmd+K, fuzzy, recent first): every page, every range preset, Clear filters, Copy link to this view, Refresh data, Toggle / system theme, Sign out, "Open player <id>", page commands (`players:copy-pid`) | `components/CommandPalette.tsx`, `lib/commands.ts` | – | pages filtered by role | present (ops): the search button in every TypeTorch header (`features/typetorch/shell.tsx` `CommandPalette`, a sheet): the web's commands, fuzzy scoring and grouping (`fuzzyScore`, `scoreCommand`, `rankCommands` ported), recent 5 kept on the phone (AsyncStorage), pages by role, ranges and Clear filters only on pages with the filter bar, Copy link (the typetorch:// form in Expo Go), Refresh, theme, Sign out, Open player / Find player, Copy this player's pid on a player |
 | Filter bar: range presets `1h 6h 1d 3d 7d 30d 90d deploy` + custom UTC dates, branch, artifact, device, new / returning, experiment variant | `components/FilterBar.tsx`, `lib/filters.ts` | POST `/v1/query/values`, `/v1/query/experiment` | all | present: `3d` and `deploy` (since the last prod release, GET `/v1/fleet/deploys?branch=prod&limit=1`) presets (interaction); audience: see the next row |
 | Filter bar Audience popover: country, language, account age, Premium, join source (player-level; choices from the `demographics` query) | `components/FilterBar.tsx`, `lib/audience.ts` | POST `/v1/query/demographics` | all | present (interaction 2): an "Audience" section in the Filters panel (`features/typetorch/filters.tsx` `AudienceSection`): country and language chips from the `demographics` query over the range (asked once the section opens), account age (`ACCOUNT_AGES`), Premium yes / no, join source (`JOIN_SOURCES`), "Clear audience"; names in `api/tt/audience.ts` (Hermes may lack `Intl.DisplayNames`: then the static English tables in `api/tt/locale-names.ts`, generated from Node's CLDR names, name them as the web does) |
 | Filters in the URL (`range, from, to, branch, art, dev, players, exp, variant, country, lang, age, prem, source`), kept across links (`withFilters`) | `lib/filters.ts`, `lib/hooks.ts` `useFilters/useParam` | – | all | present (interaction): one state per backend saved on the phone (AsyncStorage `tt.filters.v1.<backend>`), written with the web's keys into "Copy link to this view" (header link button, `features/typetorch/view-link.tsx`); a link's keys set the bar (`features/typetorch/screen.tsx`). A view link (it always carries `backend=`) is the whole filter state like a web URL: a key it leaves out is reset to its default, and `range` is always written |
@@ -67,8 +67,8 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 | Join data `jd` per session (pretty JSON, `trunc` badge) | from `timeline` rows | all | present (analytics): `features/typetorch/join-data.tsx` `JoinData` (collapsed, keys in the title row, `truncated` badge, pretty JSON) on each Timeline session card, one per session/join row with a `jd` |
 | Errors view (`realm`), each → Errors `?fp=` | GET `/v1/players/<pid>/errors` | all | present |
 | Feedback view | POST `/v1/query/feedback-list` (`pid`) | all | present (analytics): player page view `feedback` (`feedback-list` with the pid, newest 100, `FeedbackList` from `features/typetorch/feedback.tsx` without the player column) |
-| Notifications view (consent, sends with opens / plays, intents; link to Notifications `?player=<pid>&by=pid`) | GET `/v1/notify/user?pid=` | owner | missing |
-| Command "Copy this player's pid" | – | all | n/a (app has a Copy pid button) |
+| Notifications view (consent, sends with opens / plays, intents; link to Notifications `?player=<pid>&by=pid`) | GET `/v1/notify/user?pid=` | owner | present (ops): player page view `notifications` (owners only; `features/typetorch/notifications/player.tsx` `PlayerView`, every 30 s): consent, sends (tap one for the request, Roblox's answer, the launch data), opening sessions' join data, intents; "Also named so" opens the Notifications Player panel |
+| Command "Copy this player's pid" | – | all | present (ops): the command palette's "This page" group on a player (`features/typetorch/shell.tsx` `players:copy-pid`), plus the Copy pid button |
 
 ### Events (`/events`) — `pages/Events.tsx`, `components/EventTable.tsx`
 
@@ -176,35 +176,35 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 ### Fleet (`/fleet`) — `pages/Fleet.tsx`, `components/HealthReasons.tsx`, `components/ServerLocation.tsx`
 | Item | Route(s) | Role | App (`tt/fleet.tsx`) |
 | --- | --- | --- | --- |
-| Live servers table (DataTable `fleet-servers`): health badge + reasons popover, players, build, branch, kernel, TPS, memory, place version, budget pressure (DataStore / HTTP vs Roblox limits), country, address (owners), JobId → server page; branch filter (`branch`) | GET `/v1/fleet/servers?branch` | all; IP owner | partial: list + branch chips + versions; no budget, location or table features |
-| Game-declared columns (hidden until picked in Columns) | GET `/v1/fleet/columns` | all | missing |
-| Live events feed (SSE: server, alert, alert_ack, report, deploy) and query invalidation | SSE GET `/v1/fleet/stream?branch` | all | present: `features/typetorch/live-feeds.ts` `useFleetStream` (XHR streaming with the Bearer token, reopened with a backoff), refetches the app's own queries: `server` → Fleet servers / gone, `alert` / `alert_ack` → the alerts queries (home's recent alerts), `report` / `deploy` → the deploy list and deploy pages; "Live events" log (50); servers poll every 5 s while the stream is down and every 60 s while it is live (web: 30 s always). Opened without `?branch` (the branch chips filter on the phone, so it carries every branch). Only while the screen is focused. No Alerts / deploy report sections on the app's Fleet yet (rows below) |
-| Latest deploy: results, server reports, deploy errors (DataTables `fleet-results`, `fleet-reports`, `fleet-deploy-errors`) | GET `/v1/fleet/reports?latest&branch` (or `?seq` / `?artifact`) | all | missing (app home shows the latest deploy row only) |
-| By country (DataTable `fleet-countries`) + DB-IP credit | from servers | all | missing |
-| Alerts (90 days, newest first, bundle link) | GET `/v1/fleet/alerts` | all | partial: home shows 5 recent alerts; ack only on `tt/deploy/[seq].tsx` |
-| Recently gone (DataTable `fleet-gone`) | GET `/v1/fleet/servers?gone=1` | all | present (+ `tt/server-history.tsx`) |
+| Live servers table (DataTable `fleet-servers`): health badge + reasons popover, players, build, branch, kernel, TPS, memory, place version, budget pressure (DataStore / HTTP vs Roblox limits), country, address (owners), JobId → server page; branch filter (`branch`) | GET `/v1/fleet/servers?branch` | all; IP owner | present (ops, `tt/fleet.tsx`): the web's columns (health badge opens its reasons in a sheet, TPS / memory warning dots, budget text sorted by pressure with the full summary on a tap, country + city / network, IP with "moved" for owners, hidden ones in Columns), a row opens the server; `branch` text filter in the route (servers, latest deploy, gone servers and the stream ask for it); 5 metrics incl. Countries; Players per version kept (app extra) |
+| Game-declared columns (hidden until picked in Columns) | GET `/v1/fleet/columns` | all | present (ops): `cv.<name>` columns typed bool / number / enum, hidden until picked, every 60 s |
+| Live events feed (SSE: server, alert, alert_ack, report, deploy) and query invalidation | SSE GET `/v1/fleet/stream?branch` | all | present: `features/typetorch/live-feeds.ts` `useFleetStream` (XHR streaming with the Bearer token, reopened with a backoff), opened with the screen's `branch` like the web; `server` → Fleet servers / gone, `alert` / `alert_ack` → every alerts query (Fleet's table, home's recent), `report` / `deploy` → deploy list / pages and Fleet's latest deploy; "Live events" log (50, time + text); servers every 30 s while live (5 s while the stream is down). Only while the screen is focused |
+| Latest deploy: results, server reports, deploy errors (DataTables `fleet-results`, `fleet-reports`, `fleet-deploy-errors`) | GET `/v1/fleet/reports?latest&branch` (or `?seq` / `?artifact`) | all | present (ops): seq / branch / artifact / started / reported, the three DataTables (rows open the server), servers behind, stuck JobIds (tap to open), All deploys link |
+| By country (DataTable `fleet-countries`) + DB-IP credit | from servers | all | present (ops): `features/typetorch/fleet-bits.tsx` `countryCounts`, `GeoCredit` (opens the credit URL) |
+| Alerts (90 days, newest first, bundle link) | GET `/v1/fleet/alerts` | all | present (ops): DataTable `fleet-alerts` (the web's columns); a row opens the alert in a sheet: Open bundle, Errors of this build (window reaching back to it), its server, its deploy, and Acknowledge for owners (POST `/v1/fleet/alerts/<id>/ack`) |
+| Recently gone (DataTable `fleet-gone`) | GET `/v1/fleet/servers?gone=1` | all | present (ops: DataTable `fleet-gone` with the web's columns, a row opens the server; + `tt/server-history.tsx`) |
 
 ### Live map (`/live`) — see Maps and Live map below (§5), app `tt/live.tsx`.
 
 ### Server (`/servers/:jobId`) — `pages/Server.tsx`, `pages/server/*`, `lib/remote-debug.ts`, `lib/live-streams.ts`
 | Item | Route(s) | Role | App (`tt/server/[job].tsx`) |
 | --- | --- | --- | --- |
-| Header: state, health + reasons, build, branch, kernel, place version, players, last heartbeat, location, network, IP | GET `/v1/fleet/servers/<job>` | all; IP owner | present |
+| Header: state, health + reasons, build, branch, kernel, place version, players, last heartbeat, location, network, IP | GET `/v1/fleet/servers/<job>` | all; IP owner | present (ops): health badge, "Why it is …" reason lines (`fleet-bits.tsx` `reasonLines`), location label + GeoCredit, network, IP with first IP / changed, place version from the heartbeat or the `status` op |
 | Offline history: Offline badge, Timeline (alerts, reports, generation swaps, close / loss), whole-life charts | same (`history`) | all | present |
 | Debug bundles list + bundle view (`bundle`): summary, Players, Server log, Player logs (owners), Deploy and swaps | `history.bundles`, GET `/v1/fleet/bundles/<id>` | all; player logs owner | present (`tt/bundle/[id].tsx`) |
 | Errors it reported (30 d) → Errors `?fp=` | GET `/v1/servers/<job>/errors` | all | present (24 h list) |
-| Roblox logs (Open Cloud server logs: search, order, page token, place version) | GET `/v1/roblox/servers/<job>/logs` | all | missing |
-| Debug session: watch every 20 s, Connection status (waking / connecting / connected) | POST `/v1/fleet/servers/<job>/watch` | owner | missing |
-| Remote command plumbing (queue, poll result ≤ 15 s) | POST `/v1/fleet/servers/<job>/commands`, GET `.../commands/<id>` | owner | missing (`remoteCommand` defined in `api/backend.ts`, unused) |
-| Status tab: TPS / memory / players last hour with deploy marks + kernel `status` op | GET `.../metrics`, op `status` | metrics all; op owner | partial: metrics charts with deploy marks (tap for the card, toggle); no `status` op |
-| Logs tab: server log ring (`logs`, "Fetch newer"), player client logs (`player.logs`) | ops | owner | missing |
-| Players tab (`players`: dev, ping, account age, client start; "Logs") | op | owner | missing |
-| Game tab: game commands (`game.<name>`, table / kv / JSON answers), Streams latest values (~1 s) | ops, GET `.../streams?since` | owner | missing |
-| Live map tab (positions 2 Hz on the exported map, 20 s trail, `points` markers) | GET `.../streams`, maps geometry | owner | present as its own screen `tt/server-map/[job].tsx` (linked from the server page for live servers; holds the server watch 20 s, polls streams ~1 s, `features/maps/LiveMap.tsx`) so drags move the map, not the page |
-| State tab (`state`: roots, 100-entry pages, key filter, breadcrumb) | op | owner | missing |
-| Dex tab (`dex.children` lazy tree, `dex.props` properties / attributes / tags) | ops | owner | missing |
-| Modules / Builds / Budget / Errors / Network tabs (13 tables) | ops `modules`, `assets`, `builds`, `budget`, `errors`, `network` | owner | missing |
-| Audit tab (remote debug audit) | GET `/v1/fleet/debug/audit` | owner (hidden for `web`) | missing |
+| Roblox logs (Open Cloud server logs: search, order, page token, place version) | GET `/v1/roblox/servers/<job>/logs` | all | present (ops): `features/typetorch/server/roblox-logs.tsx` (live and gone servers): search, Newest / Oldest first, Load more (page token), the place version form on a 409, the not-configured text; DataTable `roblox-logs` (memory only) |
+| Debug session: watch every 20 s, Connection status (waking / connecting / connected) | POST `/v1/fleet/servers/<job>/watch` | owner | present (ops): `features/typetorch/server/remote-debug.ts` `useServerWatch` (every 20 s while the screen is focused and the app active, again on return), the web's `sessionState` / `detailRefetch` (1 s while waking, 5 s, 15 s connected), Connected / Waking / Connecting / Watch refused; read-only role: the read-only text, no watch |
+| Remote command plumbing (queue, poll result ≤ 15 s) | POST `/v1/fleet/servers/<job>/commands`, GET `.../commands/<id>` | owner | present (ops): `runRemote` / `useRemoteRunner` / `useRemote` ported (409 re-watch and queue once more, 600 ms polls, 15 s timeout, the kernel's reasons as sentences, everything aborted when the screen goes), the fetch bar (`server/shared.tsx` `RemoteBar`: waiting, answered time + ms, secrets redacted, the error) |
+| Status tab: TPS / memory / players last hour with deploy marks + kernel `status` op | GET `.../metrics`, op `status` | metrics all; op owner | present (ops): the charts with deploy marks (1 h / 6 h / 24 h / life) and the Status tab's Kernel status (fetched once as soon as the server polls; `server/tabs.tsx` `StatusFacts` + Raw answer) |
+| Logs tab: server log ring (`logs`, "Fetch newer"), player client logs (`player.logs`) | ops | owner | present (ops): Server / Player switch; latest 200 + Fetch newer (merged by index, 2000 kept); a player's client log (pick from `players`, Fetch newer), "Logs" on the Players tab opens it; DataTables `server-logs`, `server-player-logs` (memory only) |
+| Players tab (`players`: dev, ping, account age, client start; "Logs") | op | owner | present (ops): DataTable `server-players` with the web's columns and Logs |
+| Game tab: game commands (`game.<name>`, table / kv / JSON answers), Streams latest values (~1 s) | ops, GET `.../streams?since` | owner | present (ops): a card per declared command (optional JSON args, Run, the answer as a DataTable / key-values / JSON), Positions (DataTable) and each stream's latest value; streams polled ~1 s while the Game tab is open (`useServerStreams`) |
+| Live map tab (positions 2 Hz on the exported map, 20 s trail, `points` markers) | GET `.../streams`, maps geometry | owner | present as its own screen `tt/server-map/[job].tsx` (the Live map tab chip opens it, so drags move the map, not the page; holds the server watch 20 s, polls streams ~1 s, `features/maps/LiveMap.tsx`); read-only role: the read-only text |
+| State tab (`state`: roots, 100-entry pages, key filter, breadcrumb) | op | owner | present (ops): roots, breadcrumb, server key filter, Prev / Next, a row opens a table (DataTable `server-state`) |
+| Dex tab (`dex.children` lazy tree, `dex.props` properties / attributes / tags) | ops | owner | present (ops): lazy tree (200 children a page, Load more, at most 1,500 lines drawn), a tap selects (properties, attributes, tags; a reference value selects that instance) |
+| Modules / Builds / Budget / Errors / Network tabs (13 tables) | ops `modules`, `assets`, `builds`, `budget`, `errors`, `network` | owner | present (ops): every table with the web's ids and columns (`server-modules`, `server-persist`, `server-assets`, `server-branches`, `server-artifacts`, `server-reports`, `server-budget`, `server-budget-detail`, `server-memory-tags`, `server-errors`, `server-network`), memory only |
+| Audit tab (remote debug audit) | GET `/v1/fleet/debug/audit` | owner (hidden for `web`) | present (ops): this server's commands of the last 500 (every 30 s while open), DataTable `server-audit` |
 
 ### Server history — app-only page `tt/server-history.tsx` (web shows it inside Fleet "Recently gone"): present.
 
@@ -228,7 +228,7 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 | Live new errors (SSE topic `error`) | SSE GET `/v1/live?topics=error` | all | present: `useErrorStream` (debounced 1.5 s refetch, status badge live / connecting / retrying; polls every 30 s while down) |
 | Kind side sheet (`fp`): where, stack, by side / build (→ deploy or Performance) / branch, servers | GET `/v1/errors/<fp>` | all | present (`tt/error/[fp].tsx`): every list window; realm, branch and build from the route (removable chips) and sent to the kind and players reads |
 | Players who hit it (`errors-players`) | GET `/v1/errors/<fp>/players` | all | present (interaction 2): DataTable `errors-players` on the kind page (player with card, UserId, times, days, first / last seen, side; rows for occurrences that named nobody), refetched every 30 s |
-| Drop rules: list with drop counts, editor with live preview, save | GET `/v1/errors/drop-rules`, POST `.../preview`, PATCH `/v1/admin/settings` (`errorDropRules`) | list all; edit owner | missing |
+| Drop rules: list with drop counts, editor with live preview, save | GET `/v1/errors/drop-rules`, POST `.../preview`, PATCH `/v1/admin/settings` (`errorDropRules`) | list all; edit owner | present (ops): `features/typetorch/drop-rules.tsx` in a sheet from "Drop rules (n)" on Errors (`drop=1` opens it, the Settings screen links there): rules with drop counts and errors, New rule with note and the preview (350 ms after typing), How to write one, Turn on / off, Edit copy, Delete (confirm); "Drop errors like this" on a kind opens it with an exact rule; read-only for the `web` role |
 
 ### Performance (`/performance`) — `pages/Performance.tsx`, `components/PerfChart.tsx`, `components/PerfFlag.tsx`, `lib/perf*.ts`
 
@@ -247,13 +247,13 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 ### Settings (`/settings`, owner) — `pages/Settings.tsx` + cards
 | Item | Route(s) | App (`tt/settings.tsx`) |
 | --- | --- | --- |
-| Runtime settings groups Alerts, Backend alerts, Access, Rate limits, Retention and error budgets, API keys, Notifications: edit, "Reset to env", secret webhook as write-only field | GET / PATCH `/v1/admin/settings` | partial: read-only list |
-| Test alert | POST `/v1/admin/settings/test-alert` | missing |
-| Backend alert rules: master switch, repeat window, hourly cap, per rule on / off / level / thresholds, last-run status | GET `/v1/admin/alert-rules`, PATCH settings `backendAlerts` | missing |
-| Sign in with typetorch.dev: on / off, fingerprint, trusted browsers (revoke), trust this browser | GET `/v1/admin/devices`, DELETE `/v1/admin/devices/<id>`, POST `/auth/device` | missing (revoke is the useful part on a phone) |
-| Backups and disk: schedule, local backups, Back up now, Download backup (tar), disk warning | GET / POST `/v1/admin/backups`, POST `/v1/admin/backups/download` | missing |
-| Migration: state, source, rows copied, steps, per-day report; pause / resume / cancel / resolve (resend / skip); start form (URL + token) | GET / POST `/v1/admin/migrate` | missing |
-| Recent changes (settings audit, DataTable `settings-audit`) | GET `/v1/admin/audit?action=settings…` | missing |
+| Runtime settings groups Alerts, Backend alerts, Access, Rate limits, Retention and error budgets, API keys, Notifications: edit, "Reset to env", secret webhook as write-only field | GET / PATCH `/v1/admin/settings` | present (ops, owners): `features/typetorch/settings/form.tsx` (the web's `buildChanges` / `numberProblem` / `splitList`): per setting the source badge, env name, control (number, list, choice, levels, switch with the token-login guard, drop rules / kind switches summaries with links), help and bounds, Undo, Reset to env, Reset all to env, Discard, Save (confirm), the not-saved / saved notices, the read-only (runtime settings off) note; the webhook only as Set / Not set with a password field and Clear |
+| Test alert | POST `/v1/admin/settings/test-alert` | present (ops): Send test alert under a set webhook (save first while one is typed; 429 wording) |
+| Backend alert rules: master switch, repeat window, hourly cap, per rule on / off / level / thresholds, last-run status | GET `/v1/admin/alert-rules`, PATCH settings `backendAlerts` | present (ops): `settings/alert-rules.tsx` (`alertRulesChange`, `paramProblem` ported), rules per group with state badge, needs-analytics, env, help, on / off, level, thresholds with bounds, last run; status every 60 s |
+| Sign in with typetorch.dev: on / off, fingerprint, trusted browsers (revoke), trust this browser | GET `/v1/admin/devices`, DELETE `/v1/admin/devices/<id>`, POST `/auth/device` | present (ops): `settings/cards.tsx` `CentralLoginSection`: on / off, issuer, fingerprint (copy), the unblessed policy text, trusted browsers with Revoke (confirm); "Trust this browser" is n/a (a browser cookie; the screen says to use the browser or `typetorch backend bless`) |
+| Backups and disk: schedule, local backups, Back up now, Download backup (tar), disk warning | GET / POST `/v1/admin/backups`, POST `/v1/admin/backups/download` | present (ops): `settings/cards.tsx` `BackupCard` (every 60 s): disk line / warning, schedule, last failure, Back up now, Download backup (the tar is fetched, written to the cache with expo-file-system and offered through expo-sharing; 10 min deadline; held in memory on the way), DataTable `backups` |
+| Migration: state, source, rows copied, steps, per-day report; pause / resume / cancel / resolve (resend / skip); start form (URL + token) | GET / POST `/v1/admin/migrate` | present (ops): `settings/cards.tsx` `MigrationCard` (5 s while running or waiting, else 60 s; nothing on 403 / 404): state, route, rows bar, days left, waiting for, error, decision (Resend / Skip, confirm), Pause / Resume / Cancel (confirm), steps, DataTable `migrate-days`; the start form (URL, token cleared on send, rows / s, confirm) |
+| Recent changes (settings audit, DataTable `settings-audit`) | the settings view's `audit` (GET `/v1/admin/settings`, as the web) | present (ops): DataTable `settings-audit` (when, who + via, what) and the environment-only list |
 | App-only: this device, app sessions (`/v1/auth/mobile/tokens`), experience link, health | – | present (WIP backend branch only) |
 
 ### Backend stats (`/backend`, owner) — `pages/BackendStats.tsx`
@@ -271,16 +271,16 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 ### Notifications (`/notifications`) — `pages/Notifications.tsx`, `pages/notifications/*`
 | Item | Route(s) | Role | App |
 | --- | --- | --- | --- |
-| Header: live status chip + queue popover (15 s), dry run badge, own range picker, kind (`kind`), Send a test | GET `/v1/notify/status` | status owner | missing |
-| 4 KPIs: Subscribers (known), Sent, Opened, Came back next day | `/v1/query/notify-funnel`, `/v1/query/notify-optin` | all | missing |
-| Health tab: status sentence, who can get them, opened / back-next-day per day, Needs attention (`attention.ts`) | queries above + status | all (status owner) | missing |
-| Funnel tab: prompt → subscribed → sent → opened → played 1 min+ → back next day, 3 insight cards, sends and opens per day, totals, opt-in by spot | `/v1/query/notify-funnel`, `/v1/query/notify-optin` | all | missing |
-| Inbox tab: newest sends (15 s), filter chips, search, side panel (consent, request / answer, join data, earlier sends, intents) | GET `/v1/notify/recent?limit&kind`, GET `/v1/notify/user` | owner | missing |
-| Player panel (`player`, `by` = uid / pid / name): consent, mute, kinds off in game, prompt rows, sends with opens / plays, intents | GET `/v1/notify/user` | owner | missing |
-| Subscribers tab: state chips with counts, search, keyset pages, CSV | GET `/v1/notify/users`, `?format=csv` | owner | missing |
-| Kinds tab: per kind sent / opened / played / back / skipped / pending, on / off switch, funnel per kind and day | `/v1/query/notify-funnel`, PATCH `/v1/admin/settings` | switch owner | missing |
-| Queue & errors tab: right now, queue history per hour, planned / skipped by why, failures by HTTP status and code | `/v1/query/notify-queue`, GET `/v1/notify/status` | live part owner | missing |
-| Settings tab: `notify.*` (pause, dry run, rate ceiling, stale hours, day clock), test send with preview, kinds config, config record | PATCH `/v1/admin/settings`, POST `/v1/notify/test`, GET `/v1/notify/config` | owner | missing |
+| Header: live status chip + queue popover (15 s), dry run badge, own range picker, kind (`kind`), Send a test | GET `/v1/notify/status` | status owner | present (ops, `tt/notifications.tsx`): status chip (Sending · n/s, Paused, Stopped) opening Right now in a sheet with Queue & errors, dry run badge, range chips (the filter bar's range; only the range is sent), kind chips (`kind` in the route), Send a test (owners → Settings tab), halted banners (all sends, templates, kinds) |
+| 4 KPIs: Subscribers (known), Sent, Opened, Came back next day | `/v1/query/notify-funnel`, `/v1/query/notify-optin` | all | present (ops): Subscribers (owners: GET `/v1/notify/users` counts + new this week; else the range's inferred), Sent with the change against the days before (day presets) and today / tests, Opened, Came back next day |
+| Health tab: status sentence, who can get them, opened / back-next-day per day, Needs attention (`attention.ts`) | queries above + status | all (status owner) | present (ops): `features/typetorch/notifications/shared.tsx` (`attentionItems`, `healthSentence` ported), subscriber bar, two sparkline trends, Needs attention with See <tab> |
+| Funnel tab: prompt → subscribed → sent → opened → played 1 min+ → back next day, 3 insight cards, sends and opens per day, totals, opt-in by spot | `/v1/query/notify-funnel`, `/v1/query/notify-optin` | all | present (ops): steps with % of the step before, Biggest drop / Best kind / Best prompt spot, totals strip, sends / opens / played per day (a three-line chart instead of grouped bars), DataTable `notify-optin-where` |
+| Inbox tab: newest sends (15 s), filter chips, search, side panel (consent, request / answer, join data, earlier sends, intents) | GET `/v1/notify/recent?limit&kind`, GET `/v1/notify/user` | owner | present (ops): feed with initials, kind text filled with the params, status and age; filter and consent chips, search (player, UserId, nid; Open player <UserId>); the side panel is a sheet (consent badges, this send, request / answer / join data, earlier, intents, Open full player view) |
+| Player panel (`player`, `by` = uid / pid / name): consent, mute, kinds off in game, prompt rows, sends with opens / plays, intents | GET `/v1/notify/user` | owner | present (ops): `notifications/player.tsx` under the Inbox (`player`, `by` in the route; `playerLookup` ported): Guess / UserId / pid / Name, consent with prompt rows (DataTable `notify-player-consent`), sends (`notify-player-sends`, tap for SendDetail), opening sessions' join data, intents (`notify-player-intents`), Also named so |
+| Subscribers tab: state chips with counts, search, keyset pages, CSV | GET `/v1/notify/users`, `?format=csv` | owner | present (ops): subscriber bar, state chips with counts, search, Previous / Next (cursors), DataTable `notify-subscribers` (a row opens the player in the Inbox), Export CSV (the server's CSV through the share sheet, truncation note) |
+| Kinds tab: per kind sent / opened / played / back / skipped / pending, on / off switch, funnel per kind and day | `/v1/query/notify-funnel`, PATCH `/v1/admin/settings` | switch owner | present (ops): DataTable `notify-kinds` (kind text, stopped badge, On switch for owners, turning one off asks first), By kind and day (`notify-days`) |
+| Queue & errors tab: right now, queue history per hour, planned / skipped by why, failures by HTTP status and code | `/v1/query/notify-queue`, GET `/v1/notify/status` | live part owner | present (ops): live queue tiles (owners), `notify-failures`, `notify-planned`, `notify-skipped`, totals and the per-hour history (a line chart per series instead of stacked bars) |
+| Settings tab: `notify.*` (pause, dry run, rate ceiling, stale hours, day clock), test send with preview, kinds config, config record | PATCH `/v1/admin/settings`, POST `/v1/notify/test`, GET `/v1/notify/config` | owner | present (ops): Sending On / Paused (pause asks first), Dry run, Day clock, rate ceiling and stale hours with Save, the setup badges; Send a test (UserId, kind, placeholder rows + custom params, launch data, preview, confirm); kinds from the config record with their switch; Show the pushed config |
 
 ### Maps (`/maps`) — `pages/Maps.tsx`, `lib/maps.ts`, `lib/map-view.ts`, `lib/map-textures.ts`, `components/maps/*`
 
@@ -336,28 +336,27 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 | --- | --- | --- | --- |
 | Fleet SSE (server, alert, alert_ack, report, deploy) | GET `/v1/fleet/stream?branch` | Fleet | present (XHR streaming, `api/tt/sse.ts`; servers poll 5 s while down, 60 s while live; only while Fleet is focused; no `?branch`) |
 | Errors SSE | GET `/v1/live?topics=error` | Errors | present (30 s poll while down; only while Errors is focused, one refetch on return) |
-| Server watch (20 s) + command result poll (600 ms) | POST `.../watch`, GET `.../commands/<id>` | Server | missing |
-| Server streams (~1 s) | GET `/v1/fleet/servers/<job>/streams?since` | Server Game / Live map tabs | present for the live map (`features/maps/live-streams.ts` useServerStreams, + useServerWatch 20 s; both only while the screen is focused and the app in front); Game tab is ops |
+| Server watch (20 s) + command result poll (600 ms) | POST `.../watch`, GET `.../commands/<id>` | Server | present (ops): `features/typetorch/server/remote-debug.ts` (only while the screen is focused and the app active) |
+| Server streams (~1 s) | GET `/v1/fleet/servers/<job>/streams?since` | Server Game / Live map tabs | present for the live map (`features/maps/live-streams.ts` useServerStreams, + useServerWatch 20 s; both only while the screen is focused and the app in front) and the server screen's Game tab (while it is open) |
 | Live map watch (20 s) + poll (3 s) | POST `/v1/fleet/live-map/watch`, GET `/v1/fleet/live-map` | Live | present (`useLiveMap`; paused while the app is in the background or another screen is on top (useIsFocused), watch renewed on return) |
-| Health 30 s, storage 30 s, busy note 30 s, realtime 30 s, notify status / inbox 15 s, live events 60 s, alert rules 60 s, backups 60 s, backend stats 2 s | various | various | health (on open), realtime, backend stats; storage 30 s, busy note 30 s, live events 60 s (analytics) |
+| Health 30 s, storage 30 s, busy note 30 s, realtime 30 s, notify status / inbox 15 s, live events 60 s, alert rules 60 s, backups 60 s, backend stats 2 s | various | various | all present: health 30 s (header dot), realtime, backend stats; storage 30 s, busy note 30 s, live events 60 s (analytics); notify status / inbox 15 s, alert rules 60 s, backups 60 s, migration 5 s / 60 s, drop rules 30 s, fleet columns 60 s, place 60 s (ops) |
 
 ## 8. API client gaps (`src/api/backend.ts` vs `web/src/lib/api.ts`)
 
-Missing methods: `errorDropRules`, `previewDropRule`, `fleetColumns`, `migrateAction`,
-`migrateResolve`, `migrateStart`, `notifyConfig`, `notifyRecent`, `notifyStatus`, `notifyTest`, `notifyUser`,
-`notifyUsers` (+ CSV), `downloadBackup`. (Added by analytics: `experimentChange`, `migrateStatus`, `robloxDemographics`; the live
-events methods are used by `tt/live-events.tsx`, `storage` by the Overview's Storage card, `backendStats("1m")` by the busy note. Added by recordings: `anim` = GET `/v1/anims/<id>`. Added by maps-live: `liveMap`,
-`watchLiveMap`, `serverStreams`, `eventStream` (SSE), `maps`, `exportMaps`, `setMapOverride`, `removeMapOverride`,
-`mapGeometry`, `image`.) Defined but unused: `remoteCommand`, `remoteResult`, `watchServer`, `debugAudit`, `saveSettings`,
-`testAlert`, `alertRules`, `backups`, `backupNow`, `devices`, `revokeDevice`, `storage`, `fleetReport`,
-`robloxServerLogs`, `liveUrl`, `streamUrl`. Types added by analytics (`api/tt/types.ts`): Ltv*, Explain*, RobloxDemographic*,
-SessionTime*, Feedback*, AssignmentCheck, ExperimentChangeRequest, PreparedExperimentChange, IngestPressure, MigrateStatus /
-MigrateDay (the banner's part), Comparison p-values / mde / days, RealtimeResult `devices`, TrendsResult `bucketHours` /
-`partial`, RetentionCohort `partial`; Churn* and Demographic* stay in `api/tt/audience.ts` and are re-exported from types.ts and
-in QueryResults (with ltv, explain, session-time, feedback-summary, feedback-list); LiveEvent* / LiftReport are in
-`api/tt/live-events.ts`. Still missing types: Notify*, Migrate* (the Settings card's actions), GameColumn* (GameCommand / GameStream / StreamFrame / StreamPoint / ServerStreams / LiveMapServer /
-LivePlayer / MapPositionsResult added by maps-live),
-ErrorDropRule*/DropPreview, QueueStats (`AccountAge` and the audience `Filters` keys are in, from interaction 2).
+None left (ops): added `errorDropRules`, `previewDropRule`, `fleetColumns`, `migrateAction`, `migrateResolve`,
+`migrateStart`, `notifyConfig`, `notifyRecent`, `notifyStatus`, `notifyTest`, `notifyUser`, `notifyUsers`,
+`notifyUsersCsv` (text + file name + truncated) and `downloadBackup` (bytes + file name; the screen writes them with
+expo-file-system and shares them), through one `download` helper (Bearer, the CSRF header on POST, the server's
+`content-disposition` name). Every method is used now: `remoteCommand`, `remoteResult`, `watchServer`, `debugAudit`
+(server screen), `saveSettings`, `testAlert`, `alertRules`, `backups`, `backupNow`, `devices`, `revokeDevice`
+(Settings, Notifications, drop rules), `fleetReport` (Fleet), `robloxServerLogs` (server screen); `liveUrl` /
+`streamUrl` / `blessDevice` stay unused (EventSource URLs and a browser cookie: the app streams with `eventStream`).
+Earlier groups added `experimentChange`, `migrateStatus`, `robloxDemographics`, the live events methods, `storage`,
+`anim`, `liveMap`, `watchLiveMap`, `serverStreams`, `eventStream`, `maps`, `exportMaps`, `setMapOverride`,
+`removeMapOverride`, `mapGeometry`, `image`. Types (`api/tt/types.ts`) now carry the web's Notify*, Migrate* (steps,
+decision, actions, start input), GameColumn / `cv`, ErrorDropRule* / DropPreview, QueueStats, the `kindSwitches` /
+`names` / `dropRules` setting kinds, the `notify` / `keys` setting groups, `game.<name>` remote ops and the place card's
+`playingFrom`; QueryResults has `notify-funnel`, `notify-optin`, `notify-queue`.
 
 ## 9. Open Cloud / Creator Hub side (brief)
 
@@ -433,44 +432,45 @@ Done on `feat/phone-parity` (typechecked; not run on a device yet). Notes: the E
 - [x] Deploys: branch filter — GET `/v1/fleet/deploys?branch`
 - [x] Types: Churn*, Ltv*, Explain*, Demographic*, RobloxDemographics, SessionTime*, Feedback*, AssignmentCheck, ExperimentChangeRequest, PreparedExperimentChange, LiveEvent*, LiftReport, AccountAge + audience Filters
 
-### ops
-- Notifications page `tt/notifications.tsx` (web `pages/Notifications.tsx`): header status chip / dry run / range / kind / Send a test, 4 KPIs — GET `/v1/notify/status`, `/v1/query/notify-funnel`, `/v1/query/notify-optin`
-- Notifications Health tab (web `notifications/HealthTab.tsx`, `attention.ts`)
-- Notifications Funnel tab (web `notifications/FunnelTab.tsx`) — `notify-funnel`, `notify-optin`
-- Notifications Inbox tab (owner, web `notifications/InboxTab.tsx`) — GET `/v1/notify/recent`, `/v1/notify/user`
-- Notifications Player panel (owner, web `notifications/PlayerPanel.tsx`) — GET `/v1/notify/user?uid|pid|name`
-- Notifications Subscribers tab + CSV (owner, web `notifications/SubscribersTab.tsx`) — GET `/v1/notify/users[?format=csv]`
-- Notifications Kinds tab + on / off switch (web `notifications/KindsTab.tsx`) — `notify-funnel`, PATCH `/v1/admin/settings`
-- Notifications Queue & errors tab (web `notifications/QueueTab.tsx`) — `/v1/query/notify-queue`, GET `/v1/notify/status`
-- Notifications Settings tab (owner, web `notifications/SettingsTab.tsx`) — PATCH `/v1/admin/settings` `notify.*`, POST `/v1/notify/test`, GET `/v1/notify/config`
-- Player detail Notifications view (owner) — GET `/v1/notify/user?pid=`
-- Server debug session: watch 20 s + connection state + command runner (web `pages/Server.tsx`, `lib/remote-debug.ts`) — POST `.../watch`, POST `.../commands`, GET `.../commands/<id>` (owner)
-- Server Status tab: kernel `status` op + deploy marks on TPS / memory / players (web `server/StatusTab.tsx`)
-- Server Logs tab: server ring + Fetch newer, player client logs (web `server/LogsTab.tsx`) — ops `logs`, `player.logs`
-- Server Players tab (web `server/PlayersTab.tsx`) — op `players`
-- Server Game tab: game commands + streams (web `server/GameTab.tsx`) — ops `game.<name>`, GET `.../streams`
-- Server State tab (web `server/StateTab.tsx`) — op `state`
-- Server Dex tab (web `server/DexTab.tsx`) — ops `dex.children`, `dex.props`
-- Server Modules / Builds / Budget / Errors / Network tabs (web `server/InfoTabs.tsx`) — ops `modules`, `assets`, `builds`, `budget`, `errors`, `network`
-- Server Audit tab (owner) — GET `/v1/fleet/debug/audit`
-- Server Roblox logs (web `server/RobloxLogs.tsx`) — GET `/v1/roblox/servers/<job>/logs`
-- Fleet: budget column, location / country column + By country table, IP (owner) — GET `/v1/fleet/servers`
-- Fleet: game-declared columns — GET `/v1/fleet/columns`
-- Fleet: live events feed — SSE `/v1/fleet/stream`
-- Fleet: latest deploy results / reports / deploy errors — GET `/v1/fleet/reports`
-- Fleet: full alerts list (90 d) with bundle links and ack — GET `/v1/fleet/alerts`, POST `/v1/fleet/alerts/<id>/ack`
-- Errors drop rules: list, editor with preview, save (owner) — GET `/v1/errors/drop-rules`, POST `.../preview`, PATCH `/v1/admin/settings`
-- Settings: edit runtime settings per group, Reset to env, write-only webhook — PATCH `/v1/admin/settings`
-- Settings: Test alert — POST `/v1/admin/settings/test-alert`
-- Settings: Backend alert rules editor + last run — GET `/v1/admin/alert-rules`, PATCH settings
-- Settings: typetorch.dev trusted browsers (list, revoke) — GET `/v1/admin/devices`, DELETE `/v1/admin/devices/<id>`
-- Settings: Backups (list, Back up now, Download via expo-file-system + expo-sharing), disk warning — GET / POST `/v1/admin/backups`, POST `/v1/admin/backups/download`
-- Settings: Migration card (status, pause / resume / cancel / resolve, start) — GET / POST `/v1/admin/migrate`
-- Settings: Recent changes table — GET `/v1/admin/audit`
-- Shell: header health dot, place card with live players — `/healthz`, `/v1/place`
-- Command palette (web `components/CommandPalette.tsx`, `lib/commands.ts`): pages by role, ranges, clear filters, copy link (typetorch:// URL), refresh, theme, sign out, open player, page commands
-- Global Find player — GET `/v1/identity?uid=`
-- Page menu: add the 8 missing pages, grouped like `lib/nav.ts`
+### ops (done; see §1, §3 Players, §4 Fleet / Server / Errors, §5 Settings / Notifications, §7, §8)
+- [x] Notifications page `tt/notifications.tsx` (web `pages/Notifications.tsx`): header status chip / dry run / range / kind / Send a test, 4 KPIs — GET `/v1/notify/status`, `/v1/query/notify-funnel`, `/v1/query/notify-optin`
+- [x] Notifications Health tab (web `notifications/HealthTab.tsx`, `attention.ts`)
+- [x] Notifications Funnel tab (web `notifications/FunnelTab.tsx`) — `notify-funnel`, `notify-optin`
+- [x] Notifications Inbox tab (owner, web `notifications/InboxTab.tsx`) — GET `/v1/notify/recent`, `/v1/notify/user`
+- [x] Notifications Player panel (owner, web `notifications/PlayerPanel.tsx`) — GET `/v1/notify/user?uid|pid|name`
+- [x] Notifications Subscribers tab + CSV (owner, web `notifications/SubscribersTab.tsx`) — GET `/v1/notify/users[?format=csv]`
+- [x] Notifications Kinds tab + on / off switch (web `notifications/KindsTab.tsx`) — `notify-funnel`, PATCH `/v1/admin/settings`
+- [x] Notifications Queue & errors tab (web `notifications/QueueTab.tsx`) — `/v1/query/notify-queue`, GET `/v1/notify/status`
+- [x] Notifications Settings tab (owner, web `notifications/SettingsTab.tsx`) — PATCH `/v1/admin/settings` `notify.*`, POST `/v1/notify/test`, GET `/v1/notify/config`
+- [x] Player detail Notifications view (owner) — GET `/v1/notify/user?pid=`
+- [x] Server debug session: watch 20 s + connection state + command runner (web `pages/Server.tsx`, `lib/remote-debug.ts`) — POST `.../watch`, POST `.../commands`, GET `.../commands/<id>` (owner)
+- [x] Server Status tab: kernel `status` op + deploy marks on TPS / memory / players (web `server/StatusTab.tsx`)
+- [x] Server Logs tab: server ring + Fetch newer, player client logs (web `server/LogsTab.tsx`) — ops `logs`, `player.logs`
+- [x] Server Players tab (web `server/PlayersTab.tsx`) — op `players`
+- [x] Server Game tab: game commands + streams (web `server/GameTab.tsx`) — ops `game.<name>`, GET `.../streams`
+- [x] Server State tab (web `server/StateTab.tsx`) — op `state`
+- [x] Server Dex tab (web `server/DexTab.tsx`) — ops `dex.children`, `dex.props`
+- [x] Server Modules / Builds / Budget / Errors / Network tabs (web `server/InfoTabs.tsx`) — ops `modules`, `assets`, `builds`, `budget`, `errors`, `network`
+- [x] Server Audit tab (owner) — GET `/v1/fleet/debug/audit`
+- [x] Server Roblox logs (web `server/RobloxLogs.tsx`) — GET `/v1/roblox/servers/<job>/logs`
+- [x] Fleet: budget column, location / country column + By country table, IP (owner) — GET `/v1/fleet/servers`
+- [x] Fleet: game-declared columns — GET `/v1/fleet/columns`
+- [x] Fleet: live events feed — SSE `/v1/fleet/stream`
+- [x] Fleet: latest deploy results / reports / deploy errors — GET `/v1/fleet/reports`
+- [x] Fleet: full alerts list (90 d) with bundle links and ack — GET `/v1/fleet/alerts`, POST `/v1/fleet/alerts/<id>/ack`
+- [x] Errors drop rules: list, editor with preview, save (owner) — GET `/v1/errors/drop-rules`, POST `.../preview`, PATCH `/v1/admin/settings`
+- [x] Settings: edit runtime settings per group, Reset to env, write-only webhook — PATCH `/v1/admin/settings`
+- [x] Settings: Test alert — POST `/v1/admin/settings/test-alert`
+- [x] Settings: Backend alert rules editor + last run — GET `/v1/admin/alert-rules`, PATCH settings
+- [x] Settings: typetorch.dev trusted browsers (list, revoke) — GET `/v1/admin/devices`, DELETE `/v1/admin/devices/<id>`
+- [x] Settings: Backups (list, Back up now, Download via expo-file-system + expo-sharing), disk warning — GET / POST `/v1/admin/backups`, POST `/v1/admin/backups/download`
+- [x] Settings: Migration card (status, pause / resume / cancel / resolve, start) — GET / POST `/v1/admin/migrate`
+- [x] Settings: Recent changes table — GET `/v1/admin/audit`
+- [x] Shell: header health dot, place card with live players — `/healthz`, `/v1/place`
+- [x] Command palette (web `components/CommandPalette.tsx`, `lib/commands.ts`): pages by role, ranges, clear filters, copy link (typetorch:// URL), refresh, theme, sign out, open player, page commands
+- [x] Global Find player — GET `/v1/identity?uid=`
+- [x] Page menu: add the 8 missing pages, grouped like `lib/nav.ts`
+- Untested on a device (Expo Go, Android): a live debug session against a running server (watch, commands), the backup download and the subscribers CSV through the share sheet, the command palette's keyboard in a sheet
 
 ### interaction (done; see §6 and the pages above)
 - [x] Drawn graph for Flow and player Timeline: dagre layout + react-native-svg, pan / pinch-zoom, facet and moments, tap a node for its moves (`features/typetorch/graph-view.tsx`)
