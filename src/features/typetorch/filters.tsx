@@ -150,7 +150,7 @@ export function useTTAnalytics<N extends QueryName>(backendId: string, name: N, 
 const ANY = "";
 const SEP = "|";
 
-/** Range chips on top; a "Filters" button opens branch, artifact, device, new / returning and variant. */
+/** Range chips on top (`ranges={[]}`: a page with its own period hides them); a "Filters" button opens branch, artifact, device, new / returning and variant. */
 export function FilterBar({ backendId, ranges }: { backendId: string; ranges?: RangePreset[] }) {
 	const p = useTheme();
 	const { state, apiFilters, set, reset } = useTTFilters(backendId);
@@ -177,7 +177,11 @@ export function FilterBar({ backendId, ranges }: { backendId: string; ranges?: R
 		<View style={{ gap: space.sm }}>
 			<View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
 				<View style={{ flex: 1 }}>
-					<Chips options={(ranges ?? [...RANGE_PRESETS, "custom"]).map((r) => ({ value: r, label: RANGE_LABELS[r] }))} value={state.range} onChange={setRange} />
+					{ranges && ranges.length === 0 ? (
+						<Txt variant="small">The date range doesn't apply here; the other filters do.</Txt>
+					) : (
+						<Chips options={(ranges ?? [...RANGE_PRESETS, "custom"]).map((r) => ({ value: r, label: RANGE_LABELS[r] }))} value={state.range} onChange={setRange} />
+					)}
 				</View>
 				<Pressable
 					onPress={() => setOpen((o) => !o)}
@@ -190,7 +194,7 @@ export function FilterBar({ backendId, ranges }: { backendId: string; ranges?: R
 					</Txt>
 				</Pressable>
 			</View>
-			{state.range === "custom" ? (
+			{state.range === "custom" && !(ranges && ranges.length === 0) ? (
 				<View style={{ flexDirection: "row", gap: space.sm }}>
 					<View style={{ flex: 1 }}>
 						<Field label="From (UTC)" value={state.from ?? ""} placeholder="YYYY-MM-DD" onChangeText={(t) => set({ from: t.trim() || undefined })} />

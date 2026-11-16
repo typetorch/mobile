@@ -22,7 +22,7 @@ export const TT_PAGES: TTPage[] = [
 	{ key: "errors", title: "Errors", icon: "bug-outline", description: "Error kinds, stacks, where they hit", status: "ready" },
 	{ key: "settings", title: "Settings", icon: "options-outline", description: "Backend settings, app sessions", status: "ready" },
 	// Phase 2 (ported after phase 1; see README TODO):
-	{ key: "roblox", title: "Roblox", icon: "logo-electron", description: "Creator Hub numbers via the backend", status: "todo" },
+	{ key: "roblox", title: "Roblox", icon: "logo-electron", description: "Creator Hub numbers via the backend", status: "ready" },
 	{ key: "retention", title: "Retention", icon: "repeat-outline", description: "Cohorts by day", status: "ready" },
 	{ key: "funnels", title: "Funnels", icon: "funnel-outline", description: "Step conversion", status: "ready" },
 	{ key: "players", title: "Players", icon: "people-outline", description: "Player list and profiles", status: "ready" },

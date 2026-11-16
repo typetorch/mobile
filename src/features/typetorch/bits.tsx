@@ -429,3 +429,18 @@ export function JsonBlock({ value, max = 400 }: { value: unknown; max?: number }
 		</ScrollView>
 	);
 }
+
+/** "+12%" with an arrow; green when it's an improvement, red when it's worse (the web's ChangeChip). */
+export function ChangeChip({ change }: { change: { relative: number | null; direction: "up" | "down" | "flat"; good: boolean | null } }) {
+	const p = useTheme();
+	const text = change.relative === null ? (change.direction === "up" ? "new" : "–") : change.relative === 0 ? "0%" : `${change.relative > 0 ? "+" : ""}${fmtPct(change.relative, Math.abs(change.relative) < 0.1 ? 1 : 0)}`;
+	const c = change.good === true ? p.good : change.good === false ? p.destructive : p.mutedForeground;
+	return (
+		<View style={{ flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999, backgroundColor: `${c}1f` }}>
+			<Icon name={change.direction === "up" ? "arrow-up" : change.direction === "down" ? "arrow-down" : "remove"} size={10} color={c} />
+			<Txt variant="small" color={c} style={{ fontSize: 11, fontWeight: "600" }}>
+				{text}
+			</Txt>
+		</View>
+	);
+}
