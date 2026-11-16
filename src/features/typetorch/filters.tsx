@@ -26,7 +26,7 @@ export const RANGE_LABELS: Record<RangePreset, string> = {
 	"90d": "90 d",
 	custom: "Custom",
 };
-const HOUR_PRESETS: Partial<Record<RangePreset, number>> = { "1h": 1, "6h": 6 };
+export const HOUR_PRESETS: Partial<Record<RangePreset, number>> = { "1h": 1, "6h": 6 };
 
 export interface FilterState {
 	range: RangePreset;

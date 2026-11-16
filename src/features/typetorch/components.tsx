@@ -68,13 +68,15 @@ export function PageMenu({ account }: { account: BackendAccount }) {
 					))}
 				</List>
 			</Section>
-			<Section title="Coming to the app">
-				<List>
-					{todo.map((x) => (
-						<Row key={x.key} left={<Icon name={x.icon} size={18} color={p.mutedForeground} />} title={x.title} subtitle={`${x.description} · use the web explorer for now`} disabled />
-					))}
-				</List>
-			</Section>
+			{todo.length ? (
+				<Section title="Coming to the app">
+					<List>
+						{todo.map((x) => (
+							<Row key={x.key} left={<Icon name={x.icon} size={18} color={p.mutedForeground} />} title={x.title} subtitle={`${x.description} · use the web explorer for now`} disabled />
+						))}
+					</List>
+				</Section>
+			) : null}
 		</>
 	);
 }

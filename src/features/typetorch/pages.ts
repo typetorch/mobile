@@ -21,7 +21,7 @@ export const TT_PAGES: TTPage[] = [
 	{ key: "deploys", title: "Deploys", icon: "rocket-outline", description: "Release history and outcomes", status: "ready" },
 	{ key: "errors", title: "Errors", icon: "bug-outline", description: "Error kinds, stacks, where they hit", status: "ready" },
 	{ key: "settings", title: "Settings", icon: "options-outline", description: "Backend settings, app sessions", status: "ready" },
-	// Phase 2 (ported after phase 1; see README TODO):
+	// Phase 2:
 	{ key: "roblox", title: "Roblox", icon: "logo-electron", description: "Creator Hub numbers via the backend", status: "ready" },
 	{ key: "retention", title: "Retention", icon: "repeat-outline", description: "Cohorts by day", status: "ready" },
 	{ key: "funnels", title: "Funnels", icon: "funnel-outline", description: "Step conversion", status: "ready" },
@@ -31,7 +31,7 @@ export const TT_PAGES: TTPage[] = [
 	{ key: "first-session", title: "First session", icon: "footsteps-outline", description: "New players' first minutes", status: "ready" },
 	{ key: "events", title: "Events", icon: "list-outline", description: "Raw events", status: "ready" },
 	{ key: "server-history", title: "Server history", icon: "time-outline", description: "Closed and lost servers", status: "ready" },
-	{ key: "performance", title: "Performance", icon: "pulse-outline", description: "FPS, memory, ping, TPS", status: "todo" },
+	{ key: "performance", title: "Performance", icon: "pulse-outline", description: "FPS, memory, ping, TPS", status: "ready" },
 	{ key: "economy", title: "Economy", icon: "cash-outline", description: "Currency sources and sinks", status: "ready" },
 	{ key: "monetization", title: "Monetization", icon: "card-outline", description: "Purchases and products", status: "ready" },
 	{ key: "query", title: "Query", icon: "code-slash-outline", description: "Named queries and SQL", status: "ready" },

@@ -18,6 +18,8 @@ export interface ChartSeries {
 	label: string;
 	points: ChartPoint[];
 	color?: string;
+	/** Drawn dashed (a previous period). */
+	dashed?: boolean;
 }
 
 const PAD = { top: 10, right: 8, bottom: 20, left: 40 };
@@ -147,7 +149,7 @@ export function LineChart({
 							return (
 								<G key={si}>
 									{fill ? <Path d={fill} fill={colors[si]} opacity={0.12} /> : null}
-									<Path d={line} stroke={colors[si]} strokeWidth={2} fill="none" strokeLinejoin="round" strokeLinecap="round" />
+									<Path d={line} stroke={colors[si]} strokeWidth={s.dashed ? 1.5 : 2} strokeDasharray={s.dashed ? "4,3" : undefined} fill="none" strokeLinejoin="round" strokeLinecap="round" />
 									{pts.length === 1 ? <Circle cx={x((pts[0] as ChartPoint).t)} cy={y((pts[0] as ChartPoint).v as number)} r={3} fill={colors[si]} /> : null}
 								</G>
 							);
