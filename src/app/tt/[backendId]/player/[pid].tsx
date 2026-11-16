@@ -1,8 +1,8 @@
 /**
  * One player (the web's player detail under the Players list): Roblox headshot and names (GET /v1/identity/<pid>/profile),
  * the range's numbers, funnel progress, then Spending, Playtime, Sessions (query `player-stats`), Timeline (`timeline` +
- * `player-graph`, with each session's join data `jd`), Errors (GET /v1/players/<pid>/errors) and Feedback (query
- * `feedback-list` with the pid).
+ * `player-graph`, with each session's join data `jd`), Errors (GET /v1/players/<pid>/errors), Feedback (query
+ * `feedback-list` with the pid) and, for owners, Notifications (GET /v1/notify/user?pid=).
  */
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
@@ -23,13 +23,15 @@ import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "@/featur
 import { GraphControls, GraphPanelBody, isFacet, MermaidButton, PathStrip, SparseNote } from "@/features/typetorch/graph";
 import { useFlagParam, usePageParam } from "@/features/typetorch/view-link";
 import { useTTQuery } from "@/features/typetorch/hooks";
+import { PlayerView as NotifyPlayerView } from "@/features/typetorch/notifications/player";
+import { isReadOnly } from "@/features/typetorch/roles";
 import { TTScreen } from "@/features/typetorch/screen";
 import { fmtAgo, fmtInt, fmtMinutes, fmtNum, fmtTime, plural, shortId } from "@/lib/format";
 import type { ErrorParams } from "@/api/backend";
 import type { Filters } from "@/api/tt/types";
 import { space, useTheme } from "@/theme";
 
-type PlayerView = "spending" | "playtime" | "sessions" | "timeline" | "errors" | "feedback";
+type PlayerView = "spending" | "playtime" | "sessions" | "timeline" | "errors" | "feedback" | "notifications";
 type Show = "chart" | "table";
 
 const VIEWS: { value: PlayerView; label: string }[] = [
@@ -39,6 +41,7 @@ const VIEWS: { value: PlayerView; label: string }[] = [
 	{ value: "timeline", label: "Timeline" },
 	{ value: "errors", label: "Errors" },
 	{ value: "feedback", label: "Feedback" },
+	{ value: "notifications", label: "Notifications" },
 ];
 
 const FEEDBACK_LIMIT = 100;
@@ -58,18 +61,34 @@ function FeedbackView({ backendId, pid }: { backendId: string; pid: string }) {
 	);
 }
 
+/** The player's notifications (owners: GET /v1/notify/user by pid, every 30 s): consent, every send with its opens and plays, the intents. */
+function NotificationsView({ backendId, pid }: { backendId: string; pid: string }) {
+	const q = useTTQuery(backendId, ["notify", "user", { pid }], (api, s) => api.notifyUser({ pid }, s), { retry: false, refetchInterval: 30_000 });
+	return (
+		<QueryState q={q} rows={3}>
+			{(view) => (
+				<View style={{ gap: space.sm }}>
+					<NotifyPlayerView backendId={backendId} view={view} onPick={(uid) => router.push(`/tt/${backendId}/notifications?tab=inbox&player=${uid}&by=uid`)} />
+				</View>
+			)}
+		</QueryState>
+	);
+}
+
 export default function PlayerScreen() {
 	const { pid } = useLocalSearchParams<{ pid: string }>();
 	const id = decodeURIComponent(String(pid ?? ""));
-	return <TTScreen title="Player">{({ backendId }) => <Player backendId={backendId} pid={id} />}</TTScreen>;
+	return <TTScreen title="Player">{({ backendId, account }) => <Player backendId={backendId} pid={id} owner={!isReadOnly(account)} />}</TTScreen>;
 }
 
-function Player({ backendId, pid }: { backendId: string; pid: string }) {
+function Player({ backendId, pid, owner }: { backendId: string; pid: string; owner: boolean }) {
 	// The web's URL parameters (view, show, sid; facet and moments in the timeline).
 	const [viewParam, setView] = usePageParam("view", "spending");
 	const [showParam, setShow] = usePageParam("show", "chart");
 	const [sid, setSid] = usePageParam("sid");
-	const view: PlayerView = VIEWS.some((v) => v.value === viewParam) ? (viewParam as PlayerView) : "spending";
+	// Notifications are an owner route: the read-only role doesn't get the button.
+	const views = VIEWS.filter((v) => v.value !== "notifications" || owner);
+	const view: PlayerView = views.some((v) => v.value === viewParam) ? (viewParam as PlayerView) : "spending";
 	const show: Show = showParam === "table" ? "table" : "chart";
 	const stats = useTTAnalytics(backendId, "player-stats", { pid });
 	return (
@@ -79,9 +98,11 @@ function Player({ backendId, pid }: { backendId: string; pid: string }) {
 			<Panel title="Funnels">
 				<PlayerFunnels backendId={backendId} pid={pid} />
 			</Panel>
-			<Chips options={VIEWS} value={view} onChange={setView} />
-			{stats.data?.window.clamped && view !== "timeline" && view !== "errors" && view !== "feedback" ? <Note>The range is longer than 400 days: these numbers cover its last 400.</Note> : null}
-			{view === "feedback" ? (
+			<Chips options={views} value={view} onChange={setView} />
+			{stats.data?.window.clamped && view !== "timeline" && view !== "errors" && view !== "feedback" && view !== "notifications" ? <Note>The range is longer than 400 days: these numbers cover its last 400.</Note> : null}
+			{view === "notifications" && owner ? (
+				<NotificationsView backendId={backendId} pid={pid} />
+			) : view === "feedback" ? (
 				<FeedbackView backendId={backendId} pid={pid} />
 			) : view === "errors" ? (
 				<ErrorsView backendId={backendId} pid={pid} />

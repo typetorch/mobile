@@ -1,13 +1,13 @@
 /**
  * The frame of every TypeTorch screen: the title, pull to refresh (refetches this backend's queries), missing backend,
- * the "link to this view" header button, and links opened on the phone (a link's filter keys set the filter bar; a
+ * the header's server status dot and command palette (features/typetorch/shell.tsx), the "link to this view" button, and links opened on the phone (a link's filter keys set the filter bar; a
  * link made on another phone finds the backend by its URL).
  */
 import { useQueryClient } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import { router, Stack, useLocalSearchParams, usePathname } from "expo-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Pressable } from "react-native";
+import { Pressable, View } from "react-native";
 
 import type { Api } from "@/api/backend";
 import { Button, EmptyState, Icon, Screen } from "@/components/ui";
@@ -17,6 +17,7 @@ import { useTheme } from "@/theme";
 import { SignedOutNotice } from "./components";
 import { FILTER_KEYS, hasFilterParams, readFilters, setTTFilters } from "./filters";
 import { Sheet, SheetItem } from "./sheet";
+import { CommandPalette, HealthDot } from "./shell";
 import { BACKEND_PARAM, createViewLinkRegistry, useViewLink, ViewLinkProvider } from "./view-link";
 
 export function useBackendParam(): string {
@@ -174,7 +175,13 @@ export function TTScreen({
 				<Stack.Screen
 					options={{
 						title: typeof title === "function" ? title(account) : title,
-						headerRight: () => <LinkButton backendId={backendId} backendUrl={account.url} registry={registry} />,
+						headerRight: () => (
+							<View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+								<HealthDot backendId={backendId} />
+								<CommandPalette account={account} registry={registry} />
+								<LinkButton backendId={backendId} backendUrl={account.url} registry={registry} />
+							</View>
+						),
 					}}
 				/>
 				{notice ? <SignedOutNotice account={account} /> : null}

@@ -9,7 +9,7 @@ import { Switch, View } from "react-native";
 import { change } from "@/api/tt/benchmarks";
 import type { FleetAlert, OverviewResult } from "@/api/tt/types";
 import { BarChart, type ChartMark } from "@/charts/LineChart";
-import { Badge, Button, Card, Dot, ErrorState, Icon, List, Row, Section, Segmented, Skeleton, Stat, StatGrid, Txt } from "@/components/ui";
+import { Badge, Button, Card, Dot, ErrorState, Icon, List, Row, SearchBar, Section, Segmented, Skeleton, Stat, StatGrid, Txt } from "@/components/ui";
 import { compact, fmtAgo, fmtInt, fmtMinutes, fmtNum } from "@/lib/format";
 import { useAccounts, useBackend, type BackendAccount } from "@/store/accounts";
 import { useTheme } from "@/theme";
@@ -18,7 +18,8 @@ import { ChangeChip } from "./bits";
 import { dayRange, useTTQuery } from "./hooks";
 import { chartMarks, DeployMarksToggle, useDeployMarks, useMarkCard } from "./marks";
 import { OverviewAnalytics } from "./overview";
-import { pageHref, TT_PAGES } from "./pages";
+import { pageHref, visiblePages } from "./pages";
+import { PlaceCard } from "./shell";
 
 export function SignedOutNotice({ account }: { account: BackendAccount }) {
 	const p = useTheme();
@@ -40,47 +41,64 @@ export function BackendHeader({ account }: { account: BackendAccount }) {
 	const user = check.data?.user ?? account.user;
 	const who = user && user.kind === "roblox" ? `@${user.name}` : user ? "token" : "–";
 	return (
-		<Card style={{ gap: 6 }}>
-			<View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-				<Dot tone={check.error ? "critical" : check.data ? "good" : "muted"} />
-				<Txt variant="h3" numberOfLines={1} style={{ flex: 1 }}>
-					{account.name}
+		<>
+			<Card style={{ gap: 6 }}>
+				<View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+					<Dot tone={check.error ? "critical" : check.data ? "good" : "muted"} />
+					<Txt variant="h3" numberOfLines={1} style={{ flex: 1 }}>
+						{account.name}
+					</Txt>
+					<Badge label={check.data?.role ?? account.role} tone={(check.data?.role ?? account.role) === "admin" ? "brand" : "muted"} />
+				</View>
+				<Txt variant="small" numberOfLines={1}>
+					{account.url.replace(/^https?:\/\//, "")} · {who}
+					{check.data?.version ? ` · v${check.data.version}` : ""}
 				</Txt>
-				<Badge label={check.data?.role ?? account.role} tone={(check.data?.role ?? account.role) === "admin" ? "brand" : "muted"} />
-			</View>
-			<Txt variant="small" numberOfLines={1}>
-				{account.url.replace(/^https?:\/\//, "")} · {who}
-				{check.data?.version ? ` · v${check.data.version}` : ""}
-			</Txt>
-			{check.error && !account.signedOut ? <Txt variant="small">{check.error.message}</Txt> : null}
-		</Card>
+				{check.error && !account.signedOut ? <Txt variant="small">{check.error.message}</Txt> : null}
+				<FindPlayer backendId={account.id} />
+			</Card>
+			<PlaceCard backendId={account.id} />
+		</>
 	);
+}
+
+/** The web's top-bar "Find player": a pid, part of one, or a UserId; opens the Players page with it (`find`). */
+function FindPlayer({ backendId }: { backendId: string }) {
+	const [text, setText] = useState("");
+	const go = () => {
+		const value = text.trim();
+		if (!value) return;
+		router.push(`/tt/${backendId}/players?find=${encodeURIComponent(value)}` as never);
+		setText("");
+	};
+	return <SearchBar value={text} onChangeText={setText} placeholder="Find player (pid or UserId)" onSubmit={go} />;
 }
 
 export function PageMenu({ account }: { account: BackendAccount }) {
 	const p = useTheme();
 	const admin = account.role === "admin";
-	const pages = TT_PAGES.filter((x) => x.key !== "overview" && (!x.adminOnly || admin));
-	const ready = pages.filter((x) => x.status === "ready");
-	const todo = pages.filter((x) => x.status === "todo");
+	// The web's sidebar groups (lib/nav.ts), owner-only pages hidden for the read-only role; Overview is this screen.
+	const groups = visiblePages(admin)
+		.map((g) => ({ ...g, pages: g.pages.filter((x) => x.key !== "overview") }))
+		.filter((g) => g.pages.length);
 	return (
 		<>
-			<Section title="Dashboard">
-				<List>
-					{ready.map((x) => (
-						<Row key={x.key} left={<Icon name={x.icon} size={18} />} title={x.title} subtitle={x.description} chevron onPress={() => router.push(pageHref(account.id, x.key))} />
-					))}
-				</List>
-			</Section>
-			{todo.length ? (
-				<Section title="Coming to the app">
-					<List>
-						{todo.map((x) => (
-							<Row key={x.key} left={<Icon name={x.icon} size={18} color={p.mutedForeground} />} title={x.title} subtitle={`${x.description} · use the web explorer for now`} disabled />
-						))}
-					</List>
-				</Section>
-			) : null}
+			{groups.map((g) => {
+				const ready = g.pages.filter((x) => x.status === "ready");
+				const todo = g.pages.filter((x) => x.status === "todo");
+				return (
+					<Section key={g.id} title={g.label ?? "Dashboard"}>
+						<List>
+							{ready.map((x) => (
+								<Row key={x.key} left={<Icon name={x.icon} size={18} />} title={x.title} subtitle={x.description} chevron onPress={() => router.push(pageHref(account.id, x.key))} />
+							))}
+							{todo.map((x) => (
+								<Row key={x.key} left={<Icon name={x.icon} size={18} color={p.mutedForeground} />} title={x.title} subtitle={`${x.description} · use the web explorer for now`} disabled />
+							))}
+						</List>
+					</Section>
+				);
+			})}
 		</>
 	);
 }

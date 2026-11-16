@@ -772,6 +772,8 @@ export type PlaceCardInfo =
 			universeId: number | null;
 			name: string | null;
 			playing: number | null;
+			/** "fleet": Roblox gave no count (it hides the game from the server's region), so it's the sum of our servers' heartbeats. */
+			playingFrom?: "fleet";
 			/** An https icon on *.rbxcdn.com. */
 			icon: string | null;
 			/** https://www.roblox.com/games/<placeId>, or null while the PlaceId isn't known. */
