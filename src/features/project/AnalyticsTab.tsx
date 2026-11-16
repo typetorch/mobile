@@ -1,110 +1,88 @@
 /**
- * Creator Hub's analytics for any universe the key has `universe.analytics:read` on: one card per metric, each its
- * own Analytics Query API query (cached for an hour), with a range and an optional breakdown.
+ * Creator Hub's analytics for any universe the key has `universe.analytics:read` on: a group per Creator Hub page
+ * (engagement, retention, monetization, acquisition, performance, economy, funnels, journeys, custom events,
+ * observability, benchmarks, ...), each card its own Analytics Query API query (cached for an hour), with a shared
+ * range and granularity, and per-card breakdowns, variants and filters. Only the first cards of the open group load
+ * by themselves (Roblox allows 30 queries a minute per key owner).
  */
-import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { View } from "react-native";
 
 import { ANALYTICS_READ_SCOPE, hasScope } from "@/api/opencloud";
-import { LineChart, Legend } from "@/charts/LineChart";
-import { Card, Chips, ErrorState, ScopeNotice, Segmented, Skeleton, Txt } from "@/components/ui";
-import { fmtMetric } from "@/lib/format";
+import { Chips, ScopeNotice, Txt } from "@/components/ui";
 import { useAccounts } from "@/store/accounts";
-import { useTheme } from "@/theme";
 
-import {
-	aggregate,
-	analyticsSlot,
-	DIMENSION_LABELS,
-	METRIC_GROUPS,
-	normalizeRates,
-	rangeFor,
-	RANGES,
-	seriesLabel,
-	topSeries,
-	type MetricDef,
-	type RangeDays,
-} from "./analytics";
+import { DAY, METRIC_GROUPS, timeRange, type GranularityChoice, type RangeSpec } from "./analytics";
+import type { QueryFilter } from "./api/analytics-query";
+import { Benchmarks } from "./analytics/Benchmarks";
+import { Compare } from "./analytics/Compare";
+import { MetricCard } from "./analytics/MetricCard";
+import { GranularityControls, GroupPick, RangeControls } from "./analytics/options";
+import { AcquisitionFunnel, CohortTable } from "./analytics/views";
 
-const DAY = 86_400_000;
-
-function MetricCard({ universeId, metric, days }: { universeId: number; metric: MetricDef; days: RangeDays }) {
-	const p = useTheme();
-	const { cloud } = useAccounts();
-	const [breakdown, setBreakdown] = useState<string>("");
-	const range = rangeFor(days, metric);
-	const q = useQuery({
-		queryKey: ["oc", "analytics", universeId, metric.id, days, breakdown, range.endTime],
-		enabled: !!cloud,
-		staleTime: 3600_000,
-		gcTime: 3600_000,
-		retry: false,
-		queryFn: ({ signal }) =>
-			analyticsSlot(() =>
-				cloud!.queryMetric(
-					universeId,
-					{ metric: metric.id, granularity: metric.granularity, ...range, ...(breakdown ? { breakdown: [breakdown] } : {}) },
-					{ signal },
-				),
-			),
-	});
-	const series = q.data ? topSeries(normalizeRates(q.data, metric.format), breakdown ? 6 : 1) : [];
-	const total = series.length === 1 ? aggregate(series[0]!.dataPoints.map((d) => d.value), metric.aggregate) : null;
-	// Previous-half comparison is left out: the API answers only the asked range.
-	const chart = series.map((s) => ({ label: seriesLabel(s), points: s.dataPoints.map((d) => ({ t: Date.parse(d.time), v: d.value })) }));
-	return (
-		<Card style={{ gap: 8 }}>
-			<View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>
-				<View style={{ flex: 1, gap: 2 }}>
-					<Txt style={{ fontWeight: "600" }}>{metric.title}</Txt>
-					<Txt variant="small">
-						{metric.help}
-						{metric.retentionDays && days > metric.retentionDays ? ` Roblox keeps ${metric.retentionDays} days.` : ""}
-					</Txt>
-				</View>
-				{total !== null ? (
-					<Txt variant="h3" style={{ fontWeight: "700" }}>
-						{fmtMetric(metric.format, total)}
-					</Txt>
-				) : null}
-			</View>
-			<Chips options={[{ value: "", label: "Total" }, ...metric.breakdowns.map((d) => ({ value: d, label: DIMENSION_LABELS[d] ?? d }))]} value={breakdown} onChange={setBreakdown} />
-			{q.isLoading ? <Skeleton height={140} /> : null}
-			{q.error ? <ErrorState title="Roblox didn't answer this chart" error={q.error} onRetry={() => q.refetch()} /> : null}
-			{q.data && !chart.some((s) => s.points.length) ? <Txt variant="muted">No data in this range.</Txt> : null}
-			{chart.some((s) => s.points.length) ? (
-				<LineChart
-					series={chart}
-					height={150}
-					format={(v) => fmtMetric(metric.format, v)}
-					timeLabel={(t) => {
-						const d = new Date(t);
-						return days > 28 ? `${d.getUTCMonth() + 1}/${d.getUTCDate()}` : `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
-					}}
-				/>
-			) : null}
-			{breakdown && q.data && q.data.length > series.length ? <Txt variant="small">The {series.length} biggest of {q.data.length}.</Txt> : null}
-			{!breakdown && chart.length > 1 ? <Legend items={chart.map((c, i) => ({ label: c.label, color: p.chart[i % p.chart.length]! }))} /> : null}
-		</Card>
-	);
-}
+/** Cards per group that load without a tap. */
+const AUTO_LOAD = 4;
 
 export function AnalyticsTab({ universeId }: { universeId: number }) {
 	const { keyInfo, hasKey } = useAccounts();
-	const [days, setDays] = useState<RangeDays>(28);
-	const [group, setGroup] = useState(METRIC_GROUPS[0]!.title);
+	const [range, setRange] = useState<RangeSpec>({ kind: "preset", days: 28 });
+	const [granularity, setGranularity] = useState<GranularityChoice>("Auto");
+	const [groupKey, setGroupKey] = useState(METRIC_GROUPS[0]!.key);
+	const [picks, setPicks] = useState<Record<string, string | null>>({});
 	if (!hasKey || !hasScope(keyInfo, ANALYTICS_READ_SCOPE, universeId)) return <ScopeNotice what="Analytics" scopes={[ANALYTICS_READ_SCOPE]} />;
-	const metrics = METRIC_GROUPS.find((g) => g.title === group)?.metrics ?? [];
+
+	const group = METRIC_GROUPS.find((g) => g.key === groupKey) ?? METRIC_GROUPS[0]!;
+	const views = group.views ?? [];
+	const pick = group.pick;
+	const picked = pick ? (picks[group.key] ?? null) : null;
+	const groupFilter: QueryFilter | null = pick && picked !== null ? { dimension: pick.dimension, operation: "In", values: [picked] } : null;
+	const waiting = pick?.required && picked === null ? `Pick a ${pick.label.toLowerCase()} above.` : null;
+	const pickRange = timeRange(range, {}, "OneDay");
+	const custom = range.kind === "custom";
+
 	return (
 		<View style={{ gap: 12 }}>
-			<Segmented options={RANGES.map((d) => ({ value: d, label: `${d} days` }))} value={days} onChange={setDays} />
-			<Chips options={METRIC_GROUPS.map((g) => ({ value: g.title, label: g.title }))} value={group} onChange={setGroup} />
-			{metrics.map((m) => (
-				<MetricCard key={m.id} universeId={universeId} metric={m} days={days} />
+			<RangeControls range={range} onChange={setRange} />
+			{views.includes("benchmarks") || views.includes("compare") ? null : <GranularityControls value={granularity} onChange={setGranularity} />}
+			<Chips options={METRIC_GROUPS.map((g) => ({ value: g.key, label: g.title }))} value={group.key} onChange={setGroupKey} />
+			{group.help ? <Txt variant="small">{group.help}</Txt> : null}
+
+			{pick ? (
+				<GroupPick
+					key={group.key}
+					universeId={universeId}
+					metric={pick.metric}
+					dimension={pick.dimension}
+					label={pick.label}
+					required={pick.required}
+					startTime={pickRange.startTime}
+					endTime={pickRange.endTime}
+					value={picked}
+					onChange={(v) => setPicks((cur) => ({ ...cur, [group.key]: v }))}
+				/>
+			) : null}
+
+			{views.includes("acquisitionFunnel") ? <AcquisitionFunnel universeId={universeId} range={range} /> : null}
+			{views.includes("cohorts") ? <CohortTable universeId={universeId} range={range} /> : null}
+			{views.includes("benchmarks") ? <Benchmarks universeId={universeId} range={range} /> : null}
+			{views.includes("compare") ? <Compare universeId={universeId} range={range} /> : null}
+
+			{group.metrics.map((m, i) => (
+				<MetricCard
+					key={`${group.key}:${m.key ?? m.id}`}
+					universeId={universeId}
+					metric={m}
+					range={range}
+					granularity={granularity}
+					groupFilter={groupFilter}
+					autoLoad={i < AUTO_LOAD - (views.includes("acquisitionFunnel") ? 2 : 0)}
+					waiting={waiting}
+				/>
 			))}
+
 			<Txt variant="small" style={{ textAlign: "center" }}>
-				Full UTC days up to {new Date(Math.floor(Date.now() / DAY) * DAY).toISOString().slice(0, 10)} · Roblox Analytics Query API · cached for an hour
+				{custom ? `${range.start} to ${range.end} (UTC)` : `Up to ${new Date(Math.floor(Date.now() / DAY) * DAY).toISOString().slice(0, 10)} (UTC; finer than daily: up to the last half hour)`} · Roblox Analytics Query
+				API · cached for an hour · 30 queries a minute
 			</Txt>
 		</View>
 	);
