@@ -4,7 +4,7 @@ What Creator Hub (create.roblox.com/dashboard) shows for an experience, which AP
 
 Sources: Roblox's OpenAPI document (github.com/Roblox/creator-docs `content/en-us/reference/cloud/openapi.json`, 2026-11-16: 1029 operations, 370 usable with an API key), create.roblox.com/docs, and the app's code. Scopes are the doc's `x-roblox-scopes`; when a call answers 401/403 the app names the scope it needs (`ScopeError` in `src/api/opencloud.ts`, `CloudError` in `src/features/project/CloudError.tsx`).
 
-**Totals:** 37 were in the app before, 148 added now, 5 available but not in the app, 23 with no API-key or public API.
+**Totals:** 37 were in the app before, 150 added now, 3 available but not in the app, 23 with no API-key or public API.
 
 Where things are: Projects tab (list); a project's **Overview / Analytics / Tools** tabs; every Tools entry is in `src/features/project/tools.ts` and opens `/project/<universeId>/<route>` (`src/app/project/[universeId]/`). API calls: `src/api/opencloud.ts`, `src/api/roblox-public.ts`, `src/features/project/api/*.ts`.
 
@@ -37,8 +37,6 @@ Where things are: Projects tab (list); a project's **Overview / Analytics / Tool
 ## Available but not in the app
 
 - **Data stores (v1, legacy): Standard data stores v1**: Cloud v2 replaces it, and v1 has nothing v2 lacks. v1 matchVersion maps to the v2 etag, exclusiveCreate to v2 POST create, the versions time range to the v2 revision filter plus @latest:<time>, and content-md5 is only part of the v1 wire format.
-- **Places > Publish: Publish or save a new place version from an .rbxl/.rbxlx file**: Needs a document picker (expo-document-picker), which isn't installed, and adding packages isn't allowed. Downloading a version through Asset Delivery and posting it back isn't a workaround: POST /universes/v1/.../versions takes a binary body and the doc marks it firstPartyOAuthOnly. Rollback already covers restoring an older version
-- **Luau execution: Upload binary input for a Luau task**: Needs a file picker (expo-document-picker), which isn't installed, and adding packages isn't allowed
 - **Collaborators / Group payouts: Group payout-visible universes, suggested one-time payouts and latest payouts per user**: These economy.roblox.com endpoints need a browser cookie (unauthenticated calls return 404/403) and have no API-key route
 - **Followings: Follow/unfollow an experience; list followed universes for the key owner**: Excluded from this package: the configure agent owns Followings.
 
@@ -160,7 +158,7 @@ Where things are: Projects tab (list); a project's **Overview / Analytics / Tool
 
 | Item | Status | API (scope) | Where / notes |
 |---|---|---|---|
-| Publish or save a new place version from an .rbxl/.rbxlx file | ⚠️ available, not in app | POST /universes/v1/{universeId}/places/{placeId}/versions [universe-places:write] | Needs a document picker (expo-document-picker), which isn't installed, and adding packages isn't allowed. Downloading a version through Asset Delivery and posting it back isn't a workaround: POST /universes/v1/.../versions takes a binary body and the doc mark… |
+| Publish or save a new place version from an .rbxl/.rbxlx file | ✅ in app (new) | POST /universes/v1/{universeId}/places/{placeId}/versions?versionType=Published\|Saved [universe-places:write] | /project/[universeId]/place (New version from a file): system file picker (expo-file-system File.pickFileAsync), .rbxl sent as application/octet-stream and .rbxlx as application/xml; checks the extension, the file header and the 10 MiB x-roblox-size-limit, asks first naming the place, file and size, 120 s deadline, then refreshes version history. publishPlaceFile() in src/features/project/api/configure.ts |
 
 ### Places > Version history
 
@@ -208,7 +206,7 @@ Where things are: Projects tab (list); a project's **Overview / Analytics / Tool
 | Item | Status | API (scope) | Where / notes |
 |---|---|---|---|
 | Run a Luau script against a place (or a specific place version) and see output/logs | ✅ in app (new) | POST /cloud/v2/universes/{universe_id}/places/{place_id}/luau-execution-session-tasks [universe.place.luau-execution-session:write]<br>POST /cloud/v2/universes/{universe_id}/places/{place_id}/versions/{version_id}/luau-execution-session-tasks [universe.place.luau-execution-session:write]<br>GET /cloud/v2/universes/{universe_id}/places/{place_id}/versions/{version_id}/luau-execution-sessions/{luau… | /project/[universeId]/luau: bounded polling with an overall deadline, structured logs. Fix pass: a failed log read is no longer turned into an empty list. The run shows 'Couldn't load the logs: <cloudErrorText>' with a Retry button instead of 'Nothing printed… |
-| Upload binary input for a Luau task | ⚠️ available, not in app | POST /cloud/v2/universes/{universe_id}/luau-execution-session-task-binary-inputs [universe.place.luau-execution-session:write] | Needs a file picker (expo-document-picker), which isn't installed, and adding packages isn't allowed |
+| Upload binary input for a Luau task | ✅ in app (new) | POST /cloud/v2/universes/{universe_id}/luau-execution-session-task-binary-inputs [universe.place.luau-execution-session:write] | /project/[universeId]/luau: optional "Attach binary input" (any file, app cap 50 MB of Roblox's 100 MiB); creates the input with {size}, PUTs the bytes to the presigned uploadUri (https roblox.com hosts only, no API key), passes binaryInput on the task create and reuses the upload for 14 min. createLuauBinaryInput() in src/features/project/api/configure.ts |
 
 ### Place instances
 

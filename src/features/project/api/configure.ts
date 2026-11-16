@@ -16,9 +16,21 @@
  *   - Instances (BETA, 45 / min): GET, :listChildren and PATCH all answer an Operation; poll `/cloud/v2/<operation path>`
  *     until done. Only Script / LocalScript / ModuleScript can be read and updated; 200 KB request bodies.
  *   - Followings status answers PascalCase fields.
+ *   - Place publishing: POST /universes/v1/{universeId}/places/{placeId}/versions?versionType=Published|Saved, the
+ *     raw .rbxl (application/octet-stream) or .rbxlx (application/xml) bytes as the body, universe-places:write,
+ *     x-roblox-size-limit 10485760 bytes, 30 / min. 200 answers text/plain `{"versionNumber":7}`; 409 = the place
+ *     isn't in that universe.
+ *   - Luau binary input: POST /cloud/v2/universes/{universe_id}/luau-execution-session-task-binary-inputs { size }
+ *     (5 / min) answers { path, size, uploadUri }; the object (up to 100 MiB) goes to the presigned uploadUri, which
+ *     is valid 15 min. The doc doesn't name the upload's method: Roblox's own rocale-cli PUTs the bytes with
+ *     content-type application/octet-stream and no API key (presigned), and so does the app. The task then takes
+ *     `binaryInput: <path>`; the script reads it as ({...})[1].BinaryInput (a buffer).
  */
-import { HttpError, qs, requestJson } from "@/api/http";
-import type { CloudPlace, CloudUniverse, OpenCloud } from "@/api/opencloud";
+import { FileMode, type File } from "expo-file-system";
+import { fetch as expoFetch } from "expo/fetch";
+
+import { deadline, errorMessage, HttpError, qs, requestJson } from "@/api/http";
+import { OPEN_CLOUD, ScopeError, type CloudPlace, type CloudUniverse, type OpenCloud } from "@/api/opencloud";
 
 const enc = encodeURIComponent;
 const sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
@@ -41,6 +53,7 @@ export const SCOPES = {
 	assetWrite: "asset:write",
 	restrictionRead: "universe.user-restriction:read",
 	restrictionWrite: "universe.user-restriction:write",
+	placePublish: "universe-places:write",
 } as const;
 
 // Public games v1 ------------------------------------------------------------------------------------------------------
@@ -405,6 +418,7 @@ export interface LuauTask {
 	timeout?: string;
 	error?: { code?: string; message?: string };
 	output?: { results?: unknown[] };
+	binaryInput?: string;
 }
 
 export interface LuauLog {
@@ -430,9 +444,17 @@ export function utf8Length(text: string): number {
 	return n;
 }
 
-export function createLuauTask(cloud: OpenCloud, universeId: number, placeId: number, body: { script: string; timeoutSeconds: number }, version?: number) {
+export function createLuauTask(
+	cloud: OpenCloud,
+	universeId: number,
+	placeId: number,
+	body: { script: string; timeoutSeconds: number; /** A binary input's resource path (createLuauBinaryInput). */ binaryInput?: string },
+	version?: number,
+) {
 	const base = `/cloud/v2/universes/${universeId}/places/${placeId}${version ? `/versions/${version}` : ""}`;
-	return cloud.request<LuauTask>("POST", `${base}/luau-execution-session-tasks`, { script: body.script, timeout: `${body.timeoutSeconds}s` }, undefined, SCOPES.luauWrite);
+	const task: Record<string, string> = { script: body.script, timeout: `${body.timeoutSeconds}s` };
+	if (body.binaryInput) task.binaryInput = body.binaryInput;
+	return cloud.request<LuauTask>("POST", `${base}/luau-execution-session-tasks`, task, undefined, SCOPES.luauWrite);
 }
 
 const TASK_PATH = /^universes\/\d+\/places\/\d+\/(versions\/\d+\/)?(luau-execution-session-tasks\/[\w-]+|luau-execution-sessions\/[\w-]+\/tasks\/[\w-]+)$/;
@@ -604,4 +626,225 @@ export function isScriptClass(c: string): c is ScriptClass {
 /** "universes/1/places/2/instances/abc" -> "abc" */
 export function instanceIdOf(i: PlaceInstance): string {
 	return i.engineInstance?.Id ?? i.path.split("/").pop() ?? "";
+}
+
+// Raw file uploads (place publishing, Luau binary input) ----------------------------------------------------------------
+
+/** Roblox's limits: x-roblox-size-limit of the place publishing endpoint, and the binary input object's 100 MiB. */
+export const UPLOAD_LIMITS = {
+	placeBytes: 10 * 1024 * 1024,
+	binaryInputBytes: 100 * 1024 * 1024,
+	/**
+	 * The app's own cap for a binary input: the file is read into memory and handed to the native request, so a
+	 * 100 MiB file would need over 200 MB of phone memory at once.
+	 */
+	binaryInputAppBytes: 50 * 1024 * 1024,
+};
+
+/** Deadlines for the uploads: longer than requestJson's 30 s (megabytes over a phone connection), still bounded. */
+export const UPLOAD_TIMEOUT_MS = { place: 120_000, binaryInput: 180_000 };
+
+export type PlaceFileKind = "rbxl" | "rbxlx";
+
+/** "Game.rbxl" -> "rbxl"; anything that isn't a place file -> null. */
+export function placeFileKind(name: string): PlaceFileKind | null {
+	const m = /\.(rbxlx?)$/i.exec(name.trim());
+	return m ? (m[1]!.toLowerCase() as PlaceFileKind) : null;
+}
+
+/**
+ * What to call a picked file. On Android the picker hands back the provider's document URI (no copy), so `File.name`
+ * is often an opaque document id ("msf:1000012345", "document:1234") rather than the display name, which
+ * expo-file-system doesn't expose; those get `fallback`. iOS copies the file and keeps its real name.
+ */
+export function fileLabel(file: File, fallback = "picked file"): string {
+	const name = (file.name ?? "").trim();
+	return !name || /[:;=]/.test(name) || /^\d+$/.test(name) ? fallback : name;
+}
+
+/**
+ * The kind of place file from its first bytes: binary .rbxl files start with `<roblox!`, XML .rbxlx files with
+ * `<roblox` (after an optional BOM, whitespace or `<?xml …?>`). Null when it isn't a place file.
+ */
+export function sniffPlaceKind(bytes: Uint8Array): PlaceFileKind | null {
+	const head = Array.from(bytes.subarray(0, 512), (b) => String.fromCharCode(b)).join("");
+	if (head.startsWith("<roblox!")) return "rbxl";
+	const text = head.replace(/^\xEF\xBB\xBF/, "").trimStart();
+	return text.startsWith("<roblox") || (text.startsWith("<?xml") && text.includes("<roblox")) ? "rbxlx" : null;
+}
+
+/**
+ * A picked file's place kind, from its first 512 bytes (read with a read-only handle, not the whole file), because the
+ * name often has no extension on Android. When the header can't be read, falls back to the name's extension.
+ */
+export async function detectPlaceKind(file: File): Promise<PlaceFileKind | null> {
+	let head: Uint8Array;
+	try {
+		const handle = file.open(FileMode.ReadOnly);
+		try {
+			head = await handle.readBytes(512);
+		} finally {
+			handle.close();
+		}
+	} catch {
+		return placeFileKind(file.name);
+	}
+	return sniffPlaceKind(head);
+}
+
+/** "12.3 MB" (base 1024, like the limits). */
+export function fmtBytes(n: number): string {
+	if (n < 1024) return `${n} B`;
+	if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+	return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** Reads a picked file's bytes, refusing it (before reading when the size is known) when it's over `max`. */
+async function readCapped(file: File, max: number): Promise<Uint8Array<ArrayBuffer>> {
+	const known = typeof file.size === "number" && file.size > 0 ? file.size : null;
+	const label = fileLabel(file, "The file");
+	if (known !== null && known > max) throw new Error(`${label} is ${fmtBytes(known)}; the limit is ${fmtBytes(max)}.`);
+	const bytes = new Uint8Array(await file.arrayBuffer());
+	if (bytes.byteLength > max) throw new Error(`${label} is ${fmtBytes(bytes.byteLength)}; the limit is ${fmtBytes(max)}.`);
+	if (!bytes.byteLength) throw new Error(`${label} is empty.`);
+	return bytes;
+}
+
+/** Only https Roblox hosts get the user's file (the presigned upload URI comes from Roblox's answer). */
+function isRobloxHttps(uri: string): boolean {
+	try {
+		const u = new URL(uri);
+		const host = u.hostname.toLowerCase();
+		return u.protocol === "https:" && (host === "roblox.com" || host.endsWith(".roblox.com"));
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Sends raw bytes (requestJson only sends JSON / strings), with expo/fetch so the bytes reach the native request as
+ * they are. `cloud` + an Open Cloud path adds the x-api-key header, and then only for https://apis.roblox.com; a bare
+ * URI (a presigned upload URI) gets no key and must be an https roblox.com host. A deadline aborts it; 401 / 403 on a
+ * keyed call throws a ScopeError naming `scopes`. Answers the response text.
+ */
+async function sendBytes(
+	target: { cloud: OpenCloud; path: string; scopes: string[] } | { uri: string },
+	options: { method: "POST" | "PUT"; contentType: string; body: Uint8Array<ArrayBuffer>; timeoutMs: number; signal?: AbortSignal },
+): Promise<string> {
+	let url: string;
+	const headers: Record<string, string> = { "content-type": options.contentType, accept: "application/json, text/plain" };
+	if ("cloud" in target) {
+		if (!target.path.startsWith("/")) throw new Error("Bad Open Cloud path.");
+		url = `${OPEN_CLOUD}${target.path}`;
+		// The key stays inside OpenCloud: this reads its (private) header builder, and only for apis.roblox.com.
+		Object.assign(headers, target.cloud["headers"]());
+	} else {
+		if (!isRobloxHttps(target.uri)) {
+			let host = "an unknown host";
+			try {
+				host = new URL(target.uri).host;
+			} catch {
+				// not a URL: keep "an unknown host"
+			}
+			throw new HttpError(502, `Roblox returned an upload address on ${host}; the app only uploads to https roblox.com hosts.`, "upload");
+		}
+		url = target.uri;
+	}
+	const where = (() => {
+		try {
+			const u = new URL(url);
+			return `${u.host}${u.pathname}`;
+		} catch {
+			return "upload";
+		}
+	})();
+	const { signal, done } = deadline(options.timeoutMs, options.signal);
+	let text = "";
+	let status = 0;
+	let ok = false;
+	try {
+		// redirect "error": a keyed request never follows a redirect elsewhere with the key.
+		const response = await expoFetch(url, { method: options.method, headers, body: options.body, signal, redirect: "error" });
+		status = response.status;
+		ok = response.ok;
+		text = await response.text();
+	} catch (error) {
+		const reason = signal.aborted ? ((signal.reason as Error | undefined)?.message ?? "aborted") : (error as Error).message;
+		throw new HttpError(0, `cannot reach ${where}: ${reason}`, where);
+	} finally {
+		done();
+	}
+	if (!ok) {
+		let body: unknown;
+		try {
+			body = text ? JSON.parse(text) : undefined;
+		} catch {
+			body = undefined;
+		}
+		const fallback = body === undefined && text && text.length < 300 && !text.trimStart().startsWith("<") ? text.trim() : undefined;
+		const err = new HttpError(status, fallback ?? errorMessage(body, status), where, body);
+		if ("cloud" in target && (status === 401 || status === 403)) throw new ScopeError(err, target.scopes);
+		throw err;
+	}
+	return text;
+}
+
+export type PlaceVersionType = "Published" | "Saved";
+
+/**
+ * Publishes (or only saves) a new place version from a picked .rbxl / .rbxlx file. Published replaces what players
+ * join. Checks the size (Roblox's 10 MiB) and the file's header before sending; the header, not the name, picks the
+ * content type (Android names are often document ids with no extension). Answers the new version number when Roblox
+ * gives one.
+ */
+export async function publishPlaceFile(cloud: OpenCloud, universeId: number, placeId: number, file: File, versionType: PlaceVersionType): Promise<{ versionNumber?: number }> {
+	const bytes = await readCapped(file, UPLOAD_LIMITS.placeBytes);
+	const kind = sniffPlaceKind(bytes);
+	if (!kind) throw new Error(`${fileLabel(file, "The file")} isn't a Roblox place file: pick an .rbxl or .rbxlx file.`);
+	let text: string;
+	try {
+		text = await sendBytes(
+			{ cloud, path: `/universes/v1/${universeId}/places/${placeId}/versions${qs({ versionType })}`, scopes: [SCOPES.placePublish] },
+			{ method: "POST", contentType: kind === "rbxl" ? "application/octet-stream" : "application/xml", body: bytes, timeoutMs: UPLOAD_TIMEOUT_MS.place },
+		);
+	} catch (e) {
+		if (e instanceof HttpError && e.status === 409 && !(e instanceof ScopeError)) throw new HttpError(409, `Roblox says this place isn't part of the experience. (${e.message})`, e.where, e.body);
+		throw e;
+	}
+	try {
+		const r = JSON.parse(text) as { versionNumber?: unknown };
+		return typeof r.versionNumber === "number" ? { versionNumber: r.versionNumber } : {};
+	} catch {
+		return {};
+	}
+}
+
+export interface LuauBinaryInput {
+	/** universes/{id}/luau-execution-session-task-binary-inputs/{id}: pass as the task's binaryInput. */
+	path: string;
+	size?: number;
+	/** When it stops being usable (15 minutes after creation). */
+	expiresAt: number;
+}
+
+const BINARY_INPUT_PATH = /^universes\/\d+\/luau-execution-session-task-binary-inputs\/[\w-]+$/;
+
+/**
+ * Creates a Luau task binary input for a picked file and uploads the file to its presigned URI (PUT, octet-stream, no
+ * key). The returned path works for any task in this universe for 15 minutes.
+ */
+export async function createLuauBinaryInput(cloud: OpenCloud, universeId: number, file: File, signal?: AbortSignal): Promise<LuauBinaryInput> {
+	const bytes = await readCapped(file, Math.min(UPLOAD_LIMITS.binaryInputAppBytes, UPLOAD_LIMITS.binaryInputBytes));
+	const created = await cloud.request<{ path?: string; size?: number; uploadUri?: string }>(
+		"POST",
+		`/cloud/v2/universes/${universeId}/luau-execution-session-task-binary-inputs`,
+		{ size: bytes.byteLength },
+		signal,
+		SCOPES.luauWrite,
+	);
+	const expiresAt = Date.now() + 14 * 60_000;
+	const path = (created.path ?? "").replace(/^\/+/, "");
+	if (!BINARY_INPUT_PATH.test(path) || !created.uploadUri) throw new HttpError(502, "Roblox didn't return a binary input path and upload address.", "luau-execution-session-task-binary-inputs");
+	await sendBytes({ uri: created.uploadUri }, { method: "PUT", contentType: "application/octet-stream", body: bytes, timeoutMs: UPLOAD_TIMEOUT_MS.binaryInput, signal });
+	return { path, size: created.size ?? bytes.byteLength, expiresAt };
 }

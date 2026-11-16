@@ -2,17 +2,35 @@
  * Run Luau (Open Cloud Luau Execution): run a script against a place (its latest version, or a version number) in a
  * headless server, wait for it (bounded polling, can be stopped), then show the returned values and the printed logs.
  * It doesn't touch live servers, but data stores, messaging etc. are the real ones, so it asks first. Roblox allows 5
- * runs a minute. Binary input isn't offered: it needs a file picker the app doesn't ship.
+ * runs a minute. An optional binary input (any file picked with the system file picker, up to 50 MB in the app) is
+ * uploaded first and handed to the script as ({...})[1].BinaryInput; the upload is reused for 14 minutes while the same
+ * file (uri, size and modification time) stays attached, and dropped when a file is picked again or removed.
  */
 import { useMutation } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
+import type { File } from "expo-file-system";
 import { useLocalSearchParams } from "expo-router";
 import { useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 
 import type { OpenCloud } from "@/api/opencloud";
 import { Badge, Button, Card, confirm, Field, notify, Section, Txt } from "@/components/ui";
-import { createLuauTask, LUAU_DONE, LUAU_LIMITS, luauTaskLogs, utf8Length, waitLuauTask, type LuauLog, type LuauTask } from "@/features/project/api/configure";
+import {
+	createLuauBinaryInput,
+	createLuauTask,
+	fileLabel,
+	fmtBytes,
+	LUAU_DONE,
+	LUAU_LIMITS,
+	luauTaskLogs,
+	UPLOAD_LIMITS,
+	utf8Length,
+	waitLuauTask,
+	type LuauBinaryInput,
+	type LuauLog,
+	type LuauTask,
+} from "@/features/project/api/configure";
+import { pickOneFile } from "@/features/project/configure/pickFile";
 import { PlacePicker, useUniversePlaces } from "@/features/project/configure/shared";
 import { cloudErrorText } from "@/features/project/CloudError";
 import { ToolScreen } from "@/features/project/tool";
@@ -34,6 +52,22 @@ interface Run {
 	logsError?: unknown;
 	placeId: number;
 	startedAt: number;
+	/** The attached binary input's file name. */
+	binaryName?: string;
+}
+
+/**
+ * Identifies a picked file's current contents for reusing an upload: uri + size + modification time (some Android
+ * providers don't report one). Null when the file can't be read now, which means "don't reuse".
+ */
+function fileKey(file: File): string | null {
+	try {
+		const size = file.size;
+		if (typeof size !== "number") return null;
+		return `${file.uri}|${size}|${file.modificationTime ?? "?"}`;
+	} catch {
+		return null;
+	}
 }
 
 const STATE_TONE: Record<string, Tone> = { COMPLETE: "good", FAILED: "critical", CANCELLED: "warning", QUEUED: "muted", PROCESSING: "brand" };
@@ -51,14 +85,50 @@ function Luau({ universeId, cloud }: { universeId: number; cloud: OpenCloud }) {
 	const [live, setLive] = useState<LuauTask | null>(null);
 	const [runs, setRuns] = useState<Run[]>([]);
 	const stop = useRef<AbortController | null>(null);
+	const [binary, setBinary] = useState<File | null>(null);
+	const [uploading, setUploading] = useState(false);
+	/** The last upload, reused while it's valid (Roblox keeps a binary input 15 minutes; creating one allows 5 a minute). */
+	const uploaded = useRef<{ key: string; input: LuauBinaryInput } | null>(null);
 	const pid = placeId ?? rootId;
 
+	async function attach() {
+		const f = await pickOneFile({ maxBytes: UPLOAD_LIMITS.binaryInputAppBytes });
+		if (!f) return;
+		// Picking again means "use this file now": never reuse an upload of an earlier pick (it may have been edited).
+		uploaded.current = null;
+		setBinary(f);
+	}
+
+	function detach() {
+		uploaded.current = null;
+		setBinary(null);
+	}
+
+	/** The binary input path for `file`: the earlier upload while it's valid, else a new one. */
+	async function binaryInputFor(file: File, signal: AbortSignal): Promise<string> {
+		// Android hands back the same content:// uri for an edited document, so the size and modification time (read
+		// live from the file system) are part of the key too.
+		const key = fileKey(file);
+		const cached = uploaded.current;
+		if (key && cached && cached.key === key && cached.input.expiresAt > Date.now()) return cached.input.path;
+		uploaded.current = null;
+		setUploading(true);
+		try {
+			const input = await createLuauBinaryInput(cloud, universeId, file, signal);
+			uploaded.current = key ? { key, input } : null;
+			return input.path;
+		} finally {
+			setUploading(false);
+		}
+	}
+
 	const run = useMutation({
-		mutationFn: async (args: { placeId: number; script: string; timeoutSeconds: number; version?: number }) => {
+		mutationFn: async (args: { placeId: number; script: string; timeoutSeconds: number; version?: number; binary?: File }) => {
 			const controller = new AbortController();
 			stop.current = controller;
 			const startedAt = Date.now();
-			const created = await createLuauTask(cloud, universeId, args.placeId, { script: args.script, timeoutSeconds: args.timeoutSeconds }, args.version);
+			const binaryInput = args.binary ? await binaryInputFor(args.binary, controller.signal) : undefined;
+			const created = await createLuauTask(cloud, universeId, args.placeId, { script: args.script, timeoutSeconds: args.timeoutSeconds, binaryInput }, args.version);
 			setLive(created);
 			const done = await waitLuauTask(cloud, created, { signal: controller.signal, deadlineMs: (args.timeoutSeconds + 90) * 1000, onUpdate: setLive });
 			let logs: LuauLog[] = [];
@@ -68,7 +138,7 @@ function Luau({ universeId, cloud }: { universeId: number; cloud: OpenCloud }) {
 			} catch (e) {
 				logsError = e;
 			}
-			return { task: done, logs, logsError, placeId: args.placeId, startedAt };
+			return { task: done, logs, logsError, placeId: args.placeId, startedAt, binaryName: args.binary ? fileLabel(args.binary) : undefined };
 		},
 		onSuccess: (r) => setRuns((list) => [r, ...list].slice(0, 10)),
 		onError: (e) => notify("The run didn't finish", cloudErrorText(e)),
@@ -88,8 +158,9 @@ function Luau({ universeId, cloud }: { universeId: number; cloud: OpenCloud }) {
 		const v = version.trim();
 		if (v && !/^[1-9]\d*$/.test(v)) return setError("The version must be a positive whole number (or empty for the latest).");
 		const placeName = places.find((pl) => pl.id === pid)?.name ?? `place ${pid}`;
-		if (!(await confirm("Run this script?", `On ${placeName}${v ? ` version ${v}` : " (latest version)"}, up to ${t} s. It uses the experience's real data stores and services.`, "Run", false))) return;
-		run.mutate({ placeId: pid, script, timeoutSeconds: Number(t), version: v ? Number(v) : undefined });
+		const withFile = binary ? ` With ${fileLabel(binary, "the picked file")} (${fmtBytes(binary.size)}) as its binary input.` : "";
+		if (!(await confirm("Run this script?", `On ${placeName}${v ? ` version ${v}` : " (latest version)"}, up to ${t} s. It uses the experience's real data stores and services.${withFile}`, "Run", false))) return;
+		run.mutate({ placeId: pid, script, timeoutSeconds: Number(t), version: v ? Number(v) : undefined, binary: binary ?? undefined });
 	}
 
 	return (
@@ -107,11 +178,21 @@ function Luau({ universeId, cloud }: { universeId: number; cloud: OpenCloud }) {
 						<Field label="Timeout (s, ≤ 300)" value={timeout} onChangeText={setTimeoutText} keyboardType="number-pad" maxLength={3} />
 					</View>
 				</View>
+				<View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+					<View style={{ flex: 1, gap: 2 }}>
+						<Txt variant="label">Binary input (optional)</Txt>
+						<Txt variant="small" numberOfLines={1}>
+							{binary ? `${fileLabel(binary, "Picked file")} · ${fmtBytes(binary.size)}` : `Any file up to ${fmtBytes(UPLOAD_LIMITS.binaryInputAppBytes)}; the script reads it as ({...})[1].BinaryInput (a buffer).`}
+						</Txt>
+					</View>
+					<Button title={binary ? "Change" : "Attach binary input"} icon="attach-outline" small disabled={run.isPending} onPress={attach} />
+					{binary ? <Button title="Remove" icon="close" small variant="ghost" disabled={run.isPending} onPress={detach} /> : null}
+				</View>
 				{error ? <Txt variant="small" color={p.destructive}>{error}</Txt> : null}
 				<View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
 					<Button title="Run" variant="brand" icon="play" small loading={run.isPending} onPress={submit} />
 					{run.isPending ? <Button title="Stop waiting" small variant="ghost" onPress={() => stop.current?.abort()} /> : null}
-					{live?.state ? <Badge label={live.state.toLowerCase()} tone={STATE_TONE[live.state] ?? "muted"} /> : null}
+					{uploading ? <Badge label="uploading input" tone="brand" /> : live?.state ? <Badge label={live.state.toLowerCase()} tone={STATE_TONE[live.state] ?? "muted"} /> : null}
 				</View>
 				<Txt variant="small">Runs in a headless server on the saved place, not in live servers. Roblox allows 5 runs a minute.</Txt>
 			</Card>
@@ -140,6 +221,7 @@ function RunResult({ run, cloud, placeName }: { run: Run; cloud: OpenCloud; plac
 				<View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
 					<Badge label={(t.state ?? "unknown").toLowerCase()} tone={STATE_TONE[t.state ?? ""] ?? "muted"} />
 					{ended && t.updateTime && t.createTime ? <Txt variant="small">{((Date.parse(t.updateTime) - Date.parse(t.createTime)) / 1000).toFixed(1)} s</Txt> : null}
+					{run.binaryName ? <Txt variant="small" numberOfLines={1} style={{ flexShrink: 1 }}>input: {run.binaryName}</Txt> : null}
 				</View>
 				{t.error ? (
 					<Txt variant="mono" color={p.destructive} selectable>
