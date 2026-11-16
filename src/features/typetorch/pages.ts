@@ -50,7 +50,8 @@ export const TT_PAGES: TTPage[] = [
 	{ key: "roblox", title: "Roblox", icon: "logo-electron", description: "Creator Hub numbers via the backend", group: "players", status: "ready" },
 	// Observe & troubleshoot
 	{ key: "fleet", title: "Fleet", icon: "server-outline", description: "Live servers, health, versions, deploys, alerts", group: "observe", status: "ready" },
-	{ key: "live", title: "Live map", icon: "locate-outline", description: "Every live server's players on the map", group: "observe", status: "ready", adminOnly: true },
+	// Every role, like the web's nav (no ownerOnly): the read-only role gets the owners-only note there, and no feed.
+	{ key: "live", title: "Live map", icon: "locate-outline", description: "Every live server's players on the map", group: "observe", status: "ready" },
 	{ key: "deploys", title: "Deploys", icon: "rocket-outline", description: "Release history and outcomes", group: "observe", status: "ready" },
 	{ key: "errors", title: "Errors", icon: "bug-outline", description: "Error kinds, stacks, where they hit, drop rules", group: "observe", status: "ready" },
 	{ key: "performance", title: "Performance", icon: "pulse-outline", description: "FPS, memory, ping, TPS", group: "observe", status: "ready" },

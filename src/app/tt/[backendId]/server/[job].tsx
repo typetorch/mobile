@@ -1,7 +1,8 @@
 /**
  * One game server (any age): state, versions, health, its last hour of TPS / memory / players, its errors, alerts
  * and deploy reports. Polls every 5 s while open. A server that is gone keeps its offline history: when it went, its
- * timeline (alerts, deploy reports, generation swaps), its debug bundles and its whole-life charts.
+ * timeline (alerts, deploy reports, generation swaps), its debug bundles, the errors it reported (30-day error log)
+ * and its whole-life charts (5-minute rollups, also when the fleet no longer has its record).
  *
  * Remote debug (owners, web pages/Server.tsx): while the screen is in front the backend is told it watches the job
  * (every 20 s), the server picks that up at its next heartbeat (at once with a wake message) and long-polls for
@@ -15,7 +16,9 @@ import { ScrollView, View } from "react-native";
 import { LineChart } from "@/charts/LineChart";
 import { Badge, Button, Card, Dot, ErrorState, Icon, KV, List, Row, Section, Segmented, Skeleton, Stat, StatGrid, Txt } from "@/components/ui";
 import { Pressable } from "react-native";
+import { ApiError } from "@/api/backend";
 import type { DebugStatus, FleetServerDetail, RemotePlayers, RemoteStatus } from "@/api/tt/types";
+import { errorKindHref } from "@/features/typetorch/errors";
 import { useServerStreams } from "@/features/maps/live-streams";
 import { GeoCredit, HealthBadge, LocationLabel, networkText, ReasonList, reasonLines } from "@/features/typetorch/fleet-bits";
 import { healthTone, useTTQuery } from "@/features/typetorch/hooks";
@@ -64,6 +67,8 @@ type TabId = (typeof SERVER_TABS)[number]["id"];
 export const CONNECTING_TEXT = "Connecting: the server picks this up at its next heartbeat, up to 30 s.";
 export const WAKING_TEXT = "Waking server...";
 export const READ_ONLY_TEXT = "Read-only session: remote debug needs an owner.";
+/** The server errors' window: the error log's keep window, so a server's whole life is in it (web SERVER_ERRORS_WINDOW). */
+export const SERVER_ERRORS_WINDOW = "30d";
 export const GONE_TEXT = "The fleet no longer has this server's heartbeats (kept 30 days after it goes). What it still holds is below.";
 
 /** How the session looks from here: the backend's view, the last watch reply, and whether an answer came lately. */
@@ -75,7 +80,9 @@ export function sessionState(debug: DebugStatus | undefined, watch: DebugStatus 
 
 /** How often the screen re-reads the server: every second while a wake is on its way, 5 s while it waits, 15 s once connected. */
 export function detailRefetch(data: FleetServerDetail | undefined, waking = false): number | false {
-	if (!data) return 5_000;
+	// No data: the first load isn't polled anyway, and after an error (403, 404, a dead backend) the ErrorState's Retry
+	// asks again, as the web stops polling.
+	if (!data) return false;
 	if (data.state === "live") return data.debug.connected ? 15_000 : waking ? 1_000 : 5_000;
 	return data.state === "lost" ? 30_000 : false;
 }
@@ -138,40 +145,79 @@ function Server({ backendId, job, admin, readOnly }: { backendId: string; job: s
 		[backendId, job, call, ready, live, wakingNow, readOnly],
 	);
 	const life = detail.data ? lifeStart(detail.data) : undefined;
-	const since = hours === 0 ? (life ?? Date.now() - 24 * 3_600_000) : Math.floor((Date.now() - hours * 3_600_000) / 60_000) * 60_000;
-	const metrics = useTTQuery(backendId, ["server", job, "metrics", hours, hours === 0 ? since : 0], (api, s) => api.serverMetrics(job, since, s), { refetchInterval: 15_000, retry: false, enabled: hours !== 0 || !!detail.data });
-	const errors = useTTQuery(backendId, ["server", job, "errors"], (api, s) => api.serverErrors(job, { window: "24h" }, s), { staleTime: 30_000, retry: false });
+	// Gone or unknown (no fleet record): only its whole life is left to chart (web "Its whole life", from history.metrics).
+	const offline = !!detail.data && !detail.data.server;
+	const range = offline ? 0 : hours;
+	const since = range === 0 ? (life ?? Date.now() - 24 * 3_600_000) : Math.floor((Date.now() - range * 3_600_000) / 60_000) * 60_000;
+	const metrics = useTTQuery(backendId, ["server", job, "metrics", range, range === 0 ? since : 0], (api, s) => api.serverMetrics(job, since, s), {
+		refetchInterval: offline ? false : 15_000,
+		retry: false,
+		enabled: offline ? life !== undefined : hours !== 0 || !!detail.data,
+	});
+	const errors = useTTQuery(backendId, ["server", job, "errors"], (api, s) => api.serverErrors(job, { window: SERVER_ERRORS_WINDOW }, s), { staleTime: 30_000, retry: false, refetchInterval: 60_000 });
 	// Deploy marks on the status charts (this server's branch and the place-wide ones); a tap opens a mark's card.
 	const markRange = useMemo(() => ({ from: since, to: Math.ceil(Date.now() / 60_000) * 60_000 }), [since]);
 	const deploys = useDeployMarks(backendId, markRange, detail.data?.server?.branch ?? undefined, { enabled: !!detail.data });
 	const card = useMarkCard(backendId);
 	const chartMarkList = chartMarks(p, deploys.marks);
 
+	// What it sent to the error log (any state: the error log keeps 30 days, like the fleet's gone servers). An older
+	// backend without the route (404) shows nothing rather than an error.
+	const build = detail.data?.server?.artifact ?? undefined;
+	const branch = detail.data?.server?.branch ?? undefined;
+	const errorLog =
+		errors.error instanceof ApiError && errors.error.notFound ? null : (
+			<Section title="Errors it reported">
+				<Txt variant="small">From the error log (kept 30 days), most frequent first. Open one for its stack and the players who hit it.</Txt>
+				{build ? (
+					<Button
+						title={`All errors from build ${shortId(build, 8)}`}
+						small
+						icon="bug-outline"
+						onPress={() => router.push(`/tt/${backendId}/errors?${new URLSearchParams({ build, ...(branch ? { branch } : {}), window: SERVER_ERRORS_WINDOW }).toString()}` as never)}
+						style={{ alignSelf: "flex-start" }}
+					/>
+				) : null}
+				{errors.error ? (
+					<Txt variant="small">{errors.error.message}</Txt>
+				) : !errors.data ? (
+					<Skeleton height={60} />
+				) : errors.data.errors.length ? (
+					<>
+						<List>
+							{errors.data.errors.map((e) => (
+								<Row
+									key={e.fp}
+									chevron
+									onPress={() => router.push(errorKindHref(backendId, e.fp, { window: SERVER_ERRORS_WINDOW }) as never)}
+									title={e.template}
+									numberOfLines={2}
+									subtitle={
+										<View>
+											{e.topFrame ? (
+												<Txt variant="mono" numberOfLines={1} style={{ fontSize: 11 }}>
+													{e.topFrame}
+												</Txt>
+											) : null}
+											<Txt variant="small" numberOfLines={1}>{`${fmtInt(e.count)}× · ${e.realms.join(", ")} · last ${fmtAgo(e.lastAt)} · ${compact(e.total)} on all servers`}</Txt>
+										</View>
+									}
+								/>
+							))}
+						</List>
+						{errors.data.more ? <Txt variant="small">The {fmtInt(errors.data.errors.length)} most frequent of {fmtInt(errors.data.total)} kinds.</Txt> : null}
+					</>
+				) : (
+					<Txt variant="muted">This server reported no errors in the last 30 days.</Txt>
+				)}
+			</Section>
+		);
+
 	const timeline = detail.data ? timelineEvents(detail.data) : [];
 	const bundles = detail.data?.history?.bundles ?? [];
 	const history = (
 		<>
-				<Section title="Errors, 24 h">
-					{errors.error ? (
-						<Txt variant="small">{errors.error.message}</Txt>
-					) : !errors.data ? (
-						<Skeleton height={60} />
-					) : errors.data.errors.length ? (
-						<List>
-							{errors.data.errors.slice(0, 30).map((e) => (
-								<Row
-									key={e.fp}
-									chevron
-									onPress={() => router.push(`/tt/${backendId}/error/${encodeURIComponent(e.fp)}`)}
-									title={e.template}
-									subtitle={`${compact(e.count)}× · ${e.realms.join(", ")} · last ${fmtAgo(e.lastAt)}`}
-								/>
-							))}
-						</List>
-					) : (
-						<Txt variant="muted">No errors from this server in the last 24 hours.</Txt>
-					)}
-				</Section>
+				{errorLog}
 
 				{timeline.length ? (
 					<Section title="Timeline">
@@ -216,6 +262,58 @@ function Server({ backendId, job, admin, readOnly }: { backendId: string; job: s
 		</>
 	);
 
+	// TPS, memory and players over the picked range (the whole life for a gone server), with the deploy marks.
+	const pts = metrics.data ?? [];
+	const lived = detail.data ? lifetimeMs(detail.data) : undefined;
+	const span = (pts[pts.length - 1]?.t ?? 0) - (pts[0]?.t ?? 0);
+	const timeLabel = (t: number) => (range === 0 && (lived ?? span) > 86_400_000 ? new Date(t).toISOString().slice(5, 16).replace("T", " ") : new Date(t).toISOString().slice(11, 16));
+	const charts = (
+		<>
+			{metrics.error ? (
+				<Txt variant="small">{metrics.error instanceof ApiError && metrics.error.notFound ? "This backend has no TPS and memory history yet (the fleet metrics route; kernel 0.4.2+ heartbeats fill it)." : metrics.error.message}</Txt>
+			) : !metrics.data ? (
+				<Skeleton height={140} />
+			) : pts.length ? (
+				<>
+					<Card style={{ gap: 6 }}>
+						<Txt variant="label">TPS</Txt>
+						<LineChart
+							series={[
+								{ label: "TPS", points: pts.map((x) => ({ t: x.t, v: x.tps })) },
+								{ label: "Slowest second", points: pts.map((x) => ({ t: x.t, v: x.tpsMin })) },
+							]}
+							timeLabel={timeLabel}
+							height={130}
+							marks={chartMarkList}
+							onMarkPress={card.open}
+						/>
+					</Card>
+					<Card style={{ gap: 6 }}>
+						<Txt variant="label">Memory (MB)</Txt>
+						<LineChart
+							series={[
+								{ label: "Total", points: pts.map((x) => ({ t: x.t, v: x.memMb })) },
+								{ label: "Lua heap", points: pts.map((x) => ({ t: x.t, v: x.luaMb })) },
+							]}
+							timeLabel={timeLabel}
+							height={130}
+							marks={chartMarkList}
+							onMarkPress={card.open}
+						/>
+					</Card>
+					<Card style={{ gap: 6 }}>
+						<Txt variant="label">Players</Txt>
+						<LineChart series={[{ label: "Players", points: pts.map((x) => ({ t: x.t, v: x.players })) }]} timeLabel={timeLabel} height={110} marks={chartMarkList} onMarkPress={card.open} />
+					</Card>
+					<DeployMarksToggle {...deploys} />
+					{card.sheet}
+				</>
+			) : (
+				<Txt variant="muted">{offline ? "No TPS or memory readings kept for this server (rollups are kept 30 days)." : hours === 0 ? "No metrics kept for this server (kernel 0.4.2+ sends them; raw points go after a day, 5-minute rollups later)." : "No metrics in this window (kernel 0.4.2+ sends them)."}</Txt>
+			)}
+		</>
+	);
+
 	if (detail.error) return <ErrorState error={detail.error} onRetry={() => detail.refetch()} />;
 	if (!detail.data) return <Skeleton height={200} />;
 	const s = detail.data.server;
@@ -232,17 +330,21 @@ function Server({ backendId, job, admin, readOnly }: { backendId: string; job: s
 					<Txt style={{ fontWeight: "600" }}>{gone.title}</Txt>
 					<Txt variant="small">{gone.text}</Txt>
 				</Card>
-				{detail.data.state !== "unknown" ? history : null}
+				{/* Unknown: no timeline or bundles, but the error log may still name the JobId (web: the error log for any state). */}
+				{detail.data.state !== "unknown" ? history : errorLog}
 				{detail.data.state !== "unknown" ? <RobloxLogs backendId={backendId} job={job} /> : null}
+				{life !== undefined ? (
+					<Section title="Its whole life">
+						<Txt variant="small">TPS, memory and players from its heartbeats (5-minute averages past the last 2 hours; kept 30 days).</Txt>
+						{charts}
+					</Section>
+				) : null}
 			</>
 		);
 	}
 	const state = detail.data.state;
-	const pts = metrics.data ?? [];
 	const loc = s.location;
 	const placeVersion = s.placeVersion ?? status.data?.status?.placeVersion ?? undefined;
-	const lived = lifetimeMs(detail.data);
-	const timeLabel = (t: number) => (hours === 0 && lived !== undefined && lived > 86_400_000 ? new Date(t).toISOString().slice(5, 16).replace("T", " ") : new Date(t).toISOString().slice(11, 16));
 
 	return (
 		<>
@@ -359,48 +461,7 @@ function Server({ backendId, job, admin, readOnly }: { backendId: string; job: s
 
 
 			<Section title="Last hours" right={<Segmented options={METRIC_RANGES} value={hours} onChange={setHours} style={{ width: 210 }} />}>
-				{metrics.error ? (
-					<Txt variant="small">{metrics.error.message}</Txt>
-				) : !metrics.data ? (
-					<Skeleton height={140} />
-				) : pts.length ? (
-					<>
-						<Card style={{ gap: 6 }}>
-							<Txt variant="label">TPS</Txt>
-							<LineChart
-								series={[
-									{ label: "TPS", points: pts.map((x) => ({ t: x.t, v: x.tps })) },
-									{ label: "Slowest second", points: pts.map((x) => ({ t: x.t, v: x.tpsMin })) },
-								]}
-								timeLabel={timeLabel}
-								height={130}
-								marks={chartMarkList}
-								onMarkPress={card.open}
-							/>
-						</Card>
-						<Card style={{ gap: 6 }}>
-							<Txt variant="label">Memory (MB)</Txt>
-							<LineChart
-								series={[
-									{ label: "Total", points: pts.map((x) => ({ t: x.t, v: x.memMb })) },
-									{ label: "Lua heap", points: pts.map((x) => ({ t: x.t, v: x.luaMb })) },
-								]}
-								timeLabel={timeLabel}
-								height={130}
-								marks={chartMarkList}
-								onMarkPress={card.open}
-							/>
-						</Card>
-						<Card style={{ gap: 6 }}>
-							<Txt variant="label">Players</Txt>
-							<LineChart series={[{ label: "Players", points: pts.map((x) => ({ t: x.t, v: x.players })) }]} timeLabel={timeLabel} height={110} marks={chartMarkList} onMarkPress={card.open} />
-						</Card>
-						<DeployMarksToggle {...deploys} />
-						{card.sheet}
-					</>
-				) : (
-					<Txt variant="muted">{hours === 0 ? "No metrics kept for this server (kernel 0.4.2+ sends them; raw points go after a day, 5-minute rollups later)." : "No metrics in this window (kernel 0.4.2+ sends them)."}</Txt>
-				)}
+				{charts}
 			</Section>
 
 			<Section title="Details">
