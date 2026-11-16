@@ -30,8 +30,8 @@ Part of TypeTorch. Read `../TypeTorch.md` (hub) and `../plans/07-web-mobile.md` 
     publish, restart all servers (confirm), bans (list, log, ban / unban with confirm), game passes / developer
     products / badges.
   - **TypeTorch** (only when a backend is connected for that universe): the backend's dashboard, native, inside the app:
-    every page of the web explorer (Overview, Roblox, Retention, Funnels, Players + a player page, Flow, Experiments,
-    First session, Events, Fleet + server pages with their offline history and debug bundles, Server history, Deploys,
+    every page of the web explorer (Overview, Roblox, Demographics, Session time, Retention (players back and revenue /
+    LTV), Funnels, Players + a player page, Flow, Experiments, Live events, Feedback, First session, Events, Fleet + server pages with their offline history and debug bundles, Server history, Deploys,
     Errors, Performance, Economy, Monetization, Query, Settings; owners also Audit log and Backend stats). The web's
     filter bar (range, branch, artifact, device, new / returning, variant) is one state per backend that follows you from
     page to page; Roblox benchmarks are kept on the phone per backend.
@@ -114,9 +114,9 @@ src/app/                 expo-router routes
   (tabs)/                Projects, Backends, Settings
   project/[universeId]/  index (tabs) + datastores, datastore, entry, ordered, memory, messaging, bans, monetization
   tt/[backendId]/        TypeTorch dashboard: index (Overview), fleet, server/[job], bundle/[id], server-history, deploys,
-                         deploy/[seq], errors, error/[fp], settings, roblox, retention, funnels, players, player/[pid],
-                         flow, experiments, first-session, events, performance, economy, monetization, query, audit,
-                         backend-stats
+                         deploy/[seq], errors, error/[fp], settings, roblox, demographics, session-time, retention,
+                         funnels, players, player/[pid], flow, experiments, live-events, feedback, first-session, events,
+                         performance, economy, monetization, query, audit, backend-stats
   backend/connect.tsx    connect / sign in again
 src/api/                 http.ts, opencloud.ts, roblox-public.ts, backend.ts, backend-auth.ts, tt/ (web types and pure
                          helpers, copied: types, format, perf, perf-thresholds, deploys, benchmarks, graph-text,
