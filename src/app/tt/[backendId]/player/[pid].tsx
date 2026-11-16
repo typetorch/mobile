@@ -11,6 +11,7 @@ import { Linking, Pressable, View } from "react-native";
 import type { Facet, PlayerErrorKind, PlayerStatsResult, TimelineEvent, TimelineResult } from "@/api/tt/types";
 import { BarChart, type ChartPoint } from "@/charts/LineChart";
 import { Badge, Button, Card, Chips, EmptyState, Icon, List, Segmented, Skeleton, Txt } from "@/components/ui";
+import { openSessionReplay } from "@/features/recordings/links";
 import { CopyButton, EventItem, FunnelBar, FunnelStepList, Note, Panel, ProductName, productKindLabel, QueryState } from "@/features/typetorch/bits";
 import { ProductId, ProductKind } from "@/features/typetorch/cards";
 import { EventTable } from "@/features/typetorch/event-table";
@@ -314,6 +315,24 @@ function SessionsView({ backendId, stats, show, onShow, onSession }: ViewProps &
 			{ id: "events", header: "Events", type: "number", width: 66, accessor: (x) => x.events, cell: (x) => fmtInt(x.events) },
 			{ id: "first", header: "First", type: "boolean", width: 60, accessor: (x) => x.firstSession, cell: (x) => (x.firstSession ? <Badge label="first" tone="brand" /> : "") },
 			{ id: "dev", header: "Device", type: "enum", width: 80, accessor: (x) => x.dev },
+			{
+				// web StatViews "Recording": opens the replay on Recordings (the row itself opens the session's timeline)
+				id: "recording",
+				header: "Recording",
+				type: "boolean",
+				width: 84,
+				accessor: (x) => x.recorded === true,
+				cell: (x) =>
+					x.recorded ? (
+						<Pressable onPress={() => openSessionReplay(backendId, x)} hitSlop={6} accessibilityRole="link" accessibilityLabel={`Replay session ${shortId(x.sid)}`}>
+							<Txt variant="small" color={p.brand}>
+								Replay
+							</Txt>
+						</Pressable>
+					) : (
+						""
+					),
+			},
 			{ id: "art", header: "Artifact", type: "enum", width: 100, mono: true, accessor: (x) => x.art },
 			{
 				id: "job",
@@ -348,7 +367,7 @@ function SessionsView({ backendId, stats, show, onShow, onSession }: ViewProps &
 				]}
 			/>
 			<Series stats={stats} metric="sessions" format={(v) => fmtInt(v)} columns={[SESSIONS, MINUTES]} show={show} onShow={onShow} title={`Sessions per ${stats.window.bucket}`} empty="No sessions in this range: widen the date range." />
-			<Panel title="Each session" note={`${stats.sessionsTruncated ? `Showing the newest ${fmtInt(stats.sessions.length)} sessions. ` : ""}Tap a session for its events and graph.`}>
+			<Panel title="Each session" note={`${stats.sessionsTruncated ? `Showing the newest ${fmtInt(stats.sessions.length)} sessions. ` : ""}Tap a session for its events and graph; Replay opens a recorded first session on Recordings (the filter bar's range becomes that session's days).`}>
 				{stats.sessions.length ? (
 					<DataTable id="player-sessions" label="Sessions" columns={sessionColumns} data={stats.sessions} rowId={(x) => x.sid} onRowPress={(x) => onSession(x.sid)} density="compact" defaultSort={[{ id: "start", desc: true }]} />
 				) : (
@@ -424,8 +443,9 @@ function Sessions({ backendId, data, onGraph }: { backendId: string; data: Timel
 								{fmtMinutes(s.minutes)} · {plural(s.events, "event")} · {s.dev ?? "unknown device"} · artifact {s.art} · sid {shortId(s.sid)}
 							</Txt>
 						</Pressable>
-						<View style={{ flexDirection: "row", gap: space.sm }}>
+						<View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
 							<Button title="View graph" small icon="git-network-outline" onPress={() => onGraph(s.sid)} />
+							{s.firstSession ? <Button title="Replay (if recorded)" small variant="ghost" icon="videocam-outline" onPress={() => openSessionReplay(backendId, s)} /> : null}
 							<Button title={isOpen ? "Hide events" : `Events (${events.length})`} small variant="ghost" onPress={() => setOpen(isOpen ? null : s.sid)} />
 						</View>
 						{isOpen ? (

@@ -9,8 +9,15 @@
  *   - Clipping (ClipsDescendants, ScrollingFrame, CanvasGroup): rects are absolute and drawn flat, so a node is cut to
  *     the intersection of its clipping ancestors' rects: a view at that rect with overflow hidden holds it (the web's
  *     clip-path; rotation is ignored for the cut).
- *   - UIGradient multiplies the object's colour in Roblox: drawn as a linear-gradient background in place of the
- *     background colour (React Native's backgroundImage).
+ *     A node's own box does not clip (Roblox only clips through ClipsDescendants ancestors, the holder above): text
+ *     wider than its box runs past it, like the web's white-space: pre. An image is drawn in an inner layer with
+ *     overflow hidden and the box's corner radius (the web's borderRadius: inherit), so a UICorner rounds it while a
+ *     UIStroke (boxShadow on the outer box) stays visible.
+ *   - UIGradient multiplies the object's colour in Roblox: drawn as a linear-gradient background (React Native's
+ *     backgroundImage) painted over the background colour, as on the web.
+ *   - Text stroke (TextStrokeColor3 / UIStroke on text): the web's 4-direction hard text-shadow outline at
+ *     d = max(0.5, scale) is drawn as four copies of the text in the stroke colour, offset by ±d in x and y, under it
+ *     (React Native has one blurred text shadow only).
  *   - ImageColor3 (tint): a second copy of the image filled with the colour (tintColor), multiplied over it
  *     (mixBlendMode), the web's multiply layer masked by the image. ImageRect is in the image's pixels, assumed to be the
  *     thumbnail's (the backend's thumbnails keep the aspect, up to 700 px: big sprite sheets may be off). Slice (9-slice),
@@ -168,22 +175,18 @@ function UiBox({
 		width: Math.max(0, w * scale),
 		height: Math.max(0, h * scale),
 		zIndex: z,
-		overflow: "hidden",
 	};
 	if (f.rotation) style.transform = [{ rotate: `${f.rotation}deg` }];
 	const bg = f.background;
 	if (bg && bg.transparency < 1) style.backgroundColor = rgba(bg.color, bg.transparency);
 	if (f.gradient && bg && bg.transparency < 1) {
 		const g = gradientCss(f.gradient, bg.transparency);
-		if (g) {
-			style.experimental_backgroundImage = g;
-			style.backgroundColor = "transparent";
-		}
+		// painted over the background colour (CSS backgroundImage over backgroundColor)
+		if (g) style.experimental_backgroundImage = g;
 	}
 	if (f.corner) style.borderRadius = f.corner * scale;
 	if (f.stroke && f.stroke.transparency < 1 && f.stroke.thickness > 0) {
 		style.boxShadow = `0px 0px 0px ${Math.max(0.5, f.stroke.thickness * scale)}px ${rgba(f.stroke.color, f.stroke.transparency)}`;
-		style.overflow = "visible";
 	}
 	if (selected) {
 		style.outlineWidth = 2;
@@ -193,7 +196,7 @@ function UiBox({
 	}
 	const interactive = onSelect !== undefined && drawsSomething(state);
 	let inner: ReactNode = null;
-	if (isImageClass(state.cls) && f.image) inner = <UiImage backendId={backendId} fields={f} scale={scale} />;
+	if (isImageClass(state.cls) && f.image) inner = <UiImage backendId={backendId} fields={f} scale={scale} radius={f.corner ? f.corner * scale : 0} />;
 	else if (state.cls === 8 || state.cls === 10) inner = <Placeholder label={uiClassName(state.cls)} />;
 	if (isTextClass(state.cls) && f.text) inner = <UiText fields={f} scale={scale} />;
 	const box = interactive ? (
@@ -230,12 +233,23 @@ function Placeholder({ label }: { label: string }) {
 	);
 }
 
+/** How far an unwrapped text's frame reaches past its box on the free side(s) (dp): a long line runs on instead of wrapping. */
+const RUN_OVER = 2000;
+/** The four outline copies of a stroked text (web: text-shadow at ±d in x and y). */
+const STROKE_OFFSETS: [number, number][] = [
+	[1, 0],
+	[-1, 0],
+	[0, 1],
+	[0, -1],
+];
+
 function UiText({ fields, scale }: { fields: ExtUiFields; scale: number }) {
 	const s = fields.textStyle;
 	const spans = useMemo<RichSpan[]>(() => (s?.rich ? richText(fields.text ?? "") : [{ text: fields.text ?? "" }]), [fields.text, s?.rich]);
 	const size = Math.max(1, (s?.size ?? 14) * scale);
+	const xAlign = s?.xAlign ?? 1;
 	const text: Mutable<TextStyle> = {
-		textAlign: TEXT_ALIGN[s?.xAlign ?? 1],
+		textAlign: TEXT_ALIGN[xAlign],
 		color: rgba(s?.color ?? "#000000", s?.transparency ?? 0),
 		fontSize: size,
 		lineHeight: size * 1.1,
@@ -244,40 +258,56 @@ function UiText({ fields, scale }: { fields: ExtUiFields; scale: number }) {
 	};
 	const family = fontFamilyOf(s?.family);
 	if (family) text.fontFamily = family;
-	if (s && s.strokeTransparency < 1) {
-		text.textShadowColor = rgba(s.strokeColor, s.strokeTransparency);
-		text.textShadowRadius = Math.max(1, scale * 1.5);
-		text.textShadowOffset = { width: 0, height: 0 };
-	}
-	const lines = spans.reduce((n, sp) => n + (sp.br ? 1 : 0), 0) + (fields.text ?? "").split("\n").length;
+	// Wrapped text wraps at the box's width; unwrapped text (the web's white-space: pre) gets a frame reaching past the box
+	// on the side(s) away from its alignment, so it never wraps and shows past the box (Roblox without ClipsDescendants).
+	const frame: ViewStyle = {
+		position: "absolute",
+		top: 0,
+		bottom: 0,
+		justifyContent: ALIGN[s?.yAlign ?? 1],
+		alignItems: ALIGN[xAlign],
+		...(s?.wrapped ? { left: 0, right: 0 } : xAlign === 0 ? { left: 0, right: -RUN_OVER } : xAlign === 2 ? { left: -RUN_OVER, right: 0 } : { left: -RUN_OVER, right: -RUN_OVER }),
+	};
+	/** The spans as nested Text; `only` paints every span in one colour (an outline copy). */
+	const body = (only?: string) =>
+		spans.map((rs, k) => {
+			if (rs.br) return "\n";
+			const css: Mutable<TextStyle> = {};
+			if (rs.bold) css.fontWeight = "700";
+			if (rs.weight) css.fontWeight = String(rs.weight) as TextStyle["fontWeight"];
+			if (rs.italic) css.fontStyle = "italic";
+			const deco = rs.underline && rs.strike ? "underline line-through" : rs.underline ? "underline" : rs.strike ? "line-through" : null;
+			if (deco) css.textDecorationLine = deco;
+			if (rs.color && !only) css.color = rs.color;
+			if (rs.size) css.fontSize = rs.size * scale;
+			if (rs.face) {
+				const face = fontFamilyOf(rs.face);
+				if (face) css.fontFamily = face;
+			}
+			if (rs.uppercase) css.textTransform = "uppercase";
+			if (rs.smallcaps) css.fontVariant = ["small-caps"];
+			return Object.keys(css).length ? (
+				<Text key={k} style={css}>
+					{rs.text}
+				</Text>
+			) : (
+				rs.text
+			);
+		});
+	const stroke = s && s.strokeTransparency < 1 ? rgba(s.strokeColor, s.strokeTransparency) : null;
+	const d = Math.max(0.5, scale);
 	return (
-		<View style={{ flex: 1, justifyContent: ALIGN[s?.yAlign ?? 1], alignItems: ALIGN[s?.xAlign ?? 1] }} testID="ui-text">
-			<Text style={text} {...(s?.wrapped ? {} : { numberOfLines: lines, ellipsizeMode: "clip" as const })}>
-				{spans.map((rs, k) => {
-					if (rs.br) return "\n";
-					const css: Mutable<TextStyle> = {};
-					if (rs.bold) css.fontWeight = "700";
-					if (rs.weight) css.fontWeight = String(rs.weight) as TextStyle["fontWeight"];
-					if (rs.italic) css.fontStyle = "italic";
-					const deco = rs.underline && rs.strike ? "underline line-through" : rs.underline ? "underline" : rs.strike ? "line-through" : null;
-					if (deco) css.textDecorationLine = deco;
-					if (rs.color) css.color = rs.color;
-					if (rs.size) css.fontSize = rs.size * scale;
-					if (rs.face) {
-						const face = fontFamilyOf(rs.face);
-						if (face) css.fontFamily = face;
-					}
-					if (rs.uppercase) css.textTransform = "uppercase";
-					if (rs.smallcaps) css.fontVariant = ["small-caps"];
-					return Object.keys(css).length ? (
-						<Text key={k} style={css}>
-							{rs.text}
-						</Text>
-					) : (
-						rs.text
-					);
-				})}
-			</Text>
+		<View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0 }} testID="ui-text">
+			{stroke
+				? STROKE_OFFSETS.map(([dx, dy]) => (
+						<View key={`${dx},${dy}`} style={[frame, { transform: [{ translateX: dx * d }, { translateY: dy * d }] }]}>
+							<Text style={[text, { color: stroke }]}>{body(stroke)}</Text>
+						</View>
+					))
+				: null}
+			<View style={frame}>
+				<Text style={text}>{body()}</Text>
+			</View>
 		</View>
 	);
 }
@@ -310,7 +340,7 @@ function Region({ uri, natural, src, dst, tint }: { uri: string; natural: [numbe
 /** Tiles at most this many copies (a tiny tile over a big frame draws as one stretched copy instead). */
 const MAX_TILES = 400;
 
-function UiImage({ backendId, fields, scale }: { backendId: string; fields: ExtUiFields; scale: number }) {
+function UiImage({ backendId, fields, scale, radius: corner }: { backendId: string; fields: ExtUiFields; scale: number; radius: number }) {
 	const image = useAssetImage(backendId, fields.image);
 	const [box, setBox] = useState<[number, number] | null>(null);
 	if (!image || image.state !== "ready") {
@@ -384,7 +414,7 @@ function UiImage({ backendId, fields, scale }: { backendId: string; fields: ExtU
 	} else pieces.push(<Region key="all" uri={uri} natural={natural} src={src} dst={[0, 0, W, H]} tint={tint} />);
 	return (
 		<View
-			style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, overflow: "hidden", opacity, isolation: "isolate" }}
+			style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, overflow: "hidden", borderRadius: corner, opacity, isolation: "isolate" }}
 			onLayout={(e) => {
 				const { width, height } = e.nativeEvent.layout;
 				if (!box || Math.abs(box[0] - width) > 0.5 || Math.abs(box[1] - height) > 0.5) setBox([width, height]);

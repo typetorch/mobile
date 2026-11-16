@@ -58,10 +58,14 @@ function Recordings({ backendId }: { backendId: string }) {
 	);
 }
 
-/** A tab's scrolling body (the filter bar first, like the web's shell). */
+/** The web's PageHeader description: what a recording covers, which every tab's numbers depend on. */
+const DESCRIPTION = "New players' first sessions, recorded from spawn until a minute after their first input: where they went, a replay, why they quit, how soon they acted.";
+
+/** A tab's scrolling body (the page description, then the filter bar, like the web's shell). */
 function Body({ backendId, children }: { backendId: string; children: ReactNode }) {
 	return (
 		<ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: space.md, paddingBottom: space.xl * 2 }} keyboardShouldPersistTaps="handled">
+			<Note>{DESCRIPTION}</Note>
 			<FilterBar backendId={backendId} />
 			{children}
 		</ScrollView>
