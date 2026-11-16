@@ -111,6 +111,24 @@ export function keyGroupIds(info: KeyInfo | null | undefined): number[] {
 	return [...ids];
 }
 
+// Errors -----------------------------------------------------------------------------------------------------------------
+
+/** A 401 / 403 from Open Cloud for a call whose scopes are known: the key lacks one of `scopes` for this resource. */
+export class ScopeError extends HttpError {
+	override name = "ScopeError";
+	constructor(
+		cause: HttpError,
+		readonly scopes: string[],
+	) {
+		super(cause.status, `${cause.message} (the key needs ${scopes.join(" + ")} for this experience)`, cause.where, cause.body);
+	}
+}
+
+/** The scopes a failed call needed, when it failed for want of them. */
+export function missingScopesOf(error: unknown): string[] | null {
+	return error instanceof ScopeError ? error.scopes : null;
+}
+
 // Calls ------------------------------------------------------------------------------------------------------------------
 
 export class OpenCloud {
@@ -120,8 +138,17 @@ export class OpenCloud {
 		return { "x-api-key": this.apiKey };
 	}
 
-	request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
-		return requestJson<T>(`${OPEN_CLOUD}${path}`, { method, headers: this.headers(), body, signal });
+	/**
+	 * One Open Cloud call. `scopes` are the scopes the endpoint needs (from the OpenAPI document's x-roblox-scopes):
+	 * a 401 / 403 then throws a ScopeError that names them, so screens can say which scope to add to the key.
+	 */
+	async request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal, scopes?: string | string[]): Promise<T> {
+		try {
+			return await requestJson<T>(`${OPEN_CLOUD}${path}`, { method, headers: this.headers(), body, signal });
+		} catch (error) {
+			if (scopes && error instanceof HttpError && (error.status === 401 || error.status === 403)) throw new ScopeError(error, typeof scopes === "string" ? [scopes] : scopes);
+			throw error;
+		}
 	}
 
 	// Universe and places
@@ -132,10 +159,10 @@ export class OpenCloud {
 		return this.request<CloudPlace>("GET", `/cloud/v2/universes/${universeId}/places/${placeId}`);
 	}
 	restartServers(universeId: number) {
-		return this.request<Record<string, never>>("POST", `/cloud/v2/universes/${universeId}:restartServers`, {});
+		return this.request<Record<string, never>>("POST", `/cloud/v2/universes/${universeId}:restartServers`, {}, undefined, "universe:write");
 	}
 	publishMessage(universeId: number, topic: string, message: string) {
-		return this.request<unknown>("POST", `/cloud/v2/universes/${universeId}:publishMessage`, { topic, message });
+		return this.request<unknown>("POST", `/cloud/v2/universes/${universeId}:publishMessage`, { topic, message }, undefined, "universe-messaging-service:publish");
 	}
 
 	// Data stores (v2)
@@ -143,32 +170,41 @@ export class OpenCloud {
 		return this.request<{ dataStores?: CloudDataStore[]; nextPageToken?: string }>(
 			"GET",
 			`/cloud/v2/universes/${universeId}/data-stores${qs({ maxPageSize: 100, pageToken: params.pageToken, filter: params.prefix ? `id.startsWith("${escapeCel(params.prefix)}")` : undefined })}`,
+			undefined,
+			undefined,
+			"universe-datastores.control:list",
 		);
 	}
 	listEntries(universeId: number, store: string, params: { scope?: string; prefix?: string; pageToken?: string } = {}) {
 		return this.request<{ dataStoreEntries?: CloudEntry[]; nextPageToken?: string }>(
 			"GET",
 			`${storePath(universeId, store, params.scope)}/entries${qs({ maxPageSize: 100, pageToken: params.pageToken, filter: params.prefix ? `id.startsWith("${escapeCel(params.prefix)}")` : undefined })}`,
+			undefined,
+			undefined,
+			"universe-datastores.objects:list",
 		);
 	}
 	getEntry(universeId: number, store: string, key: string, scope?: string) {
-		return this.request<CloudEntry>("GET", `${storePath(universeId, store, scope)}/entries/${entryRef(key)}`);
+		return this.request<CloudEntry>("GET", `${storePath(universeId, store, scope)}/entries/${entryRef(key)}`, undefined, undefined, "universe-datastores.objects:read");
 	}
 	/** A past revision: `<key>@<revisionId>` (the v2 revision syntax). */
 	getEntryRevision(universeId: number, store: string, key: string, revisionId: string, scope?: string) {
-		return this.request<CloudEntry>("GET", `${storePath(universeId, store, scope)}/entries/${entryRef(key, revisionId)}`);
+		return this.request<CloudEntry>("GET", `${storePath(universeId, store, scope)}/entries/${entryRef(key, revisionId)}`, undefined, undefined, ["universe-datastores.objects:read", "universe-datastores.versions:read"]);
 	}
 	listRevisions(universeId: number, store: string, key: string, params: { scope?: string; pageToken?: string } = {}) {
 		return this.request<{ dataStoreEntries?: CloudEntry[]; nextPageToken?: string }>(
 			"GET",
 			`${storePath(universeId, store, params.scope)}/entries/${encodeURIComponent(key)}:listRevisions${qs({ maxPageSize: 50, pageToken: params.pageToken })}`,
+			undefined,
+			undefined,
+			"universe-datastores.versions:list",
 		);
 	}
 	updateEntry(universeId: number, store: string, key: string, value: unknown, scope?: string) {
-		return this.request<CloudEntry>("PATCH", `${storePath(universeId, store, scope)}/entries/${encodeURIComponent(key)}`, { value });
+		return this.request<CloudEntry>("PATCH", `${storePath(universeId, store, scope)}/entries/${encodeURIComponent(key)}`, { value }, undefined, "universe-datastores.objects:update");
 	}
 	deleteEntry(universeId: number, store: string, key: string, scope?: string) {
-		return this.request<unknown>("DELETE", `${storePath(universeId, store, scope)}/entries/${encodeURIComponent(key)}`);
+		return this.request<unknown>("DELETE", `${storePath(universeId, store, scope)}/entries/${encodeURIComponent(key)}`, undefined, undefined, "universe-datastores.objects:delete");
 	}
 
 	// Ordered data stores (v2)
@@ -176,6 +212,9 @@ export class OpenCloud {
 		return this.request<{ orderedDataStoreEntries?: { path: string; id: string; value: number }[]; nextPageToken?: string }>(
 			"GET",
 			`/cloud/v2/universes/${universeId}/ordered-data-stores/${encodeURIComponent(store)}/scopes/${encodeURIComponent(scope || "global")}/entries${qs({ maxPageSize: 100, orderBy: params.desc === false ? "value" : "value desc", pageToken: params.pageToken })}`,
+			undefined,
+			undefined,
+			"universe.ordered-data-store.scope.entry:read",
 		);
 	}
 
@@ -184,6 +223,9 @@ export class OpenCloud {
 		return this.request<{ items?: SortedMapItem[]; nextPageToken?: string }>(
 			"GET",
 			`/cloud/v2/universes/${universeId}/memory-store/sorted-maps/${encodeURIComponent(map)}/items${qs({ maxPageSize: 100, orderBy: params.desc ? "desc" : "asc", pageToken: params.pageToken })}`,
+			undefined,
+			undefined,
+			"memory-store.sorted-map:read",
 		);
 	}
 	/** A peek: invisibilityWindow 0s, so the read doesn't hide the items from game servers. */
@@ -191,6 +233,9 @@ export class OpenCloud {
 		return this.request<{ queueItems?: { path?: string; data: unknown; priority?: number; expireTime?: string }[]; id?: string }>(
 			"GET",
 			`/cloud/v2/universes/${universeId}/memory-store/queues/${encodeURIComponent(queue)}/items:read${qs({ count, allOrNothing: false, invisibilityWindow: "0s" })}`,
+			undefined,
+			undefined,
+			"memory-store.queue:dequeue",
 		);
 	}
 
@@ -199,12 +244,18 @@ export class OpenCloud {
 		return this.request<{ userRestrictions?: UserRestriction[]; nextPageToken?: string }>(
 			"GET",
 			`/cloud/v2/universes/${universeId}/user-restrictions${qs({ maxPageSize: 100, pageToken })}`,
+			undefined,
+			undefined,
+			"universe.user-restriction:read",
 		);
 	}
 	restrictionLogs(universeId: number, pageToken?: string) {
 		return this.request<{ logs?: RestrictionLog[]; nextPageToken?: string }>(
 			"GET",
 			`/cloud/v2/universes/${universeId}/user-restrictions:listLogs${qs({ maxPageSize: 100, pageToken })}`,
+			undefined,
+			undefined,
+			"universe.user-restriction:read",
 		);
 	}
 	/** Ban (active true) or unban (active false). `durationSeconds` omitted = permanent. */
@@ -220,6 +271,8 @@ export class OpenCloud {
 			"PATCH",
 			`/cloud/v2/universes/${universeId}/user-restrictions/${userId}${qs({ updateMask: "gameJoinRestriction" })}`,
 			{ gameJoinRestriction },
+			undefined,
+			"universe.user-restriction:write",
 		);
 	}
 
@@ -228,12 +281,18 @@ export class OpenCloud {
 		return this.request<{ developerProducts?: DeveloperProduct[]; nextPageToken?: string }>(
 			"GET",
 			`/developer-products/v2/universes/${universeId}/developer-products/creator${qs({ pageSize: 50, pageToken })}`,
+			undefined,
+			undefined,
+			"developer-product:read",
 		);
 	}
 	gamePasses(universeId: number, pageToken?: string) {
 		return this.request<{ gamePasses?: CreatorGamePass[]; nextPageToken?: string }>(
 			"GET",
 			`/game-passes/v1/universes/${universeId}/game-passes/creator${qs({ pageSize: 50, pageToken })}`,
+			undefined,
+			undefined,
+			"game-pass:read",
 		);
 	}
 
@@ -428,7 +487,7 @@ export async function queryAnalyticsMetric(
 	const path = `/analytics-query-api/v1/universes/${universeId}/metrics`;
 	let body: Record<string, unknown>;
 	try {
-		body = record(await cloud.request<unknown>("POST", path, query, options.signal));
+		body = record(await cloud.request<unknown>("POST", path, query, options.signal, ANALYTICS_READ_SCOPE));
 	} catch (error) {
 		if (error instanceof HttpError) {
 			const e = record(record(error.body).error);
