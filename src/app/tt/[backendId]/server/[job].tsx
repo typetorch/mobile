@@ -1,6 +1,8 @@
 /**
  * One game server (any age): state, versions, health, its last hour of TPS / memory / players, its errors, alerts
- * and deploy reports. Polls every 5 s while open. (Remote debug commands are web-only for now.)
+ * and deploy reports. Polls every 5 s while open. A server that is gone keeps its offline history: when it went, its
+ * timeline (alerts, deploy reports, generation swaps), its debug bundles and its whole-life charts. (Remote debug
+ * commands are web-only for now.)
  */
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
@@ -10,14 +12,20 @@ import { LineChart } from "@/charts/LineChart";
 import { Badge, Card, Dot, ErrorState, KV, List, Row, Section, Segmented, Skeleton, Stat, StatGrid, Txt } from "@/components/ui";
 import { healthTone, useTTQuery } from "@/features/typetorch/hooks";
 import { TTScreen } from "@/features/typetorch/screen";
-import { compact, fmtAgo, fmtInt, fmtNum, fmtTime, shortId } from "@/lib/format";
+import { lifeStart, lifetimeMs, offlineText, timelineEvents, type TimelineEvent } from "@/api/tt/server-history";
+import { compact, fmtAgo, fmtBytes, fmtDuration, fmtInt, fmtNum, fmtTime, shortId } from "@/lib/format";
 import { useTheme } from "@/theme";
 
 const METRIC_RANGES = [
 	{ value: 1, label: "1 h" },
 	{ value: 6, label: "6 h" },
 	{ value: 24, label: "24 h" },
+	{ value: 0, label: "Life" },
 ];
+
+function timelineTone(e: TimelineEvent): "critical" | "warning" | "good" | "muted" {
+	return e.tone === "critical" ? "critical" : e.tone === "warning" ? "warning" : e.tone === "good" ? "good" : "muted";
+}
 
 export default function ServerScreen() {
 	const { job } = useLocalSearchParams<{ job: string }>();
@@ -29,8 +37,9 @@ function Server({ backendId, job, admin }: { backendId: string; job: string; adm
 	const p = useTheme();
 	const [hours, setHours] = useState(1);
 	const detail = useTTQuery(backendId, ["server", job], (api, s) => api.fleetServer(job, s), { refetchInterval: 5_000 });
-	const since = Math.floor((Date.now() - hours * 3_600_000) / 60_000) * 60_000;
-	const metrics = useTTQuery(backendId, ["server", job, "metrics", hours], (api, s) => api.serverMetrics(job, since, s), { refetchInterval: 15_000, retry: false });
+	const life = detail.data ? lifeStart(detail.data) : undefined;
+	const since = hours === 0 ? (life ?? Date.now() - 24 * 3_600_000) : Math.floor((Date.now() - hours * 3_600_000) / 60_000) * 60_000;
+	const metrics = useTTQuery(backendId, ["server", job, "metrics", hours, hours === 0 ? since : 0], (api, s) => api.serverMetrics(job, since, s), { refetchInterval: 15_000, retry: false, enabled: hours !== 0 || !!detail.data });
 	const errors = useTTQuery(backendId, ["server", job, "errors"], (api, s) => api.serverErrors(job, { window: "24h" }, s), { staleTime: 30_000, retry: false });
 
 	if (detail.error) return <ErrorState error={detail.error} onRetry={() => detail.refetch()} />;
@@ -40,6 +49,10 @@ function Server({ backendId, job, admin }: { backendId: string; job: string; adm
 	const state = detail.data.state;
 	const pts = metrics.data ?? [];
 	const loc = s.location;
+	const lived = lifetimeMs(detail.data);
+	const timeline = timelineEvents(detail.data);
+	const bundles = detail.data.history?.bundles ?? [];
+	const timeLabel = (t: number) => (hours === 0 && lived !== undefined && lived > 86_400_000 ? new Date(t).toISOString().slice(5, 16).replace("T", " ") : new Date(t).toISOString().slice(11, 16));
 
 	return (
 		<>
@@ -49,8 +62,10 @@ function Server({ backendId, job, admin }: { backendId: string; job: string; adm
 					<Txt variant="mono" selectable style={{ flex: 1 }}>
 						{job}
 					</Txt>
-					<Badge label={state} tone={state === "live" ? "good" : state === "lost" ? "critical" : "muted"} />
+					<Badge label={state === "live" ? "live" : "offline"} tone={state === "live" ? "good" : state === "lost" ? "critical" : "muted"} />
 				</View>
+				{state !== "live" ? <Txt variant="small">Offline: {offlineText(detail.data)}</Txt> : null}
+				{lived !== undefined ? <Txt variant="small">{state === "live" ? "Up" : "Ran"} {fmtDuration(lived)}</Txt> : null}
 				{s.reasons?.length ? (
 					<View style={{ gap: 2 }}>
 						{s.reasons.map((r, i) => (
@@ -70,7 +85,7 @@ function Server({ backendId, job, admin }: { backendId: string; job: string; adm
 				<Stat label="Physics" value={s.physFps !== null && s.physFps !== undefined ? `${fmtNum(s.physFps, 0)} FPS` : "–"} />
 			</StatGrid>
 
-			<Section title="Last hours" right={<Segmented options={METRIC_RANGES} value={hours} onChange={setHours} style={{ width: 160 }} />}>
+			<Section title="Last hours" right={<Segmented options={METRIC_RANGES} value={hours} onChange={setHours} style={{ width: 210 }} />}>
 				{metrics.error ? (
 					<Txt variant="small">{metrics.error.message}</Txt>
 				) : !metrics.data ? (
@@ -84,7 +99,7 @@ function Server({ backendId, job, admin }: { backendId: string; job: string; adm
 									{ label: "TPS", points: pts.map((x) => ({ t: x.t, v: x.tps })) },
 									{ label: "Slowest second", points: pts.map((x) => ({ t: x.t, v: x.tpsMin })) },
 								]}
-								timeLabel={(t) => new Date(t).toISOString().slice(11, 16)}
+								timeLabel={timeLabel}
 								height={130}
 							/>
 						</Card>
@@ -95,17 +110,17 @@ function Server({ backendId, job, admin }: { backendId: string; job: string; adm
 									{ label: "Total", points: pts.map((x) => ({ t: x.t, v: x.memMb })) },
 									{ label: "Lua heap", points: pts.map((x) => ({ t: x.t, v: x.luaMb })) },
 								]}
-								timeLabel={(t) => new Date(t).toISOString().slice(11, 16)}
+								timeLabel={timeLabel}
 								height={130}
 							/>
 						</Card>
 						<Card style={{ gap: 6 }}>
 							<Txt variant="label">Players</Txt>
-							<LineChart series={[{ label: "Players", points: pts.map((x) => ({ t: x.t, v: x.players })) }]} timeLabel={(t) => new Date(t).toISOString().slice(11, 16)} height={110} />
+							<LineChart series={[{ label: "Players", points: pts.map((x) => ({ t: x.t, v: x.players })) }]} timeLabel={timeLabel} height={110} />
 						</Card>
 					</>
 				) : (
-					<Txt variant="muted">No metrics in this window (kernel 0.4.2+ sends them).</Txt>
+					<Txt variant="muted">{hours === 0 ? "No metrics kept for this server (kernel 0.4.2+ sends them; raw points go after a day, 5-minute rollups later)." : "No metrics in this window (kernel 0.4.2+ sends them)."}</Txt>
 				)}
 			</Section>
 
@@ -152,27 +167,40 @@ function Server({ backendId, job, admin }: { backendId: string; job: string; adm
 				)}
 			</Section>
 
-			{detail.data.history?.alerts.length ? (
-				<Section title="Alerts">
+			{timeline.length ? (
+				<Section title="Timeline">
 					<List>
-						{detail.data.history.alerts.slice(0, 20).map((a) => (
-							<Row key={a.id} left={<Dot tone={a.level === "critical" ? "critical" : a.level === "warning" ? "warning" : "muted"} />} title={a.message} subtitle={`${a.code} · ${fmtAgo(a.at)}`} numberOfLines={2} />
-						))}
+						{timeline.slice(0, 60).map((e) => {
+							const seq = e.kind === "report" ? Number(e.key.split(":")[1]) : null;
+							const open = e.bundle ? () => router.push(`/tt/${backendId}/bundle/${e.bundle}`) : seq ? () => router.push(`/tt/${backendId}/deploy/${seq}`) : undefined;
+							return (
+								<Row
+									key={e.key}
+									left={<Dot tone={timelineTone(e)} />}
+									title={e.title}
+									subtitle={`${fmtTime(e.at)} UTC${e.detail ? ` · ${e.detail}` : ""}${e.bundle ? " · debug bundle" : ""}`}
+									numberOfLines={2}
+									{...(open ? { onPress: open, chevron: true } : {})}
+								/>
+							);
+						})}
 					</List>
 				</Section>
 			) : null}
 
-			{detail.data.history?.reports.length ? (
-				<Section title="Deploy reports">
+			{bundles.length ? (
+				<Section title="Debug bundles">
+					<Txt variant="small">What this server sent when something failed (kept 30 days, 20 per server). Shown as text.</Txt>
 					<List>
-						{detail.data.history.reports.slice(0, 20).map((r, i) => (
+						{bundles.map((b) => (
 							<Row
-								key={i}
+								key={b.id}
 								chevron
-								onPress={() => router.push(`/tt/${backendId}/deploy/${r.seq}`)}
-								left={<Dot tone={r.result === "ok" || r.result === "applied" ? "good" : "warning"} />}
-								title={`#${r.seq} · ${r.result}`}
-								subtitle={r.error ?? `${r.branch ?? "–"} · ${shortId(r.artifact, 6)}`}
+								onPress={() => router.push(`/tt/${backendId}/bundle/${b.id}`)}
+								left={<Dot tone={b.level === "critical" ? "critical" : b.level === "warning" ? "warning" : "muted"} />}
+								title={b.message || b.code}
+								subtitle={`${b.code} · ${fmtTime(b.at)}${b.stage ? ` · ${b.stage}` : ""} · ${fmtInt(b.players)} players · ${fmtBytes(b.size)}`}
+								numberOfLines={2}
 							/>
 						))}
 					</List>
