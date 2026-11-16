@@ -10,10 +10,12 @@ import { Pressable, View } from "react-native";
 import type { Api } from "@/api/backend";
 import type { PlayerSummary } from "@/api/tt/types";
 import { Badge, Button, Chips, List, SearchBar, Segmented, Txt } from "@/components/ui";
-import { FunnelBar, Note, openPlayer, Panel, QueryState } from "@/features/typetorch/bits";
+import { FunnelBar, Note, openPlayer, Panel, PidLink, QueryState } from "@/features/typetorch/bits";
 import { FilterBar, useTTAnalytics } from "@/features/typetorch/filters";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { TTScreen } from "@/features/typetorch/screen";
+import { DataTable, type DataColumn, type SortSpec } from "@/features/typetorch/table";
+import { usePageParam } from "@/features/typetorch/view-link";
 import { fmtAgo, fmtInt, fmtMinutes, plural, shortId } from "@/lib/format";
 import { useBackend } from "@/store/accounts";
 import { space, useTheme } from "@/theme";
@@ -21,16 +23,38 @@ import { space, useTheme } from "@/theme";
 const PID = /^[A-Za-z0-9_-]{1,64}$/;
 const UID = /^\d{1,16}$/;
 
-const SORTS = [
-	{ value: "lastSeen", label: "Last seen" },
-	{ value: "firstSeen", label: "First seen" },
-	{ value: "sessions", label: "Sessions" },
-	{ value: "playtime", label: "Playtime" },
-	{ value: "robux", label: "Robux spent" },
-	{ value: "events", label: "Events" },
-	{ value: "new", label: "New" },
-	{ value: "pid", label: "pid" },
-];
+/** The columns the server orders by (the players query's orderBy). */
+const PLAYER_SORT_COLUMNS = ["pid", "lastSeen", "firstSeen", "sessions", "playtime", "robux", "events", "new"];
+
+/** The player list: pid with its UserId under it, then when, how often, how long and how much Robux. Sorts by the numbers, not the text. */
+function playerListColumns(backendId: string): DataColumn<PlayerSummary>[] {
+	return [
+		{
+			id: "pid",
+			header: "Player",
+			width: 130,
+			accessor: (x) => x.pid,
+			searchText: (x) => (x.uid !== undefined ? `UserId ${x.uid}` : ""),
+			cell: (x) => (
+				<View style={{ gap: 2 }}>
+					<View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+						<PidLink backendId={backendId} pid={x.pid} keep={10} {...(x.uid !== undefined ? { uid: x.uid } : {})} />
+						{x.newInRange ? <Badge label="new" tone="brand" /> : null}
+					</View>
+					{x.uid !== undefined ? <Txt variant="small" style={{ fontSize: 10 }}>UserId {x.uid}</Txt> : null}
+				</View>
+			),
+		},
+		{ id: "lastSeen", header: "Seen", type: "date", width: 90, accessor: (x) => x.lastSeen, format: (_v, x) => fmtAgo(x.lastSeen) },
+		{ id: "sessions", header: "Sessions", type: "number", width: 74, accessor: (x) => x.sessions, cell: (x) => fmtInt(x.sessions) },
+		{ id: "playtime", header: "Playtime", type: "number", width: 80, accessor: (x) => x.playtimeMinutes, format: (_v, x) => fmtMinutes(x.playtimeMinutes) },
+		{ id: "robux", header: "Robux spent", type: "number", width: 84, accessor: (x) => x.robux ?? 0, cell: (x) => fmtInt(x.robux ?? 0) },
+		{ id: "events", header: "Events", type: "number", width: 70, accessor: (x) => x.events, defaultHidden: true },
+		{ id: "firstSeen", header: "First seen", type: "date", width: 100, accessor: (x) => x.firstSeen, defaultHidden: true },
+		{ id: "new", header: "New", type: "boolean", width: 60, accessor: (x) => x.newInRange, defaultHidden: true },
+		{ id: "uid", header: "UserId", type: "text", width: 100, accessor: (x) => (x.uid === undefined ? null : String(x.uid)), defaultHidden: true },
+	];
+}
 
 /** A pid, or a UserId mapped to its most recently seen pid. */
 async function pidFor(api: Api, text: string): Promise<string | undefined> {
@@ -50,19 +74,40 @@ function Players({ backendId, api }: { backendId: string; api: Api }) {
 	const [text, setText] = useState("");
 	const [search, setSearch] = useState("");
 	const [missing, setMissing] = useState("");
-	const [sort, setSort] = useState("lastSeen");
-	const [desc, setDesc] = useState(true);
-	const [funnels, setFunnels] = useState<string[]>([]);
+	const [sort, setSort] = useState<SortSpec | undefined>(undefined);
+	// The web's URL parameter `funnels` (the progress columns, comma separated).
+	const [funnelsParam, setFunnelsParam] = usePageParam("funnels");
+	const funnels = useMemo(() => funnelsParam.split(",").filter(Boolean).slice(0, 8), [funnelsParam]);
+	const setFunnels = (next: string[]) => setFunnelsParam(next.join(","));
 	const [pickFunnels, setPickFunnels] = useState(false);
 	useEffect(() => {
 		const timer = setTimeout(() => setSearch(text.trim()), 400);
 		return () => clearTimeout(timer);
 	}, [text]);
 	const valid = search === "" || PID.test(search);
-	const q = useTTAnalytics(backendId, "players", { limit: 100, ...(search ? { search } : {}), orderBy: sort, desc }, { enabled: valid, keepPrevious: true });
+	const q = useTTAnalytics(backendId, "players", { limit: 100, ...(search ? { search } : {}), ...(sort ? { orderBy: sort.id, desc: sort.desc } : {}) }, { enabled: valid, keepPrevious: true });
 	const pids = useMemo(() => (q.data?.players ?? []).map((x) => x.pid), [q.data]);
 	const progress = useTTAnalytics(backendId, "funnel-progress", { ...(funnels.length === 1 ? { funnel: funnels[0] } : {}), pids }, { enabled: funnels.length > 0 && pids.length > 0 });
 	const byKey = useMemo(() => new Map((progress.data?.progress ?? []).map((x) => [`${x.pid}\n${x.funnel}`, x])), [progress.data]);
+	const columns = useMemo<DataColumn<PlayerSummary>[]>(
+		() => [
+			...playerListColumns(backendId),
+			...funnels.map(
+				(f): DataColumn<PlayerSummary> => ({
+					id: `funnel:${f}`,
+					header: f,
+					title: `Furthest step in ${f}`,
+					type: "number",
+					width: 110,
+					filter: false,
+					accessor: (x) => byKey.get(`${x.pid}\n${f}`)?.share ?? null,
+					format: (v) => (v === null || v === undefined ? "not started" : `${Math.round((v as number) * 100)}%`),
+					cell: (x) => (progress.data ? <FunnelBar progress={byKey.get(`${x.pid}\n${f}`)} /> : progress.error ? "–" : "…"),
+				}),
+			),
+		],
+		[backendId, funnels, byKey, progress.data, progress.error],
+	);
 	const canOpen = (PID.test(text.trim()) && text.trim().length >= 8) || UID.test(text.trim());
 	const open = async () => {
 		const pid = await pidFor(api, text.trim());
@@ -80,52 +125,24 @@ function Players({ backendId, api }: { backendId: string; api: Api }) {
 			{canOpen ? <Button title={`Open ${UID.test(text.trim()) ? "UserId" : "pid"} ${text.trim()}`} small icon="person-outline" onPress={open} style={{ alignSelf: "flex-start" }} /> : null}
 			{!valid ? <Note>A pid has only letters, digits, _ and -.</Note> : null}
 			{missing ? <Note>No player found for UserId {missing}.</Note> : null}
-			<View style={{ gap: space.sm }}>
-				<Txt variant="label">Order (the server sends the first 100 in it)</Txt>
-				<Chips options={SORTS} value={sort} onChange={setSort} />
-				<Segmented
-					options={[
-						{ value: "desc", label: "Largest / newest first" },
-						{ value: "asc", label: "Smallest / oldest first" },
-					]}
-					value={desc ? "desc" : "asc"}
-					onChange={(v) => setDesc(v === "desc")}
-				/>
-			</View>
 			<View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
 				<Button title={funnels.length ? `Funnels (${funnels.length})` : "Add funnel progress"} small icon="funnel-outline" onPress={() => setPickFunnels((x) => !x)} />
 			</View>
 			{pickFunnels ? <FunnelChoices backendId={backendId} chosen={funnels} onChange={setFunnels} /> : null}
 			<QueryState q={q} isEmpty={(d) => d.players.length === 0} empty={search ? "No pid matches." : "No players in this range."}>
 				{(data) => (
-					<Panel title={plural(data.players.length, "player")}>
-						<List>
-							{data.players.map((x: PlayerSummary) => (
-								<Pressable key={x.pid} onPress={() => openPlayer(backendId, x.pid)} android_ripple={{ color: p.accent }} style={({ pressed }) => [{ paddingVertical: 9, paddingHorizontal: space.md, gap: 4 }, pressed && { backgroundColor: p.accent }]}>
-									<View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-										<Txt variant="mono" style={{ flexShrink: 1 }} numberOfLines={1}>
-											{shortId(x.pid, 10)}
-										</Txt>
-										{x.newInRange ? <Badge label="new" tone="brand" /> : null}
-										<View style={{ flex: 1 }} />
-										<Txt variant="small">{fmtAgo(x.lastSeen)}</Txt>
-									</View>
-									<Txt variant="small">
-										{[x.uid !== undefined ? `UserId ${x.uid}` : null, plural(x.sessions, "session"), fmtMinutes(x.playtimeMinutes), `${fmtInt(x.robux ?? 0)} Robux`, sort === "events" ? plural(x.events, "event") : null, sort === "firstSeen" ? `first ${fmtAgo(x.firstSeen)}` : null]
-											.filter(Boolean)
-											.join(" · ")}
-									</Txt>
-									{funnels.map((f) => (
-										<View key={f} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-											<Txt variant="small" numberOfLines={1} style={{ width: 96 }}>
-												{f}
-											</Txt>
-											<View style={{ flex: 1 }}>{progress.data ? <FunnelBar progress={byKey.get(`${x.pid}\n${f}`)} /> : <Txt variant="small">{progress.error ? "–" : "…"}</Txt>}</View>
-										</View>
-									))}
-								</Pressable>
-							))}
-						</List>
+					<Panel title={plural(data.players.length, "player")} note="The server sends the first 100 in the order you pick: tap a header to order by it.">
+						<DataTable
+							id="players-list"
+							label="Players"
+							columns={columns}
+							data={data.players}
+							serverSort={{ columns: PLAYER_SORT_COLUMNS, onChange: setSort }}
+							rowId={(x) => x.pid}
+							density="compact"
+							onRowPress={(x) => openPlayer(backendId, x.pid)}
+							columnsMenu={<FunnelChoices backendId={backendId} chosen={funnels} onChange={setFunnels} />}
+						/>
 					</Panel>
 				)}
 			</QueryState>

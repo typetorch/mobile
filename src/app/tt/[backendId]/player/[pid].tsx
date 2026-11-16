@@ -8,11 +8,13 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState, type ReactNode } from "react";
 import { Linking, Pressable, View } from "react-native";
 
-import type { Facet, PlayerStatsResult, TimelineEvent, TimelineResult } from "@/api/tt/types";
+import type { Facet, PlayerErrorKind, PlayerStatsResult, TimelineEvent, TimelineResult } from "@/api/tt/types";
 import { BarChart, type ChartPoint } from "@/charts/LineChart";
 import { Badge, Button, Card, Chips, EmptyState, Icon, List, Segmented, Skeleton, Txt } from "@/components/ui";
 import { CopyButton, EventItem, FunnelBar, FunnelStepList, Note, Panel, ProductName, productKindLabel, QueryState } from "@/features/typetorch/bits";
-import { DataTable } from "@/features/typetorch/table";
+import { ProductId, ProductKind } from "@/features/typetorch/cards";
+import { EventTable } from "@/features/typetorch/event-table";
+import { DataTable, type DataColumn } from "@/features/typetorch/table";
 import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
 import { GraphControls, GraphPanelBody, isFacet, MermaidButton, PathStrip, SparseNote } from "@/features/typetorch/graph";
 import { useFlagParam, usePageParam } from "@/features/typetorch/view-link";
@@ -253,6 +255,16 @@ interface ViewProps {
 
 function SpendingView({ backendId, stats, show, onShow }: ViewProps & { backendId: string }) {
 	const t = stats.totals;
+	const purchaseColumns = useMemo<DataColumn<PlayerStatsResult["purchases"][number]>[]>(
+		() => [
+			{ id: "time", header: "Time (UTC)", type: "date", width: 130, mono: true, accessor: (x) => x.time, format: (_v, x) => fmtTime(x.time) },
+			{ id: "product", header: "Product", width: 160, filter: "text", accessor: (x) => x.product, cell: (x) => (x.product === null || x.product === undefined ? "no id" : <ProductId backendId={backendId} id={x.product} kind={x.kind} showName filterColumn="product" />) },
+			{ id: "kind", header: "Kind", type: "enum", width: 120, accessor: (x) => x.kind, format: (v) => productKindLabel(String(v)), cell: (x) => <ProductKind kind={x.kind} filterColumn="kind" /> },
+			{ id: "robux", header: "Robux", type: "number", width: 70, accessor: (x) => x.robux, cell: (x) => (x.robux === null ? "–" : fmtInt(x.robux)) },
+			{ id: "where", header: "Where", type: "enum", width: 100, accessor: (x) => x.where },
+		],
+		[backendId],
+	);
 	return (
 		<>
 			<Numbers
@@ -266,21 +278,7 @@ function SpendingView({ backendId, stats, show, onShow }: ViewProps & { backendI
 			<Series stats={stats} metric="robux" format={(v) => fmtInt(v)} columns={[ROBUX, PURCHASES]} show={show} onShow={onShow} title={`Robux per ${stats.window.bucket}`} empty="No Robux spent in this range." />
 			<Panel title="Purchases" note={stats.purchasesTruncated ? `Showing the newest ${fmtInt(stats.purchases.length)} purchases.` : undefined}>
 				{stats.purchases.length ? (
-					<List>
-						{stats.purchases.map((x, i) => (
-							<View key={`${x.t}-${i}`} style={{ paddingVertical: 8, paddingHorizontal: space.md, gap: 2 }}>
-								<View style={{ flexDirection: "row", justifyContent: "space-between", gap: 8 }}>
-									<View style={{ flex: 1 }}>
-										<ProductName backendId={backendId} id={x.product} kind={x.kind} style="body" />
-									</View>
-									<Txt style={{ fontWeight: "600" }}>{x.robux === null ? "–" : robux(x.robux)}</Txt>
-								</View>
-								<Txt variant="small">
-									{[fmtTime(x.time), productKindLabel(x.kind), x.where].filter(Boolean).join(" · ")}
-								</Txt>
-							</View>
-						))}
-					</List>
+					<DataTable id="player-purchases" label="Purchases" columns={purchaseColumns} data={stats.purchases} rowId={(x, i) => `${x.t}-${i}`} density="compact" defaultSort={[{ id: "time", desc: true }]} />
 				) : (
 					<Txt variant="muted">No purchases in this range.</Txt>
 				)}
@@ -309,6 +307,36 @@ function PlaytimeView({ stats, show, onShow }: ViewProps) {
 function SessionsView({ backendId, stats, show, onShow, onSession }: ViewProps & { backendId: string; onSession(sid: string): void }) {
 	const p = useTheme();
 	const t = stats.totals;
+	const sessionColumns = useMemo<DataColumn<PlayerStatsResult["sessions"][number]>[]>(
+		() => [
+			{ id: "start", header: "Start (UTC)", type: "date", width: 130, mono: true, accessor: (x) => x.start, format: (_v, x) => fmtTime(x.start) },
+			{ id: "minutes", header: "Length", type: "number", width: 76, accessor: (x) => x.minutes, format: (_v, x) => fmtMinutes(x.minutes) },
+			{ id: "events", header: "Events", type: "number", width: 66, accessor: (x) => x.events, cell: (x) => fmtInt(x.events) },
+			{ id: "first", header: "First", type: "boolean", width: 60, accessor: (x) => x.firstSession, cell: (x) => (x.firstSession ? <Badge label="first" tone="brand" /> : "") },
+			{ id: "dev", header: "Device", type: "enum", width: 80, accessor: (x) => x.dev },
+			{ id: "art", header: "Artifact", type: "enum", width: 100, mono: true, accessor: (x) => x.art },
+			{
+				id: "job",
+				header: "Server",
+				width: 90,
+				mono: true,
+				accessor: (x) => x.job ?? null,
+				format: (_v, x) => (x.job ? shortId(x.job, 6) : ""),
+				cell: (x) =>
+					x.job ? (
+						<Pressable onPress={() => router.push(`/tt/${backendId}/server/${encodeURIComponent(x.job as string)}`)} hitSlop={6}>
+							<Txt variant="small" color={p.brand}>
+								{shortId(x.job, 6)}
+							</Txt>
+						</Pressable>
+					) : (
+						"–"
+					),
+			},
+			{ id: "sid", header: "Session", width: 100, mono: true, accessor: (x) => x.sid, format: (_v, x) => shortId(x.sid, 10), defaultHidden: true },
+		],
+		[backendId, p.brand],
+	);
 	return (
 		<>
 			<Numbers
@@ -322,29 +350,7 @@ function SessionsView({ backendId, stats, show, onShow, onSession }: ViewProps &
 			<Series stats={stats} metric="sessions" format={(v) => fmtInt(v)} columns={[SESSIONS, MINUTES]} show={show} onShow={onShow} title={`Sessions per ${stats.window.bucket}`} empty="No sessions in this range: widen the date range." />
 			<Panel title="Each session" note={`${stats.sessionsTruncated ? `Showing the newest ${fmtInt(stats.sessions.length)} sessions. ` : ""}Tap a session for its events and graph.`}>
 				{stats.sessions.length ? (
-					<List>
-						{stats.sessions.map((s) => (
-							<Pressable key={s.sid} onPress={() => onSession(s.sid)} android_ripple={{ color: p.accent }} style={{ paddingVertical: 8, paddingHorizontal: space.md, gap: 2 }}>
-								<View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-									<Txt variant="mono" style={{ flex: 1 }}>
-										{fmtTime(s.start)}
-									</Txt>
-									{s.firstSession ? <Badge label="first session" tone="brand" /> : null}
-									<Txt style={{ fontWeight: "600" }}>{fmtMinutes(s.minutes)}</Txt>
-								</View>
-								<View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-									<Txt variant="small">{[plural(s.events, "event"), s.dev ?? "unknown device", `artifact ${s.art}`].join(" · ")}</Txt>
-									{s.job ? (
-										<Pressable onPress={() => router.push(`/tt/${backendId}/server/${encodeURIComponent(s.job as string)}`)} hitSlop={6}>
-											<Txt variant="small" color={p.brand}>
-												server {shortId(s.job, 6)}
-											</Txt>
-										</Pressable>
-									) : null}
-								</View>
-							</Pressable>
-						))}
-					</List>
+					<DataTable id="player-sessions" label="Sessions" columns={sessionColumns} data={stats.sessions} rowId={(x) => x.sid} onRowPress={(x) => onSession(x.sid)} density="compact" defaultSort={[{ id: "start", desc: true }]} />
 				) : (
 					<Txt variant="muted">No sessions in this range.</Txt>
 				)}
@@ -388,13 +394,13 @@ function TimelineView({ backendId, pid, sid, setSid }: { backendId: string; pid:
 				</QueryState>
 			</Panel>
 			<QueryState q={timeline} isEmpty={(t) => t.sessions.length === 0} empty="This player has no events in this range: widen the date range.">
-				{(t) => <Sessions data={t} onGraph={setSid} />}
+				{(t) => <Sessions backendId={backendId} data={t} onGraph={setSid} />}
 			</QueryState>
 		</>
 	);
 }
 
-function Sessions({ data, onGraph }: { data: TimelineResult; onGraph(sid: string): void }) {
+function Sessions({ backendId, data, onGraph }: { backendId: string; data: TimelineResult; onGraph(sid: string): void }) {
 	const [open, setOpen] = useState<string | null>(data.sessions.length ? (data.sessions[data.sessions.length - 1]?.sid ?? null) : null);
 	const bySession = useMemo(() => {
 		const m = new Map<string, TimelineEvent[]>();
@@ -424,11 +430,7 @@ function Sessions({ data, onGraph }: { data: TimelineResult; onGraph(sid: string
 						</View>
 						{isOpen ? (
 							events.length ? (
-								<List>
-									{events.map((e, i) => (
-										<EventItem key={`${e.t}-${i}`} e={e} dateToo={false} />
-									))}
-								</List>
+								<EventTable backendId={backendId} id="player-events" label={`Events of session ${shortId(s.sid)}`} events={events} urlSync={false} rowId={(e, i) => `${e.t}-${i}`} />
 							) : (
 								<EmptyState title="No events of this session in the list." />
 							)
@@ -458,6 +460,34 @@ function errorParamsFor(filters: Filters, realm: string): ErrorParams {
 	return params;
 }
 
+const ERROR_COLUMNS: DataColumn<PlayerErrorKind>[] = [
+	{
+		id: "template",
+		header: "Error",
+		width: 240,
+		accessor: (k) => k.template,
+		searchText: (k) => k.topFrame ?? "",
+		cell: (k) => (
+			<View style={{ gap: 2 }}>
+				<Txt variant="mono" numberOfLines={3} style={{ fontSize: 11 }}>
+					{k.template}
+				</Txt>
+				{k.topFrame ? (
+					<Txt variant="small" numberOfLines={2} style={{ fontFamily: "monospace", fontSize: 10 }}>
+						{k.topFrame}
+					</Txt>
+				) : null}
+			</View>
+		),
+	},
+	{ id: "realms", header: "Side", type: "enum", width: 100, accessor: (k) => k.realms.join(", "), cell: (k) => <View style={{ flexDirection: "row", gap: 4, flexWrap: "wrap" }}>{k.realms.map((r) => <Badge key={r} label={r} tone={r === "server" ? "brand" : "muted"} />)}</View> },
+	{ id: "count", header: "Times", type: "number", width: 66, accessor: (k) => k.count, cell: (k) => fmtInt(k.count) },
+	{ id: "days", header: "Days", type: "number", width: 56, accessor: (k) => k.days },
+	{ id: "firstAt", header: "First", type: "date", width: 90, accessor: (k) => k.firstAt, format: (_v, k) => fmtAgo(k.firstAt), defaultHidden: true },
+	{ id: "lastAt", header: "Last", type: "date", width: 90, accessor: (k) => k.lastAt, format: (_v, k) => fmtAgo(k.lastAt) },
+	{ id: "total", header: "All time", title: "All occurrences of the kind, every player", type: "number", width: 76, accessor: (k) => k.total, cell: (k) => fmtInt(k.total) },
+];
+
 function ErrorsView({ backendId, pid }: { backendId: string; pid: string }) {
 	const p = useTheme();
 	const { apiFilters } = useTTFilters(backendId);
@@ -481,28 +511,16 @@ function ErrorsView({ backendId, pid }: { backendId: string; pid: string }) {
 						<Txt variant="muted">No errors from this player in this range.</Txt>
 					) : (
 						<View style={{ gap: space.sm }}>
-							<List>
-								{d.errors.map((k) => (
-									<Pressable key={k.fp} onPress={() => router.push(`/tt/${backendId}/error/${encodeURIComponent(k.fp)}?window=30d`)} android_ripple={{ color: p.accent }} style={{ paddingVertical: 8, paddingHorizontal: space.md, gap: 3 }}>
-										<Txt variant="mono" numberOfLines={3}>
-											{k.template}
-										</Txt>
-										{k.topFrame ? (
-											<Txt variant="small" numberOfLines={2} style={{ fontFamily: "monospace", fontSize: 11 }}>
-												{k.topFrame}
-											</Txt>
-										) : null}
-										<View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-											{k.realms.map((r) => (
-												<Badge key={r} label={r} tone={r === "server" ? "brand" : "muted"} />
-											))}
-											<Txt variant="small">
-												{fmtInt(k.count)}× · {plural(k.days, "day")} · last {fmtAgo(k.lastAt)} · {fmtInt(k.total)} all time
-											</Txt>
-										</View>
-									</Pressable>
-								))}
-							</List>
+							<DataTable
+								id="player-errors"
+								label="Errors this player hit"
+								columns={ERROR_COLUMNS}
+								data={d.errors}
+								rowId={(k) => k.fp}
+								onRowPress={(k) => router.push(`/tt/${backendId}/error/${encodeURIComponent(k.fp)}?window=30d`)}
+								defaultSort={[{ id: "count", desc: true }]}
+								density="compact"
+							/>
 							<Note>
 								{d.more ? `The ${fmtInt(d.errors.length)} kinds they hit most, of ${fmtInt(d.total)}. ` : ""}
 								Times counts the occurrences in each minute's report that named the player, so players who hit it in the same minute on one server share that report.
