@@ -3,18 +3,25 @@
  * (Overview) body that both /tt/<id> and the project's TypeTorch tab show.
  */
 import { router } from "expo-router";
-import { useState } from "react";
-import { View } from "react-native";
+import { useMemo, useState } from "react";
+import { Switch, View } from "react-native";
 
-import type { FleetAlert } from "@/api/tt/types";
-import { BarChart } from "@/charts/LineChart";
-import { Badge, Button, Card, Dot, ErrorState, Icon, List, Row, Section, Segmented, Skeleton, Stat, StatGrid, Txt } from "@/components/ui";
-import { compact, fmtAgo, fmtInt, fmtMinutes, fmtNum } from "@/lib/format";
+import { change } from "@/api/tt/benchmarks";
+import { previousPeriod, type PreviousPeriod } from "@/api/tt/compare";
+import { bucketText } from "@/api/tt/perf";
+import type { FleetAlert, OverviewResult, StorageReport } from "@/api/tt/types";
+import { LineChart } from "@/charts/LineChart";
+import { Badge, Button, Card, Dot, ErrorState, Icon, KV, List, Row, Section, Skeleton, Stat, StatGrid, Txt } from "@/components/ui";
+import { compact, fmtAgo, fmtBytes, fmtInt, fmtMinutes, fmtNum } from "@/lib/format";
 import { useAccounts, useBackend, type BackendAccount } from "@/store/accounts";
 import { useTheme } from "@/theme";
 
-import { dayRange, useTTQuery } from "./hooks";
+import { ChangeChip, ShareRow } from "./bits";
+import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "./filters";
+import { useTTQuery } from "./hooks";
+import { useDeployMarks } from "./marks";
 import { pageHref, TT_PAGES } from "./pages";
+import { SavedQueryTile } from "./saved-query";
 
 export function SignedOutNotice({ account }: { account: BackendAccount }) {
 	const p = useTheme();
@@ -81,11 +88,134 @@ export function PageMenu({ account }: { account: BackendAccount }) {
 	);
 }
 
-const RANGES = [
-	{ value: 1, label: "Today" },
-	{ value: 7, label: "7 days" },
-	{ value: 28, label: "28 days" },
-] as const;
+const DAY_MS = 86_400_000;
+
+/** The web Overview's charts. */
+const CHARTS: { key: "players" | "newPlayers" | "sessions" | "playtimeHours"; label: string }[] = [
+	{ key: "players", label: "Players" },
+	{ key: "newPlayers", label: "New players" },
+	{ key: "sessions", label: "Sessions" },
+	{ key: "playtimeHours", label: "Playtime (hours)" },
+];
+
+/** The web Overview's eight tiles: label, the number the change chip compares, its text. */
+const TILES: { label: string; value(d: OverviewResult): number; text(d: OverviewResult): string }[] = [
+	{ label: "Players", value: (d) => d.players, text: (d) => fmtInt(d.players) },
+	{ label: "New players", value: (d) => d.newPlayers, text: (d) => fmtInt(d.newPlayers) },
+	{ label: "Returning", value: (d) => d.returningPlayers, text: (d) => fmtInt(d.returningPlayers) },
+	{ label: "Sessions", value: (d) => d.sessions, text: (d) => fmtInt(d.sessions) },
+	{ label: "Events", value: (d) => d.events, text: (d) => compact(d.events) },
+	{ label: "Playtime", value: (d) => d.playtimeHours, text: (d) => `${fmtNum(d.playtimeHours, 1)} h` },
+	{ label: "Avg session", value: (d) => d.avgSessionMinutes, text: (d) => fmtMinutes(d.avgSessionMinutes) },
+	{ label: "Playtime per player", value: (d) => d.playtimePerPlayerMinutes, text: (d) => fmtMinutes(d.playtimePerPlayerMinutes) },
+];
+
+/** One chart's points: per step for windows of a day or less (the backend's buckets), else per day (the web's overviewBars). */
+function overviewPoints(data: OverviewResult, key: (typeof CHARTS)[number]["key"], shiftMs = 0): { points: { t: number; v: number }[]; per: string; step: boolean } {
+	const step = data.bucketMs;
+	if (step && step < DAY_MS && data.buckets) {
+		return { points: data.buckets.map((b) => ({ t: b.t + shiftMs, v: b[key] })), per: `per ${bucketText(step)} (UTC)`, step: true };
+	}
+	return { points: data.days.map((d) => ({ t: Date.parse(d.date) + shiftMs, v: d[key] })), per: "per day (UTC)", step: false };
+}
+
+/** The analytics overview under the filter bar: eight tiles (vs the previous period when on), four charts with deploy marks. */
+function OverviewBody({ backendId, data, previous, period, branch }: { backendId: string; data: OverviewResult; previous?: OverviewResult; period?: PreviousPeriod; branch?: string }) {
+	const p = useTheme();
+	const marks = useDeployMarks(backendId, Date.parse(data.from), Date.parse(data.to), branch);
+	const markLines = (marks.data ?? []).map((m) => ({ t: m.at, color: m.kind === "rollback" ? p.destructive : p.warning }));
+	return (
+		<>
+			<StatGrid>
+				{TILES.map((t) => (
+					<Stat key={t.label} label={t.label} value={t.text(data)} sub={previous ? <ChangeChip change={change(t.value(data), t.value(previous))} /> : undefined} />
+				))}
+			</StatGrid>
+			{CHARTS.map((c) => {
+				const cur = overviewPoints(data, c.key);
+				const prev = previous && period ? overviewPoints(previous, c.key, period.shiftMs) : undefined;
+				if (cur.points.length < 2 && !prev) return null;
+				return (
+					<Card key={c.key} style={{ gap: 6 }}>
+						<Txt variant="label">
+							{c.label}, {cur.per}
+							{prev ? "; dashed: the previous period" : ""}
+						</Txt>
+						<LineChart
+							series={[{ label: c.label, points: cur.points }, ...(prev ? [{ label: "Previous period", points: prev.points, dashed: true }] : [])]}
+							format={c.key === "playtimeHours" ? (v) => fmtNum(v, 1) : compact}
+							{...(cur.step ? { timeLabel: (t: number) => new Date(t).toISOString().slice(11, 16) } : {})}
+							marks={markLines}
+							height={130}
+						/>
+					</Card>
+				);
+			})}
+		</>
+	);
+}
+
+/** The saved queries pinned on the Query page; nothing when none are (or the backend has no saved queries). */
+function PinnedQueries({ backendId }: { backendId: string }) {
+	const list = useTTQuery(backendId, ["saved-queries"], (api, s) => api.savedQueries(s), { retry: false, staleTime: 30_000 });
+	const pinned = (list.data ?? []).filter((q) => q.pinned);
+	if (!pinned.length) return null;
+	return (
+		<Section title="Pinned queries">
+			{pinned.map((q) => (
+				<SavedQueryTile key={q.id} backendId={backendId} query={q} />
+			))}
+		</Section>
+	);
+}
+
+/** What the analytics server keeps on disk (GET /v1/storage, owners only), with the disk's free space. */
+function StorageCard({ backendId }: { backendId: string }) {
+	const p = useTheme();
+	const q = useTTQuery<StorageReport>(backendId, ["storage"], (api, s) => api.storage(s), { refetchInterval: 30_000, retry: false });
+	return (
+		<Section title="Storage">
+			{q.error ? (
+				<Txt variant="small">{q.error.message}</Txt>
+			) : !q.data ? (
+				<Skeleton height={100} />
+			) : (
+				<Card style={{ gap: 6 }}>
+					<Txt variant="muted">What the analytics server keeps on disk. Not filtered.</Txt>
+					<KV label="Total" value={fmtBytes(q.data.totalBytes)} />
+					{q.data.disk ? (
+						<KV
+							label="Disk free"
+							value={
+								<View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+									<Txt>
+										{fmtBytes(q.data.disk.freeBytes)} of {fmtBytes(q.data.disk.totalBytes)} ({fmtNum(q.data.disk.freePercent, 0)}%)
+									</Txt>
+									{q.data.disk.level !== "ok" ? <Badge label={q.data.disk.level === "critical" ? "low" : "getting low"} tone={q.data.disk.level === "critical" ? "critical" : "warning"} /> : null}
+								</View>
+							}
+						/>
+					) : null}
+					{q.data.growth ? (
+						<KV label="Growth" value={`${fmtBytes(q.data.growth.todayBytes)} today${q.data.growth.avgPerDayBytes !== null ? ` · ${fmtBytes(q.data.growth.avgPerDayBytes)} a day` : ""}`} />
+					) : null}
+					{q.data.parts
+						.filter((x) => x.bytes > 0)
+						.sort((a, b) => b.bytes - a.bytes)
+						.slice(0, 8)
+						.map((x) => (
+							<ShareRow key={x.key} label={x.label} value={fmtBytes(x.bytes)} share={q.data.totalBytes ? x.bytes / q.data.totalBytes : 0} sub={x.days !== undefined ? `${fmtInt(x.days)} days` : undefined} />
+						))}
+					{q.data.disk && q.data.disk.level !== "ok" ? (
+						<Txt variant="small" color={q.data.disk.level === "critical" ? p.destructive : p.warning}>
+							Free space is under {q.data.disk.level === "critical" ? q.data.disk.criticalFreePercent : q.data.disk.warnFreePercent}% of the disk.
+						</Txt>
+					) : null}
+				</Card>
+			)}
+		</Section>
+	);
+}
 
 function alertTone(level: FleetAlert["level"]): "critical" | "warning" | "muted" {
 	return level === "critical" ? "critical" : level === "warning" ? "warning" : "muted";
@@ -95,9 +225,14 @@ function alertTone(level: FleetAlert["level"]): "critical" | "warning" | "muted"
 export function TTHome({ backendId, poll = true }: { backendId: string; poll?: boolean }) {
 	const p = useTheme();
 	const { account } = useBackend(backendId);
-	const [days, setDays] = useState<number>(7);
+	const { state, apiFilters } = useTTFilters(backendId);
+	const [compare, setCompare] = useState(false);
+	const period = useMemo(() => previousPeriod(state), [state]);
 	const fleet = useTTQuery(backendId, ["fleet", "servers"], (api, s) => api.fleetServers(undefined, s), { refetchInterval: poll ? 15_000 : false });
-	const overview = useTTQuery(backendId, ["query", "overview", days], (api, s) => api.query("overview", dayRange(days), {}, s), { staleTime: 60_000 });
+	// The filter bar's range and filters (branch, artifact, device, new / returning, variant), like the web's Overview.
+	const overview = useTTAnalytics(backendId, "overview", {}, { staleTime: 60_000, keepPrevious: true });
+	const prevOverview = useTTAnalytics(backendId, "overview", {}, { staleTime: 60_000, enabled: compare && period !== undefined, ...(period ? { filters: period.filters } : {}) });
+	const branch = typeof apiFilters.branch === "string" ? apiFilters.branch : undefined;
 	const errors = useTTQuery(backendId, ["errors", "24h", ""], (api, s) => api.errors({ window: "24h", limit: 5 }, s), { staleTime: 60_000 });
 	const deploys = useTTQuery(backendId, ["deploys", "latest"], (api, s) => api.fleetDeploys({ limit: 1 }, s), { staleTime: 60_000 });
 	const alerts = useTTQuery(backendId, ["alerts", "recent"], (api, s) => api.fleetAlerts({ limit: 5 }, s), { staleTime: 30_000 });
@@ -124,31 +259,21 @@ export function TTHome({ backendId, poll = true }: { backendId: string; poll?: b
 				<Button title="Open fleet" small icon="server-outline" onPress={() => router.push(pageHref(backendId, "fleet"))} style={{ alignSelf: "flex-start" }} />
 			</Section>
 
-			<Section title="Players" right={<Segmented options={RANGES.map((r) => ({ value: r.value, label: r.label }))} value={days} onChange={setDays} style={{ width: 220 }} />}>
+			<Section title="Players">
+				<FilterBar backendId={backendId} />
+				<View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+					<Txt variant="small" style={{ flex: 1 }}>
+						Players, sessions and playtime, {describeRange(state)}. Session length = first to last event.
+					</Txt>
+					<Txt variant="small">vs before</Txt>
+					<Switch value={compare && !!period} onValueChange={setCompare} disabled={!period} />
+				</View>
 				{overview.error ? <ErrorState error={overview.error} onRetry={() => overview.refetch()} /> : null}
 				{!o && !overview.error ? <Skeleton height={120} /> : null}
-				{o ? (
-					<>
-						<StatGrid>
-							<Stat label="Players" value={fmtInt(o.players)} sub={`${fmtInt(o.newPlayers)} new · ${fmtInt(o.returningPlayers)} returning`} />
-							<Stat label="Sessions" value={fmtInt(o.sessions)} sub={`${fmtMinutes(o.avgSessionMinutes)} avg`} />
-							<Stat label="Playtime" value={`${fmtNum(o.playtimeHours, 1)} h`} sub={`${fmtMinutes(o.playtimePerPlayerMinutes)} per player`} />
-							<Stat label="Events" value={compact(o.events)} />
-						</StatGrid>
-						{o.days.length > 1 ? (
-							<Card style={{ gap: 6 }}>
-								<Txt variant="label">Players per day</Txt>
-								<BarChart points={o.days.map((d) => ({ t: Date.parse(d.date), v: d.players }))} format={compact} />
-							</Card>
-						) : o.buckets?.length ? (
-							<Card style={{ gap: 6 }}>
-								<Txt variant="label">Players per step</Txt>
-								<BarChart points={o.buckets.map((b) => ({ t: b.t, v: b.players }))} format={compact} timeLabel={(t) => new Date(t).toISOString().slice(11, 16)} />
-							</Card>
-						) : null}
-					</>
-				) : null}
+				{o ? <OverviewBody backendId={backendId} data={o} {...(compare && prevOverview.data && period ? { previous: prevOverview.data, period } : {})} {...(branch ? { branch } : {})} /> : null}
 			</Section>
+
+			<PinnedQueries backendId={backendId} />
 
 			{latest ? (
 				<Section title="Latest deploy">
@@ -183,6 +308,8 @@ export function TTHome({ backendId, poll = true }: { backendId: string; poll?: b
 					</List>
 				</Section>
 			) : null}
+
+			{account.role === "admin" ? <StorageCard backendId={backendId} /> : null}
 
 			<PageMenu account={account} />
 			<Txt variant="small" style={{ textAlign: "center", color: p.mutedForeground }}>

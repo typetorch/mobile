@@ -45,3 +45,16 @@ export function healthTone(health: string | null | undefined): "good" | "warning
 export function outcomeTone(o: DeployOutcome): "good" | "critical" | "muted" | "warning" {
 	return o === "ok" ? "good" : o === "failed" ? "critical" : o === "no_reports" ? "muted" : "warning";
 }
+
+/** The Errors windows (the web's), shared by the list and one kind's page so a kind opens with the list's window. */
+export const ERROR_WINDOWS = [
+	{ value: "1h", label: "1 h" },
+	{ value: "6h", label: "6 h" },
+	{ value: "24h", label: "24 h" },
+	{ value: "7d", label: "7 d" },
+	{ value: "30d", label: "30 d" },
+];
+
+export function errorWindowOf(value: string | undefined, fallback = "24h"): string {
+	return value && ERROR_WINDOWS.some((w) => w.value === value) ? value : fallback;
+}

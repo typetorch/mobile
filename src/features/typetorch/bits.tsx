@@ -8,8 +8,7 @@ import { router } from "expo-router";
 import { useState, type ReactNode } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
-import type { Api } from "@/api/backend";
-import type { FunnelProgress, RobloxProductInfo } from "@/api/tt/types";
+import type { FunnelProgress } from "@/api/tt/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Icon, SkeletonList, Txt } from "@/components/ui";
 import { compactJson, fmtPct, fmtTime, prettyJson, shortId } from "@/lib/format";
 import { radius, space, toneColor, useTheme, type Tone } from "@/theme";

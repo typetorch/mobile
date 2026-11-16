@@ -80,17 +80,19 @@ async function enrich(ids: number[], keyIds: Set<number>): Promise<Project[]> {
 }
 
 export function useProjects() {
-	const { ready, keyInfo, hasKey, keyLoading, prefs } = useAccounts();
+	const { ready, keyInfo, hasKey, keyLoading, prefs, backends } = useAccounts();
 	const userId = prefs.userId ?? keyInfo?.authorizedUserId ?? null;
 	const keyIds = keyUniverseIds(keyInfo);
 	const keyGroups = keyGroupIds(keyInfo);
+	// Universes of connected TypeTorch backends: listed even when private, unlisted or in a group under the rank filter.
+	const backendIds = [...new Set(backends.map((b) => b.universeId).filter((id): id is number => typeof id === "number" && id > 0))].sort((a, b) => a - b);
 	return useQuery<ProjectsResult>({
-		queryKey: ["projects", userId, prefs.groupMinRank, keyIds.join(","), keyGroups.join(","), prefs.extraUniverseIds.join(",")],
+		queryKey: ["projects", userId, prefs.groupMinRank, keyIds.join(","), keyGroups.join(","), prefs.extraUniverseIds.join(","), backendIds.join(",")],
 		enabled: ready && !(hasKey && keyLoading),
 		staleTime: 60_000,
 		queryFn: async () => {
 			const warnings: string[] = [];
-			const ids = new Set<number>([...keyIds, ...prefs.extraUniverseIds]);
+			const ids = new Set<number>([...keyIds, ...prefs.extraUniverseIds, ...backendIds]);
 			let groups: GroupRole[] = [];
 			if (userId) {
 				const [mine, roles] = await Promise.all([
@@ -133,7 +135,7 @@ export function useProjects() {
 					title = p.creator.name;
 					icon = gIcons[p.creator.id] ?? null;
 					const r = roleOf.get(p.creator.id);
-					subtitle = r ? `${r.role.name} · rank ${r.role.rank}` : "From your API key";
+					subtitle = r ? `${r.role.name} · rank ${r.role.rank}` : keyGroups.includes(p.creator.id) || p.viaKey ? "From your API key" : undefined;
 				} else {
 					key = `user:${p.creator.id}`;
 					title = `${p.creator.name}'s experiences`;

@@ -36,6 +36,8 @@ Part of TypeTorch. Read `../TypeTorch.md` (hub) and `../plans/07-web-mobile.md` 
     filter bar (range, branch, artifact, device, new / returning, variant) is one state per backend that follows you from
     page to page; Roblox benchmarks are kept on the phone per backend.
 - **Backends**: connect TypeTorch backends by URL (several at once), sign in with the browser or the admin token.
+  `http://` only for localhost and LAN addresses (marked "not encrypted"; the admin token over http asks first).
+  A connected backend's universe is always listed under Projects, even when private or unlisted.
 - **Settings**: the Open Cloud key (checked with Roblox, which scopes are missing for which feature), the Roblox user
   whose experiences to list, group rank filter, appearance (system / dark / light).
 
@@ -97,7 +99,8 @@ Auth (all shapes in `src/api/backend-auth.ts`):
 Dashboard (Bearer, client in `src/api/backend.ts`, ported from `../backend/web/src/lib/api.ts`): `/healthz`,
 `/v1/query/overview`, `/v1/fleet/servers[?gone=1]`, `/v1/fleet/servers/<job>`, `/v1/fleet/servers/<job>/metrics`,
 `/v1/servers/<job>/errors`, `/v1/fleet/deploys`, `/v1/fleet/deploys/<seq>`, `/v1/fleet/alerts`,
-`/v1/fleet/alerts/<id>/ack`, `/v1/errors`, `/v1/errors/<fp>`, `/v1/admin/settings`.
+`/v1/fleet/alerts/<id>/ack`, `/v1/fleet/reports?latest[&branch=]`, `/v1/errors`, `/v1/errors/<fp>`,
+`/v1/errors/<fp>/players`, `/v1/storage` (owners), `/v1/admin/settings`.
 
 Phase 2 pages add: `POST /v1/query/<name>` (retention, funnel, funnel-progress, playtime-funnel, funnel-players,
 players, player-stats, timeline, player-graph, flow, experiment, confusion, top-events, events, values, benchmarks,

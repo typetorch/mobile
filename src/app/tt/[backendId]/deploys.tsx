@@ -1,10 +1,12 @@
-/** Deploys: the release history, newest first, a page at a time (GET /v1/fleet/deploys). */
+/** Deploys: the release history, newest first, a page at a time, all branches or one (GET /v1/fleet/deploys?branch=). */
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
+import { useRef, useState } from "react";
+import { View } from "react-native";
 
 import type { DeployRecord } from "@/api/tt/deploys";
 import { OUTCOME_STYLE, startedByText } from "@/api/tt/deploys";
-import { Badge, Button, EmptyState, ErrorState, List, Row, Section, SkeletonList, Txt } from "@/components/ui";
+import { Badge, Button, Chips, EmptyState, ErrorState, List, Row, Section, SkeletonList, Txt } from "@/components/ui";
 import { outcomeTone } from "@/features/typetorch/hooks";
 import { TTScreen } from "@/features/typetorch/screen";
 import { fmtAgo, shortId } from "@/lib/format";
@@ -28,19 +30,37 @@ function DeployRow({ d, backendId }: { d: DeployRecord; backendId: string }) {
 
 function Deploys({ backendId }: { backendId: string }) {
 	const { api, account } = useBackend(backendId);
+	const [branch, setBranch] = useState("");
 	const q = useInfiniteQuery({
-		queryKey: ["tt", backendId, "deploys", "pages"],
+		queryKey: ["tt", backendId, "deploys", "pages", branch],
 		enabled: !!api && !account?.signedOut,
 		initialPageParam: undefined as number | undefined,
-		queryFn: ({ pageParam, signal }) => api!.fleetDeploys({ limit: 30, ...(pageParam ? { before: pageParam } : {}) }, signal),
+		queryFn: ({ pageParam, signal }) => api!.fleetDeploys({ limit: 30, ...(branch ? { branch } : {}), ...(pageParam ? { before: pageParam } : {}) }, signal),
 		getNextPageParam: (last) => last.next ?? undefined,
 	});
+	// The branches seen on any loaded page (kept while one is picked, so the chips stay).
+	const seen = useRef(new Set<string>());
+	for (const page of q.data?.pages ?? []) for (const d of page.deploys) if (d.branch) seen.current.add(d.branch);
+	const branches = [...seen.current].sort();
+	const chips =
+		branches.length > 1 || branch ? (
+			<View>
+				<Chips options={[{ value: "", label: "All branches" }, ...branches.map((b) => ({ value: b, label: b }))]} value={branch} onChange={setBranch} />
+			</View>
+		) : null;
 	if (q.error) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
 	if (!q.data) return <SkeletonList rows={8} />;
 	const deploys = q.data.pages.flatMap((p) => p.deploys);
-	if (!deploys.length) return <EmptyState icon="rocket-outline" title="No deploys yet" body="Releases made with the TypeTorch CLI show up here with their rollout outcome." />;
+	if (!deploys.length)
+		return (
+			<>
+				{chips}
+				<EmptyState icon="rocket-outline" title={branch ? `No deploys on ${branch}` : "No deploys yet"} body="Releases made with the TypeTorch CLI show up here with their rollout outcome." />
+			</>
+		);
 	return (
-		<Section title="Releases">
+		<Section title={branch ? `Releases · ${branch}` : "Releases"}>
+			{chips}
 			<List>
 				{deploys.map((d) => (
 					<DeployRow key={d.seq} d={d} backendId={backendId} />

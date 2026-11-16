@@ -1,18 +1,120 @@
 /**
- * One release: its outcome, the servers' reports by result, errors, the servers behind, its alerts (ack for admins),
- * and the releases before and after. Promote / rollback are CLI operations: the backend API has no endpoint for them.
+ * One release: its outcome, the servers' reports by result, errors, before vs after (errors and performance over two
+ * equal windows around it, the web's Impact), the servers behind, its alerts (ack for admins), and the releases before
+ * and after. Promote / rollback are CLI operations: the backend API has no endpoint for them.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { router, useLocalSearchParams } from "expo-router";
+import { useState } from "react";
 import { View } from "react-native";
 
-import { OUTCOME_STYLE, startedByText } from "@/api/tt/deploys";
-import { Badge, Button, Card, Dot, ErrorState, KV, List, Row, Section, Skeleton, Stat, StatGrid, Txt, confirm } from "@/components/ui";
+import { ApiError, type ErrorParams } from "@/api/backend";
+import { errorChanges, IMPACT_HOURS, impactWindows, OUTCOME_STYLE, startedByText, type DeployRecord } from "@/api/tt/deploys";
+import { Badge, Button, Card, Chips, Dot, EmptyState, ErrorState, KV, List, Row, Section, Skeleton, SkeletonList, Stat, StatGrid, Txt, confirm } from "@/components/ui";
+import { QueryState } from "@/features/typetorch/bits";
+import { useTTAnalytics } from "@/features/typetorch/filters";
 import { outcomeTone, useTTQuery } from "@/features/typetorch/hooks";
+import { CompareTable } from "@/features/typetorch/perf-compare";
 import { TTScreen } from "@/features/typetorch/screen";
-import { fmtAgo, fmtInt, fmtTime, shortId } from "@/lib/format";
+import { compact, fmtAgo, fmtDuration, fmtInt, fmtTime, shortId } from "@/lib/format";
 import { useBackend } from "@/store/accounts";
 import { useTheme } from "@/theme";
+
+const ERROR_LIMIT = 200;
+
+/** "not on this backend" for a part that is off (404) or not ready (503), else the error's message. */
+function unavailable(error: unknown, what: string): string {
+	if (error instanceof ApiError && (error.status === 404 || error.status === 503)) return `${what} are not available on this backend.`;
+	return (error as Error)?.message ?? String(error);
+}
+
+type Windows = NonNullable<ReturnType<typeof impactWindows>>;
+
+function ErrorsAround({ backendId, windows, branch }: { backendId: string; windows: Windows; branch: string | null }) {
+	const p = useTheme();
+	const params = (w: { from: number; to: number }): ErrorParams => ({ from: w.from, to: w.to, limit: ERROR_LIMIT, ...(branch ? { branch } : {}) });
+	const before = useTTQuery(backendId, ["errors", "deploy", params(windows.before)], (api, s) => api.errors(params(windows.before), s), { retry: false });
+	const after = useTTQuery(backendId, ["errors", "deploy", params(windows.after)], (api, s) => api.errors(params(windows.after), s), { retry: false });
+	if (before.error || after.error) return <Txt variant="small">{unavailable(before.error ?? after.error, "Error logs")}</Txt>;
+	if (!before.data || !after.data) return <SkeletonList rows={3} />;
+	const changes = errorChanges(before.data, after.data);
+	const fresh = changes.filter((c) => c.isNew).length;
+	return (
+		<>
+			<StatGrid>
+				<Stat label="Errors before" value={fmtInt(before.data.totals.count)} sub={`${fmtInt(before.data.totals.kinds)} kinds`} />
+				<Stat label="Errors after" value={fmtInt(after.data.totals.count)} sub={`${fmtInt(after.data.totals.kinds)} kinds`} />
+				<Stat label="New kinds after" value={fmtInt(fresh)} tone={fresh ? "critical" : undefined} />
+				<Stat label="Players affected after" value={fmtInt(after.data.totals.players)} sub={`${fmtInt(before.data.totals.players)} before`} />
+			</StatGrid>
+			{changes.length ? (
+				<List>
+					{changes.slice(0, 40).map((c) => (
+						<Row
+							key={c.fp}
+							chevron
+							onPress={() => router.push(`/tt/${backendId}/error/${encodeURIComponent(c.fp)}?window=30d`)}
+							title={c.template}
+							numberOfLines={2}
+							subtitle={
+								<View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+									{c.isNew ? <Badge label="new" tone="critical" /> : null}
+									<Txt variant="small">
+										{c.realm} · before {compact(c.before)} · after {compact(c.after)}
+									</Txt>
+								</View>
+							}
+						/>
+					))}
+				</List>
+			) : (
+				<Txt variant="muted">No errors in either window.</Txt>
+			)}
+			{changes.length > 40 ? <Txt variant="small" color={p.mutedForeground}>{fmtInt(changes.length - 40)} more kinds not shown.</Txt> : null}
+		</>
+	);
+}
+
+function PerfAround({ backendId, at, hours, branch }: { backendId: string; at: number; hours: number; branch: string | null }) {
+	const q = useTTAnalytics(backendId, "perf-compare", { mode: "around", at, hours }, { filters: branch ? { branch } : {} });
+	if (q.error) return <Txt variant="small">{unavailable(q.error, "Performance numbers")}</Txt>;
+	return (
+		<QueryState q={q} rows={4} isEmpty={(r) => r.periods.every((x) => x.client.samples === 0 && x.server.samples === 0)} empty="No samples to compare.">
+			{(r) => <CompareTable result={r} />}
+		</QueryState>
+	);
+}
+
+/** Before vs after: two equal windows on each side of the deploy (shortened to the time since it), its branch only. */
+function Impact({ backendId, deploy }: { backendId: string; deploy: DeployRecord }) {
+	const [hours, setHours] = useState(24);
+	// Floored to the minute so the windows (and their query keys) stay put between renders.
+	const windows = impactWindows(deploy.at, hours, Math.floor(Date.now() / 60_000) * 60_000);
+	return (
+		<Section title="Before vs after">
+			<Chips options={IMPACT_HOURS.map((h) => ({ value: h, label: h < 24 ? `${h} h each` : `${h / 24} d each` }))} value={hours} onChange={setHours} />
+			<Txt variant="small">
+				{windows
+					? `Two equal windows of ${fmtDuration(windows.ms)} on each side of the deploy${deploy.branch ? `, branch ${deploy.branch} only` : ""}.`
+					: "Wait at least 5 minutes after the deploy to compare."}
+			</Txt>
+			{windows ? (
+				<>
+					<Card style={{ gap: 8 }}>
+						<Txt variant="label">Errors</Txt>
+						<ErrorsAround backendId={backendId} windows={windows} branch={deploy.branch} />
+					</Card>
+					<Card style={{ gap: 8 }}>
+						<Txt variant="label">Performance</Txt>
+						<PerfAround backendId={backendId} at={deploy.at} hours={hours} branch={deploy.branch} />
+					</Card>
+				</>
+			) : (
+				<EmptyState title="Too soon after the deploy to compare." />
+			)}
+		</Section>
+	);
+}
 
 export default function DeployScreen() {
 	const { seq } = useLocalSearchParams<{ seq: string }>();
@@ -76,6 +178,8 @@ function Deploy({ backendId, seq, admin }: { backendId: string; seq: number; adm
 					</List>
 				</Section>
 			) : null}
+
+			<Impact backendId={backendId} deploy={d} />
 
 			{d.errors.length ? (
 				<Section title="Errors">
