@@ -16,6 +16,8 @@ import { useTheme } from "@/theme";
 
 import { SignedOutNotice } from "./components";
 import { FILTER_KEYS, hasFilterParams, readFilters, refreshFilterNow, setTTFilters } from "./filters";
+import { NavLeft, ProjectPickerTitle, useCurrentPage } from "./nav";
+import { TT_PAGES } from "./pages";
 import { Sheet, SheetItem } from "./sheet";
 import { CommandPalette, HealthDot } from "./shell";
 import { BACKEND_PARAM, createViewLinkRegistry, useViewLink, ViewLinkProvider } from "./view-link";
@@ -145,6 +147,7 @@ export function TTScreen({
 	const [refreshing, setRefreshing] = useState(false);
 	const registry = useMemo(() => createViewLinkRegistry(), []);
 	const foreign = useForeignBackendLink(backendId, !!account);
+	const current = useCurrentPage();
 	useLinkFilters(backendId, !!account);
 	// A screen opening moves the filter bar's "now" forward (when a minute has passed), so "1 h" means the last hour.
 	useEffect(() => {
@@ -181,6 +184,16 @@ export function TTScreen({
 				<Stack.Screen
 					options={{
 						title: typeof title === "function" ? title(account) : title,
+						// Like the web: the project as a picker, the page under it; a menu and home instead of a back arrow
+						// (detail screens keep theirs).
+						headerTitle: () => (
+							<ProjectPickerTitle
+								account={account}
+								page={typeof title === "function" ? (TT_PAGES.find((x) => x.key === current.key)?.title ?? title(account)) : title}
+							/>
+						),
+						headerBackVisible: current.detail,
+						headerLeft: current.detail ? undefined : () => <NavLeft account={account} />,
 						headerRight: () => (
 							<View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
 								<HealthDot backendId={backendId} />

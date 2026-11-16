@@ -263,6 +263,31 @@ export interface TouchPoint {
 	y: number;
 }
 
+/**
+ * three r163+ refuses a context that is `instanceof WebGLRenderingContext` (WebGL 1). expo-gl's context is an OpenGL
+ * ES 3 context (WebGL 2's API) but its class is still named WebGLRenderingContext, so the check trips. The global is
+ * swapped for a class nothing is an instance of while the renderer is made, then put back. A device without ES 3 still
+ * fails, with the GL version in the error.
+ */
+function createRenderer(canvas: ReturnType<typeof adaptContext>, gl: ExpoWebGLRenderingContext): THREE.WebGLRenderer {
+	const g = globalThis as { WebGLRenderingContext?: unknown };
+	const saved = g.WebGLRenderingContext;
+	g.WebGLRenderingContext = class NotWebGL1 {};
+	try {
+		return new THREE.WebGLRenderer({ canvas: canvas as never, context: gl as never, antialias: false, alpha: true, stencil: true });
+	} catch (error) {
+		let version = "";
+		try {
+			version = String(gl.getParameter(gl.VERSION) ?? "");
+		} catch {
+			// the context may be gone
+		}
+		throw new Error(`${(error as Error).message}${version ? ` · GL: ${version}` : ""}`);
+	} finally {
+		g.WebGLRenderingContext = saved;
+	}
+}
+
 export class MapRenderer {
 	readonly renderer: THREE.WebGLRenderer;
 	private readonly scene = new THREE.Scene();
@@ -316,7 +341,7 @@ export class MapRenderer {
 		fetchImage: (id: string, signal: AbortSignal) => Promise<ImageFetch>,
 	) {
 		this.canvas = adaptContext(gl);
-		this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, context: gl, antialias: false, alpha: true, stencil: true });
+		this.renderer = createRenderer(this.canvas, gl);
 		this.renderer.setPixelRatio(1);
 		this.renderer.localClippingEnabled = true;
 		this.renderer.setClearColor(0x000000, 0);
