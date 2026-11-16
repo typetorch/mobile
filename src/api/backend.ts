@@ -448,7 +448,18 @@ export function createApi(options: ApiOptions) {
 		 * An SSE stream with the Bearer token (React Native has no EventSource): `/v1/fleet/stream?branch` or
 		 * `/v1/live?topics=error`. The caller reopens it when `onClose` comes (useEventStream).
 		 */
-		eventStream: (path: string, handlers: SseHandlers): SseConnection => openEventStream(`${base}${path}`, { authorization: `Bearer ${options.token}` }, handlers),
+		/**
+		 * An SSE stream with the Bearer. The backend closes a stream once its token is revoked (it re-checks on every
+		 * ping); the hook's reopen then gets a 401, which signs the backend out like any other request's.
+		 */
+		eventStream: (path: string, handlers: SseHandlers): SseConnection =>
+			openEventStream(`${base}${path}`, { authorization: `Bearer ${options.token}` }, {
+				...handlers,
+				onClose: (reason) => {
+					if (reason.status === 401) options.onUnauthorized?.();
+					handlers.onClose?.(reason);
+				},
+			}),
 		/** Plans/34: one server's declared streams and its frames after `since` (owners; the server watch makes the kernel post them). */
 		serverStreams: (job: string, since?: number, signal?: AbortSignal) => get<ServerStreams>(`/v1/fleet/servers/${encodeURIComponent(job)}/streams${qs({ since })}`, signal),
 		/** Plans/34: the live map is open (every 20 s; lapses after 60 s): live servers post positions every 3 s. Owners only. */

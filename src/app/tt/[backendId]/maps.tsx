@@ -10,8 +10,9 @@
  *   - Layers: one per positioned event; dots or heat cells of 0.5, 1 or 2 studs (the filter bar applies).
  *   - Alignment: whether the positioned events land on the geometry, else the recordings' positions on that map;
  *     owners apply the suggested offset, set a model path or remove the override.
- * The view (2D / 3D, band, toggles, cell, hidden layers) is one state per backend in memory, shared with the live maps
- * (the web keeps it in the URL). The map stays on top while the controls scroll under it, so drags move the map.
+ * The view (2D / 3D, band, toggles, cell, hidden layers) is one state per backend in memory, shared with the live maps;
+ * the picked map is in the route (`map`) and "Copy link to this view" carries the view under the web's URL keys. The
+ * map stays on top while the controls scroll under it, so drags move the map.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
@@ -20,7 +21,7 @@ import { ScrollView, View, useWindowDimensions } from "react-native";
 import { cleanFilters, type Api } from "@/api/backend";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Section, Segmented, Skeleton, Txt, confirm } from "@/components/ui";
 import { BandControls, ToggleChip } from "@/features/maps/BandControls";
-import { useMapGeometry, useMapsList, useMapView } from "@/features/maps/hooks";
+import { useMapGeometry, useMapsList, useMapView, useMapViewLink } from "@/features/maps/hooks";
 import { bandFits, resolveBand } from "@/features/maps/map-view";
 import {
 	alignmentOf,
@@ -42,6 +43,7 @@ import {
 import { MapScene } from "@/features/maps/MapScene";
 import { FilterBar, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
 import { useTTQuery } from "@/features/typetorch/hooks";
+import { usePageParam } from "@/features/typetorch/view-link";
 import { TTScreen } from "@/features/typetorch/screen";
 import { fmtAgo, fmtBytes, fmtInt, fmtPct } from "@/lib/format";
 import { useBackend } from "@/store/accounts";
@@ -64,7 +66,9 @@ function Maps({ backendId, owner }: { backendId: string; owner: boolean }) {
 	const list = useMapsList(backendId);
 	// Owners only (the server says so too; a viewer's session never gets the Export button or the override form).
 	const view = list.data && !owner ? { ...list.data, canExport: false } : list.data;
-	const [picked, setPicked] = useState<string | null>(null);
+	// The picked map is in the route (`map`, the web's key), the rest of the view in links through useMapViewLink.
+	const [picked, setPicked] = usePageParam("map");
+	useMapViewLink(backendId);
 	const maps = view?.maps ?? [];
 	const map = maps.find((m) => m.name === picked) ?? maps[0] ?? null;
 

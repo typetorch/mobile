@@ -7,11 +7,18 @@
  *        ?error=access_denied|not_owner|not_blessed|state|failed&state=)
  *   POST <backend>/v1/auth/mobile/token  { code, code_verifier }                              -> MobileToken (400 invalid_grant)
  *   POST <backend>/v1/auth/mobile/token  { device } + Authorization: Bearer <admin token>     -> MobileToken
- *   POST <backend>/v1/auth/mobile/refresh  (Bearer <mobile token>)  -> MobileToken; the old token is revoked at once
+ *   POST <backend>/v1/auth/mobile/refresh  (Bearer <mobile token>)  -> MobileToken; the old token is revoked at once.
+ *        409 { code: "mobile_refresh_in_progress" } while another refresh of it runs (keep the token, never retry with
+ *        it: a refreshed token presented again 10 s after its refresh revokes the whole sign-in, so refreshes are single-
+ *        flight here); 403 { code: "mobile_signin_too_old" } past TYPETORCH_MOBILE_TOKEN_MAX_DAYS (sign in again)
  *   POST <backend>/v1/auth/mobile/logout   (Bearer <mobile token>)  -> { ok: true }
- *   GET  <backend>/v1/auth/mobile/tokens[?all=1]  (Bearer)  -> { tokens: [{ id, device, user, role, createdAt, expiresAt,
- *        lastUsedAt, revokedAt?, revokeReason?, current? }], lifetimeDays }
- *   DELETE <backend>/v1/auth/mobile/tokens/<id>  (Bearer)
+ *   GET  <backend>/v1/auth/mobile/tokens[?all=1]  (Bearer; owners: every token, the web role: its own; all=1 adds revoked
+ *        and expired ones)  -> { tokens: [{ id, device, user, role, createdAt, expiresAt, lastUsedAt, revokedAt?,
+ *        revokeReason?, current? }], lifetimeDays }
+ *   DELETE <backend>/v1/auth/mobile/tokens/<id>  (Bearer)  -> { ok, tokens, lifetimeDays }
+ *   POST <backend>/v1/auth/mobile/tokens/revoke-all  (owners)  -> { ok, revoked, tokens, lifetimeDays }: every phone
+ *        signs out, this one too
+ *   SSE streams (/v1/fleet/stream, /v1/live) close once the token is revoked; the reopen's 401 signs the backend out.
  *   GET  <backend>/v1/auth/check -> always game: { universeId|null, label|null }; a 401 says mobileLogin: true|false
  *        (whether browser sign-in exists); with a mobile token: mobile: { id, expiresAt }
  *   Any route, dead token: 401 { code: "mobile_token_dead", reason } -> the backend shows as signed out.
@@ -41,6 +48,9 @@ export interface MobileToken {
 
 export interface MobileSession {
 	id: string;
+	/** Revoked (with `?all=1` only). */
+	revokedAt: number | null;
+	revokeReason: string | null;
 	device: string | null;
 	role: AuthRole | null;
 	createdAt: number | null;
@@ -208,10 +218,48 @@ export function needsRefresh(expiresAt: number, now = Date.now()): boolean {
 	return expiresAt - now < REFRESH_WHEN_DAYS_LEFT * DAY_MS;
 }
 
-/** A new token for an old one. The backend revokes the old token at once: save the new one before anything else runs. */
-export async function refreshToken(backendUrl: string, token: string): Promise<MobileToken> {
-	const body = await requestJson<unknown>(`${backendUrl}/v1/auth/mobile/refresh`, { headers: { authorization: `Bearer ${token}` }, body: {}, timeoutMs: 10_000 });
-	return parseMobileToken(body);
+/** Refreshes in flight, per token: a second caller waits for the first instead of presenting the old token again. */
+const refreshing = new Map<string, Promise<MobileToken>>();
+
+/** What a failed refresh means for the stored token. */
+export type RefreshFailure = "signed_out" | "busy" | "retry";
+
+export function refreshFailure(error: unknown): RefreshFailure {
+	if (!(error instanceof HttpError)) return "retry";
+	const code = error.body && typeof error.body === "object" ? (error.body as Record<string, unknown>).code : undefined;
+	if (error.status === 401 || (error.status === 403 && code === "mobile_signin_too_old")) return "signed_out";
+	if (error.status === 409) return "busy";
+	return "retry";
+}
+
+/**
+ * A new token for an old one. The backend revokes the old token at once: save the new one before anything else runs.
+ * One refresh per token at a time (a parallel one gets 409 on the backend, and presenting a refreshed token later
+ * revokes every token of its sign-in).
+ */
+export function refreshToken(backendUrl: string, token: string): Promise<MobileToken> {
+	const running = refreshing.get(token);
+	if (running) return running;
+	const job = (async () => {
+		try {
+			const body = await requestJson<unknown>(`${backendUrl}/v1/auth/mobile/refresh`, { headers: { authorization: `Bearer ${token}` }, body: {}, timeoutMs: 10_000 });
+			return parseMobileToken(body);
+		} catch (error) {
+			if (error instanceof HttpError) {
+				const kind = refreshFailure(error);
+				if (kind === "busy") throw new HttpError(error.status, "this token is already being renewed; the app keeps it until the next start", error.where, error.body);
+				if (kind === "signed_out" && error.status === 403) throw new HttpError(error.status, "this sign-in is too old to renew: sign in again", error.where, error.body);
+			}
+			throw error;
+		}
+	})();
+	refreshing.set(token, job);
+	// The entry goes once settled (a later call with the same, now revoked token gets the backend's own answer).
+	job.then(
+		() => setTimeout(() => refreshing.delete(token), 60_000),
+		() => refreshing.delete(token),
+	);
+	return job;
 }
 
 /** Ends the session on the backend; a 401 (already gone) is fine. */
@@ -224,25 +272,54 @@ export async function logout(backendUrl: string, token: string): Promise<void> {
 	}
 }
 
-/** This user's app sessions (`all`: every user's, admins only). Revoked ones are left out. */
-export async function listSessions(backendUrl: string, token: string, currentId?: string, all = false): Promise<MobileSession[]> {
-	const body = await requestJson<Record<string, unknown>>(`${backendUrl}/v1/auth/mobile/tokens${all ? "?all=1" : ""}`, { headers: { authorization: `Bearer ${token}` } });
+export interface MobileSessions {
+	sessions: MobileSession[];
+	/** TYPETORCH_MOBILE_TOKEN_DAYS (null: an older backend). */
+	lifetimeDays: number | null;
+}
+
+function readSessions(body: Record<string, unknown> | undefined, currentId?: string): MobileSessions {
 	const list = Array.isArray(body?.tokens) ? body.tokens : [];
-	return (list as Record<string, unknown>[]).filter((t) => !t.revokedAt).map((t) => {
-		const id = String(t.id ?? "");
-		return {
-			id,
-			device: typeof t.device === "string" ? t.device : null,
-			role: t.role ? role(t.role) : null,
-			createdAt: toMs(t.createdAt),
-			lastUsedAt: toMs(t.lastUsedAt ?? t.lastUsed),
-			expiresAt: toMs(t.expiresAt),
-			current: t.current === true || (!!currentId && id === currentId),
-			user: (t.user as AuthUser | undefined) ?? null,
-		};
-	});
+	return {
+		lifetimeDays: typeof body?.lifetimeDays === "number" ? body.lifetimeDays : null,
+		sessions: (list as Record<string, unknown>[]).map((t) => {
+			const id = String(t.id ?? "");
+			return {
+				id,
+				revokedAt: toMs(t.revokedAt),
+				revokeReason: typeof t.revokeReason === "string" ? t.revokeReason : null,
+				device: typeof t.device === "string" ? t.device : null,
+				role: t.role ? role(t.role) : null,
+				createdAt: toMs(t.createdAt),
+				lastUsedAt: toMs(t.lastUsedAt ?? t.lastUsed),
+				expiresAt: toMs(t.expiresAt),
+				current: t.current === true || (!!currentId && id === currentId),
+				user: (t.user as AuthUser | undefined) ?? null,
+			};
+		}),
+	};
+}
+
+/**
+ * The app sessions this sign-in may see (owners: every phone's; the web role: its own). `ended`: revoked and expired
+ * ones too (kept 30 days on the backend).
+ */
+export async function listSessions(backendUrl: string, token: string, currentId?: string, ended = false): Promise<MobileSessions> {
+	const body = await requestJson<Record<string, unknown>>(`${backendUrl}/v1/auth/mobile/tokens${ended ? "?all=1" : ""}`, { headers: { authorization: `Bearer ${token}` } });
+	return readSessions(body, currentId);
 }
 
 export async function revokeSession(backendUrl: string, token: string, id: string): Promise<void> {
-	await requestJson<unknown>(`${backendUrl}/v1/auth/mobile/tokens/${encodeURIComponent(id)}`, { method: "DELETE", headers: { authorization: `Bearer ${token}` } });
+	try {
+		await requestJson<unknown>(`${backendUrl}/v1/auth/mobile/tokens/${encodeURIComponent(id)}`, { method: "DELETE", headers: { authorization: `Bearer ${token}` } });
+	} catch (error) {
+		if (error instanceof HttpError && error.status === 404) throw new HttpError(404, "that session is already gone", error.where, error.body);
+		throw error;
+	}
+}
+
+/** Owners: every mobile app token revoked at once (every phone signs out, this one too). Audited on the backend. */
+export async function revokeAllSessions(backendUrl: string, token: string): Promise<number> {
+	const body = await requestJson<Record<string, unknown>>(`${backendUrl}/v1/auth/mobile/tokens/revoke-all`, { headers: { authorization: `Bearer ${token}` }, body: {} });
+	return typeof body?.revoked === "number" ? body.revoked : 0;
 }

@@ -1,5 +1,6 @@
 /**
- * Settings for one backend. For everyone: this device's session, the app sessions (list / revoke), the experience it
+ * Settings for one backend. For everyone: this device's session, the app sessions (the web's Mobile app sessions card:
+ * owners see every phone's, a viewer their own; revoke one, owners Revoke all, revoked / expired ones on request), the experience it
  * is linked to, the server's health. For owners (the web's Settings page, owner-only there): the runtime settings per
  * group with Save / Undo / Reset to env / Reset all to env, the write-only webhook and Send test alert, the backend
  * alert rules with their last run, Sign in with typetorch.dev (trusted browsers, revoke), Backups and disk (Back up
@@ -11,7 +12,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
 
-import { listSessions, refreshToken, revokeSession } from "@/api/backend-auth";
+import { listSessions, refreshFailure, refreshToken, revokeAllSessions, revokeSession } from "@/api/backend-auth";
 import { Badge, Button, Card, confirm, ErrorState, Field, KV, List, Row, Section, Segmented, Skeleton, Txt } from "@/components/ui";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { TTScreen } from "@/features/typetorch/screen";
@@ -30,21 +31,30 @@ function BackendSettings({ account }: { account: BackendAccount }) {
 	const queryClient = useQueryClient();
 	const { backendToken, removeBackend, replaceToken, updateBackend } = useAccounts();
 	const admin = account.role === "admin";
-	const [all, setAll] = useState(false);
+	const [ended, setEnded] = useState(false);
 	const [universeText, setUniverseText] = useState(account.universeId ? String(account.universeId) : "");
 	const token = backendToken(account.id) ?? "";
 
 	const health = useTTQuery(account.id, ["health"], (api, s) => api.health(s), { staleTime: 30_000 });
-	const sessions = useTTQuery(account.id, ["mobile-sessions", all], () => listSessions(account.url, token, account.tokenId, all));
+	const sessions = useTTQuery(account.id, ["mobile-sessions", ended], () => listSessions(account.url, token, account.tokenId, ended), { staleTime: 0 });
 	const settings = useTTQuery(account.id, SETTINGS_KEY, (api, s) => api.settings(s), { enabled: admin, retry: false, staleTime: 0 });
 
 	const revoke = useMutation({
 		mutationFn: (id: string) => revokeSession(account.url, token, id),
 		onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tt", account.id, "mobile-sessions"] }),
 	});
+	const revokeAll = useMutation({
+		mutationFn: () => revokeAllSessions(account.url, token),
+		// This phone's token went too: the backend shows as signed out here (Sign in again).
+		onSuccess: () => updateBackend(account.id, { signedOut: true }),
+	});
 	const refresh = useMutation({
 		mutationFn: async () => replaceToken(account.id, await refreshToken(account.url, token)),
+		onError: (error) => {
+			if (refreshFailure(error) === "signed_out") void updateBackend(account.id, { signedOut: true });
+		},
 	});
+	const sessionCount = sessions.data?.sessions.filter((s) => !s.revokedAt && (s.expiresAt ?? Infinity) > Date.now()).length ?? 0;
 
 	async function disconnect() {
 		if (!(await confirm("Disconnect this backend?", "The app signs out (the backend revokes this device's token) and forgets it.", "Disconnect"))) return;
@@ -86,42 +96,82 @@ function BackendSettings({ account }: { account: BackendAccount }) {
 				</Card>
 			</Section>
 
-			<Section title="App sessions" right={admin ? <Segmented options={[{ value: 0, label: "Mine" }, { value: 1, label: "Everyone" }]} value={all ? 1 : 0} onChange={(v) => setAll(v === 1)} style={{ width: 170 }} /> : undefined}>
+			<Section
+				title="App sessions"
+				right={<Segmented options={[{ value: 0, label: "Active" }, { value: 1, label: "+ ended" }]} value={ended ? 1 : 0} onChange={(v) => setEnded(v === 1)} style={{ width: 170 }} />}
+			>
+				<Txt variant="muted">
+					{admin ? "Every phone" : "Your phones"} signed in to this backend with the TypeTorch app. A session lasts {sessions.data?.lifetimeDays ?? 60} days and renews itself while the app is used; revoking one signs that phone out at once.
+				</Txt>
 				{sessions.error ? (
 					<ErrorState error={sessions.error} onRetry={() => sessions.refetch()} />
 				) : !sessions.data ? (
 					<Skeleton height={80} />
+				) : !sessions.data.sessions.length ? (
+					<Txt variant="muted">No phone is signed in. The TypeTorch app signs in with Roblox in the phone's browser, or with the admin token once.</Txt>
 				) : (
 					<List>
-						{sessions.data.map((s) => (
-							<Row
-								key={s.id}
-								title={
-									<View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-										<Txt numberOfLines={1} style={{ flexShrink: 1, fontWeight: "500" }}>
-											{s.device ?? "Unknown device"}
-										</Txt>
-										{s.current ? <Badge label="this phone" tone="brand" /> : null}
-									</View>
-								}
-								subtitle={`${s.user && s.user.kind === "roblox" ? `@${s.user.name} · ` : ""}${s.role ?? ""} · used ${fmtAgo(s.lastUsedAt)} · ends ${fmtDate(s.expiresAt)}`}
-								right={
-									s.current ? undefined : (
-										<Button
-											title="Revoke"
-											small
-											variant="ghost"
-											loading={revoke.isPending && revoke.variables === s.id}
-											onPress={async () => {
-												if (await confirm("Revoke this session?", `${s.device ?? "The device"} is signed out right away.`, "Revoke")) revoke.mutate(s.id);
-											}}
-										/>
-									)
-								}
-							/>
-						))}
+						{[...sessions.data.sessions]
+							.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+							.map((s) => {
+								const over = !!s.revokedAt || (s.expiresAt !== null && s.expiresAt <= Date.now());
+								const who = s.user ? (s.user.kind === "roblox" ? `@${s.user.name}${s.user.userId ? ` (${s.user.userId})` : ""}${s.user.login === "typetorch.dev" ? " via typetorch.dev" : ""}` : "Admin token") : "";
+								const state = s.revokedAt ? `revoked ${fmtAgo(s.revokedAt)}${s.revokeReason ? ` (${s.revokeReason})` : ""}` : over ? `expired ${fmtDate(s.expiresAt)}` : `ends ${fmtDate(s.expiresAt)}`;
+								return (
+									<Row
+										key={s.id}
+										title={
+											<View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+												<Txt numberOfLines={1} style={{ flexShrink: 1, fontWeight: "500" }} color={over ? p.mutedForeground : undefined}>
+													{s.device ?? "Unknown device"}
+												</Txt>
+												{s.current ? <Badge label="this phone" tone="brand" /> : null}
+												{s.role ? <Badge label={s.role === "admin" ? "admin" : "read-only"} tone={s.role === "admin" ? "brand" : "muted"} /> : null}
+											</View>
+										}
+										subtitle={`${who ? `${who} · ` : ""}made ${fmtAgo(s.createdAt)} · used ${s.lastUsedAt ? fmtAgo(s.lastUsedAt) : "never"} · ${state}`}
+										right={
+											s.current || over ? undefined : (
+												<Button
+													title="Revoke"
+													small
+													variant="ghost"
+													loading={revoke.isPending && revoke.variables === s.id}
+													disabled={revokeAll.isPending}
+													onPress={async () => {
+														if (await confirm("Revoke this session?", `${s.device ?? "The device"} is signed out right away.`, "Revoke")) revoke.mutate(s.id);
+													}}
+												/>
+											)
+										}
+									/>
+								);
+							})}
 					</List>
 				)}
+				{admin && sessionCount > 0 ? (
+					<Button
+						title="Revoke all"
+						small
+						variant="destructive"
+						icon="log-out-outline"
+						loading={revokeAll.isPending}
+						style={{ alignSelf: "flex-start" }}
+						onPress={async () => {
+							const n = sessionCount;
+							if (
+								await confirm(
+									`Revoke all ${n} mobile app ${n === 1 ? "session" : "sessions"}?`,
+									"Every phone signed in to this backend with the TypeTorch app signs out at once, this one included, and has to sign in again. Rotating the admin token doesn't do this for Roblox sign-ins.",
+									"Revoke all",
+								)
+							)
+								revokeAll.mutate();
+						}}
+					/>
+				) : null}
+				{revokeAll.isSuccess ? <Txt variant="small">Revoked {revokeAll.data} mobile app {revokeAll.data === 1 ? "session" : "sessions"}. Sign in again to use this backend.</Txt> : null}
+				{revokeAll.error ? <Txt variant="small" color={p.destructive}>{(revokeAll.error as Error).message}</Txt> : null}
 				{revoke.error ? <Txt variant="small" color={p.destructive}>{(revoke.error as Error).message}</Txt> : null}
 			</Section>
 

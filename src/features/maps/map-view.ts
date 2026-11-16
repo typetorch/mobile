@@ -1,7 +1,8 @@
 /**
  * The map view's state (port of the web explorer's lib/map-view.ts). The web keeps it in the URL; the app keeps one state
  * per backend in memory (useMapView in hooks.ts, like the filter bar), shared by the Maps, Live map and Recordings
- * screens, so it survives switching maps and screens. The URL form below stays for deep links:
+ * screens, so it survives switching maps and screens. Links carry it in the URL form below (useMapViewLink: "Copy link
+ * to this view" writes it, a screen opened from a link reads it; the Recordings screen keeps it in its route):
  *
  *   mode=2d          3D (default since 2026-11-15) or 2D
  *   draw=points      heat cells (default) or points (the Recordings page's old `view=dots` reads as points)

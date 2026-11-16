@@ -2,11 +2,13 @@
  * The maps' queries and view state, shared by the Maps, Live map, server live map and Recordings screens (web
  * pages/Maps.tsx, pages/recordings/RealMap.tsx useMapExports / useMapGeometry, lib/map-view.ts).
  */
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { router, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
 import { useTTQuery } from "@/features/typetorch/hooks";
+import { useViewLinkRegistry } from "@/features/typetorch/view-link";
 
-import { DEFAULT_MAP_VIEW, type MapViewState } from "./map-view";
+import { DEFAULT_MAP_VIEW, mapViewPatch, readMapView, VIEW_KEYS, type MapViewState } from "./map-view";
 import { MAPS_KEY, type MapInfo } from "./maps";
 
 /** The map list (GET /v1/maps); polls every 1.5 s while an export runs. */
@@ -33,7 +35,7 @@ export function useMapGeometry(backendId: string, info: Pick<MapInfo, "name" | "
 	});
 }
 
-// The view, one per backend in memory (the web keeps it in the URL) -----------------------------------------------------
+// The view, one per backend in memory (the web keeps it in the URL; here a link carries it) ------------------------------
 
 const views = new Map<string, MapViewState>();
 const listeners = new Set<() => void>();
@@ -45,15 +47,52 @@ function subscribe(l: () => void) {
 	};
 }
 
+/** The backend's map view now (outside React: links). */
+export function currentMapView(backendId: string): MapViewState {
+	return views.get(backendId) ?? DEFAULT_MAP_VIEW;
+}
+
+function setMapView(backendId: string, next: MapViewState) {
+	views.set(backendId, next);
+	for (const l of listeners) l();
+}
+
 /** The map view of a backend (2D / 3D, draw, cell, band, toggles, hidden layers) and a patch setter. */
 export function useMapView(backendId: string): [MapViewState, (patch: Partial<MapViewState>) => void] {
-	const state = useSyncExternalStore(subscribe, () => views.get(backendId) ?? DEFAULT_MAP_VIEW);
-	const set = useCallback(
-		(patch: Partial<MapViewState>) => {
-			views.set(backendId, { ...(views.get(backendId) ?? DEFAULT_MAP_VIEW), ...patch });
-			for (const l of listeners) l();
-		},
-		[backendId],
-	);
+	const state = useSyncExternalStore(subscribe, () => currentMapView(backendId));
+	const set = useCallback((patch: Partial<MapViewState>) => setMapView(backendId, { ...currentMapView(backendId), ...patch }), [backendId]);
 	return [state, set];
+}
+
+/** A URL patch without its removed (default) keys. */
+export function presentKeys(patch: Record<string, string | null>): Record<string, string> {
+	const out: Record<string, string> = {};
+	for (const [k, v] of Object.entries(patch)) if (v) out[k] = v;
+	return out;
+}
+
+/**
+ * The map view in links (Maps, Live map, a server's Live map tab): "Copy link to this view" carries the backend's map
+ * view under the web's URL keys (mode, draw, cell, band, decor, markers, hide, tex), and a screen opened from such a
+ * link makes them the view (keys the link leaves out go back to their defaults, like a web URL). The keys then leave the
+ * route: the view lives in memory, shared by the map screens, and a later link writes it again.
+ */
+export function useMapViewLink(backendId: string): void {
+	const registry = useViewLinkRegistry();
+	const params = useLocalSearchParams<Record<string, string | string[] | undefined>>();
+	const applied = useRef(false);
+	useEffect(() => {
+		if (applied.current) return;
+		applied.current = true;
+		const one = (k: string): string | null => {
+			const v = params[k];
+			const s = Array.isArray(v) ? v[0] : v;
+			return s === undefined || s === "" ? null : s;
+		};
+		const keys = VIEW_KEYS.filter((k) => one(k) !== null);
+		if (!keys.length) return;
+		setMapView(backendId, readMapView({ get: one, has: (k) => one(k) !== null }));
+		router.setParams(Object.fromEntries(keys.map((k) => [k, undefined])));
+	}, [backendId, params]);
+	useEffect(() => registry?.register("map-view", () => presentKeys(mapViewPatch(currentMapView(backendId)))), [registry, backendId]);
 }

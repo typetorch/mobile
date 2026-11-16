@@ -11,8 +11,7 @@ import * as SecureStore from "expo-secure-store";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { createApi, type Api } from "@/api/backend";
-import { logout as backendLogout, needsRefresh, refreshToken, type MobileToken } from "@/api/backend-auth";
-import { HttpError } from "@/api/http";
+import { logout as backendLogout, needsRefresh, refreshFailure, refreshToken, type MobileToken } from "@/api/backend-auth";
 import { introspectKey, OpenCloud, type KeyInfo } from "@/api/opencloud";
 import type { AuthRole, AuthUser } from "@/api/tt/types";
 import type { Appearance } from "@/theme";
@@ -137,8 +136,9 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
 					tokens.current.set(b.id, next.token);
 					loaded.push({ ...b, tokenId: next.id || b.tokenId, expiresAt: next.expiresAt, role: next.role, user: next.user ?? b.user });
 				} catch (error) {
-					// A dead token (401) stays dead: show it as signed out instead of retrying.
-					loaded.push(error instanceof HttpError && error.status === 401 ? { ...b, signedOut: true } : b);
+					// A dead token (401) or a sign-in too old to renew (403 mobile_signin_too_old) shows as signed out; a refresh
+					// already running (409) or a network error keeps the token for the next start.
+					loaded.push(refreshFailure(error) === "signed_out" ? { ...b, signedOut: true } : b);
 				}
 			}
 			if (loaded.some((b, i) => b !== list[i])) await SecureStore.setItemAsync(KEY_BACKENDS, JSON.stringify(loaded)).catch(() => undefined);

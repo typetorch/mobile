@@ -18,7 +18,7 @@ import { Button, Card, EmptyState, Segmented, Skeleton, Txt } from "@/components
 import { radius, space, useTheme } from "@/theme";
 
 import { BandControls, ToggleChip } from "./BandControls";
-import { useMapExports, useMapGeometry, useMapView } from "./hooks";
+import { useMapExports, useMapGeometry, useMapView, useMapViewLink } from "./hooks";
 import { liveLayers, mapCounts, mapForPosition, nearestDot, type LiveDot } from "./live-map";
 import { resolveBand, type BandChoice } from "./map-view";
 import { detectFloors, ROOT_HEIGHT, type MapLayer } from "./maps";
@@ -52,6 +52,7 @@ export function LiveMap({
 	const p = useTheme();
 	const maps = useMapExports(backendId);
 	const [view, setView] = useMapView(backendId);
+	useMapViewLink(backendId);
 	const [picked, setPicked] = useState<string | null>(null);
 	const [followed, setFollowed] = useState<string | null>(null);
 	/** A free choice of band while following ("All" said out loud), else following cuts above the player. */

@@ -17,17 +17,17 @@
  * Phone layout: the scene and its height controls are handed back separately (useRealScene), so the screen keeps the
  * map fixed on top (drags move the map) and the controls in the scroll view under it, like the Maps screen.
  */
-import { useCallback, useEffect, useMemo, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { View } from "react-native";
 
 import type { RecFrame, RecMapLayer } from "@/api/tt/types";
 import { Txt } from "@/components/ui";
 import { BandControls, ChipRow, ToggleChip } from "@/features/maps/BandControls";
-import { useMapExports, useMapGeometry, useMapView } from "@/features/maps/hooks";
+import { currentMapView, useMapExports, useMapGeometry, useMapView } from "@/features/maps/hooks";
 import { bandFits, bandParam, mapViewPatch, readMapView, resolveBand, type BandChoice, type MapViewState } from "@/features/maps/map-view";
 import { CELL_SIZES, detectFloors, exportFor, floorUnder, recordingLayer, ROOT_HEIGHT, type CellSize, type MapGeometry, type MapInfo, type MapLayer } from "@/features/maps/maps";
 import { MapScene } from "@/features/maps/MapScene";
-import { usePageParams } from "@/features/typetorch/view-link";
+import { usePageParams, useViewLinkRegistry } from "@/features/typetorch/view-link";
 import { space } from "@/theme";
 
 import { layerColor, layerName } from "./map";
@@ -55,6 +55,22 @@ export function useRecView(backendId: string): [MapViewState, (patch: Partial<Ma
 		mode: params.mode !== undefined ? fromRoute.mode : shared.mode,
 		draw: params.draw !== undefined || params.view !== undefined ? fromRoute.draw : shared.draw,
 	};
+	// A link carries 2D / 3D and Points / Heatmap even when only the shared view holds them (the route wins).
+	const registry = useViewLinkRegistry();
+	const routeRef = useRef(params);
+	routeRef.current = params;
+	useEffect(
+		() =>
+			registry?.register("rec-map-view", () => {
+				const route = routeRef.current;
+				const view = currentMapView(backendId);
+				return {
+					...(route.mode === undefined && view.mode === "2d" ? { mode: "2d" } : {}),
+					...(route.draw === undefined && route.view === undefined && view.draw === "points" ? { draw: "points" } : {}),
+				};
+			}),
+		[registry, backendId],
+	);
 	const set = useCallback(
 		(patch: Partial<MapViewState>) => {
 			setParams(mapViewPatch(patch));
