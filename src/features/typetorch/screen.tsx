@@ -15,7 +15,7 @@ import { useAccounts, useBackend, type BackendAccount } from "@/store/accounts";
 import { useTheme } from "@/theme";
 
 import { SignedOutNotice } from "./components";
-import { FILTER_KEYS, hasFilterParams, readFilters, setTTFilters } from "./filters";
+import { FILTER_KEYS, hasFilterParams, readFilters, refreshFilterNow, setTTFilters } from "./filters";
 import { Sheet, SheetItem } from "./sheet";
 import { CommandPalette, HealthDot } from "./shell";
 import { BACKEND_PARAM, createViewLinkRegistry, useViewLink, ViewLinkProvider } from "./view-link";
@@ -146,6 +146,10 @@ export function TTScreen({
 	const registry = useMemo(() => createViewLinkRegistry(), []);
 	const foreign = useForeignBackendLink(backendId, !!account);
 	useLinkFilters(backendId, !!account);
+	// A screen opening moves the filter bar's "now" forward (when a minute has passed), so "1 h" means the last hour.
+	useEffect(() => {
+		if (backendId) refreshFilterNow(backendId, 60_000);
+	}, [backendId]);
 	if (!account || !api) {
 		return (
 			<Screen>
@@ -163,6 +167,8 @@ export function TTScreen({
 	}
 	const onRefresh = async () => {
 		setRefreshing(true);
+		// Hour presets end "now": move it, so the pull shows the last 1 h / 6 h, not a window that kept growing.
+		refreshFilterNow(backendId);
 		try {
 			await queryClient.refetchQueries({ queryKey: ["tt", backendId, ...(refreshKeys ?? [])], type: "active" });
 		} finally {

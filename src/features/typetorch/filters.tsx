@@ -200,6 +200,12 @@ const STORAGE_PREFIX = "tt.filters.v1.";
 const states = new Map<string, FilterState>();
 const loaded = new Set<string>();
 const loading = new Map<string, Promise<void>>();
+/**
+ * The "now" the presets end at, one per backend, so every hook instance on every open screen asks the same window. It
+ * moves forward on pull to refresh and when a screen opens (`refreshFilterNow`), not on every render: the hour presets
+ * would otherwise keep the `from` of the moment the state was made, and a refresh would show an ever-longer window.
+ */
+const nows = new Map<string, number>();
 const listeners = new Set<() => void>();
 const DEFAULT_STATE: FilterState = { range: DEFAULT_RANGE };
 
@@ -248,6 +254,24 @@ export function currentTTFilters(backendId: string): FilterState {
 	return getState(backendId);
 }
 
+function getNow(backendId: string): number {
+	let now = nows.get(backendId);
+	if (now === undefined) {
+		now = Date.now();
+		nows.set(backendId, now);
+	}
+	return now;
+}
+
+/** Moves a backend's "now" forward (pull to refresh; a screen opening once it is older than `olderThanMs`). */
+export function refreshFilterNow(backendId: string, olderThanMs = 0) {
+	const now = Date.now();
+	const last = nows.get(backendId);
+	if (last !== undefined && now - last < olderThanMs) return;
+	nows.set(backendId, now);
+	emit();
+}
+
 function subscribe(l: () => void) {
 	listeners.add(l);
 	return () => {
@@ -278,8 +302,9 @@ export function useTTFilters(backendId: string) {
 	const lastDeploy = useLastProdDeploy(backendId, sinceDeploy);
 	const sinceMs = sinceDeploy ? (lastDeploy.data ?? undefined) : undefined;
 	const state = useMemo(() => (sinceMs !== undefined ? { ...stored, sinceMs } : stored), [stored, sinceMs]);
-	// Recomputed when the state changes: presets end "now".
-	const apiFilters = useMemo(() => toApiFilters(state), [state]);
+	const now = useSyncExternalStore(subscribe, () => getNow(backendId));
+	// Recomputed when the state or the backend's "now" changes (presets end then).
+	const apiFilters = useMemo(() => toApiFilters(state, now), [state, now]);
 	const set = useCallback((patch: Partial<FilterState>) => setTTFilters(backendId, { ...getState(backendId), ...patch }), [backendId]);
 	const reset = useCallback(() => setTTFilters(backendId, { range: getState(backendId).range }), [backendId]);
 	const pending = !isLoaded || (sinceDeploy && lastDeploy.isPending && lastDeploy.fetchStatus !== "idle");

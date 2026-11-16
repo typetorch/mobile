@@ -218,9 +218,10 @@ export class OpenCloud {
 		);
 	}
 
-	// Memory store (v2, read only)
+	// Memory store (v2, read only). The list is named after the resource (memoryStoreSortedMapItems), like the other v2
+	// lists here; `items` is kept as a fallback.
 	listSortedMap(universeId: number, map: string, params: { desc?: boolean; pageToken?: string } = {}) {
-		return this.request<{ items?: SortedMapItem[]; nextPageToken?: string }>(
+		return this.request<{ memoryStoreSortedMapItems?: SortedMapItem[]; items?: SortedMapItem[]; nextPageToken?: string }>(
 			"GET",
 			`/cloud/v2/universes/${universeId}/memory-store/sorted-maps/${encodeURIComponent(map)}/items${qs({ maxPageSize: 100, orderBy: params.desc ? "desc" : "asc", pageToken: params.pageToken })}`,
 			undefined,

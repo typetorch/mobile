@@ -103,7 +103,7 @@ function SortedMap({ universeId, cloud, map, can }: { universeId: number; cloud:
 		queryFn: ({ pageParam }) => listSortedMap(cloud, universeId, map, { desc, pageToken: pageParam }),
 		getNextPageParam: (last) => last.nextPageToken || undefined,
 	});
-	const items = list.data?.pages.flatMap((p) => p.items ?? []) ?? [];
+	const items = list.data?.pages.flatMap((p) => p.memoryStoreSortedMapItems ?? p.items ?? []) ?? [];
 	const lookup = useMutation({
 		mutationFn: (id: string) => getSortedMapItem(cloud, universeId, map, id),
 		onSuccess: (it) => setEditing(it),

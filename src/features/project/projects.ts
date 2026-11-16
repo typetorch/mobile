@@ -386,13 +386,15 @@ function sortProjects(projects: Project[]) {
 }
 
 export function useProjects() {
-	const { ready, keyInfo, hasKey, keyLoading, prefs, cloud } = useAccounts();
+	const { ready, keyInfo, hasKey, keyLoading, prefs, cloud, backends } = useAccounts();
 	const userId = prefs.userId ?? keyInfo?.authorizedUserId ?? null;
 	const keyIds = keyUniverseIds(keyInfo);
 	const keyGroups = keyGroupIds(keyInfo);
+	// Universes of connected TypeTorch backends: listed even when private, unlisted or in a group under the rank filter.
+	const backendIds = [...new Set(backends.map((b) => b.universeId).filter((id): id is number => typeof id === "number" && id > 0))].sort((a, b) => a - b);
 	const scopeSig = keyInfo ? ["legacy-group:manage", "legacy-universe:manage", "ad.campaign:read", "group:read"].map((s) => (hasScope(keyInfo, s) ? 1 : 0)).join("") : "-";
 	return useQuery<ProjectsResult>({
-		queryKey: ["projects", userId, prefs.groupMinRank, keyIds.join(","), keyGroups.join(","), prefs.extraUniverseIds.join(","), hasKey, keyInfo?.authorizedUserId ?? null, scopeSig],
+		queryKey: ["projects", userId, prefs.groupMinRank, keyIds.join(","), keyGroups.join(","), prefs.extraUniverseIds.join(","), backendIds.join(","), hasKey, keyInfo?.authorizedUserId ?? null, scopeSig],
 		enabled: ready && !(hasKey && keyLoading),
 		staleTime: 60_000,
 		queryFn: async () => {
@@ -406,6 +408,7 @@ export function useProjects() {
 			};
 			addSource("API key", keyIds);
 			addSource("Added by hand", prefs.extraUniverseIds);
+			addSource("TypeTorch backends", backendIds);
 
 			let groups = new Map<number, GroupInfo>();
 			if (userId) {

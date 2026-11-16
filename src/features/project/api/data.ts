@@ -284,10 +284,13 @@ function mapPath(universeId: number, map: string): string {
 	return `${u(universeId)}/memory-store/sorted-maps/${enc(map)}/items`;
 }
 
-/** Items in key order; `after` / `before` become the doc's filter on id (only <, > and && are allowed). */
+/**
+ * Items in key order; `after` / `before` become the doc's filter on id (only <, > and && are allowed). The v2 list is
+ * named after the resource (memoryStoreSortedMapItems); `items` is kept as a fallback.
+ */
 export function listSortedMap(cloud: OpenCloud, universeId: number, map: string, params: { desc?: boolean; after?: string; before?: string; pageToken?: string } = {}) {
 	const parts = [params.after ? `id > "${escapeCel(params.after)}"` : "", params.before ? `id < "${escapeCel(params.before)}"` : ""].filter(Boolean);
-	return cloud.request<{ items?: SortedMapItem[]; nextPageToken?: string }>(
+	return cloud.request<{ memoryStoreSortedMapItems?: SortedMapItem[]; items?: SortedMapItem[]; nextPageToken?: string }>(
 		"GET",
 		`${mapPath(universeId, map)}${qs({ maxPageSize: 100, orderBy: params.desc ? "desc" : "asc", filter: parts.length ? parts.join(" && ") : undefined, pageToken: params.pageToken })}`,
 		undefined,

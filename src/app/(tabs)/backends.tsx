@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { View } from "react-native";
 
+import { isUnencrypted } from "@/api/backend-auth";
 import type { BackendAccount } from "@/store/accounts";
 import { Badge, Button, Dot, EmptyState, Icon, List, Row, Screen, Section, Txt } from "@/components/ui";
 import { daysLeft } from "@/lib/format";
@@ -35,6 +36,7 @@ function BackendRow({ b }: { b: BackendAccount }) {
 						{b.name}
 					</Txt>
 					<Badge label={b.role} tone={b.role === "admin" ? "brand" : "muted"} />
+					{isUnencrypted(b.url) ? <Badge label="not encrypted" tone="warning" /> : null}
 				</View>
 			}
 			subtitle={
