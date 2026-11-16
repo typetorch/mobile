@@ -4,7 +4,7 @@
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
 
 import { GameIcon } from "@/components/ProjectRow";
@@ -28,6 +28,10 @@ export default function ProjectScreen() {
 	const project = useProject(id);
 	const backends = useUniverseBackends(id);
 	const [tab, setTab] = useState<Tab>(initialTab ?? (backends.length ? "typetorch" : "overview"));
+	// The sidebar switches tabs through the route's `tab` param.
+	useEffect(() => {
+		if (initialTab) setTab(initialTab);
+	}, [initialTab]);
 	const [backendId, setBackendId] = useState<string | null>(null);
 	const queryClient = useQueryClient();
 	const [refreshing, setRefreshing] = useState(false);
@@ -55,7 +59,8 @@ export default function ProjectScreen() {
 		<Screen refreshing={refreshing} onRefresh={onRefresh}>
 			<Stack.Screen
 				options={{
-					title: project.data?.name ?? "Experience",
+					// The header shows the experience as the picker; this is the line under it.
+					title: tabs.find((t) => t.value === tab)?.label ?? "Overview",
 					headerRight: () => (
 						<Pressable onPress={() => togglePin(id)} hitSlop={10} accessibilityRole="button" accessibilityLabel={pinned ? "Unpin this experience" : "Pin this experience"}>
 							<Icon name={pinned ? "star" : "star-outline"} size={22} color={pinned ? theme.warning : theme.mutedForeground} />
@@ -82,7 +87,14 @@ export default function ProjectScreen() {
 				<Skeleton height={56} />
 			) : null}
 
-			<Segmented options={tabs} value={tab} onChange={setTab} />
+			<Segmented
+				options={tabs}
+				value={tab}
+				onChange={(v) => {
+					setTab(v);
+					router.setParams({ tab: v });
+				}}
+			/>
 
 			{tab === "overview" && project.data ? <OverviewTab project={project.data} /> : null}
 			{tab === "analytics" ? <AnalyticsTab universeId={id} /> : null}

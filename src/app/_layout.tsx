@@ -62,6 +62,8 @@ function Navigation() {
 			>
 				<Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 				<Stack.Screen name="auth" options={{ headerShown: false }} />
+				{/* An experience's pages have their own stack (project/[universeId]/_layout: sidebar and project picker). */}
+				<Stack.Screen name="project/[universeId]" options={{ headerShown: false }} />
 			</Stack>
 		</NavThemeProvider>
 	);

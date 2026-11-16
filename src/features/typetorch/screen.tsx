@@ -16,7 +16,7 @@ import { useTheme } from "@/theme";
 
 import { SignedOutNotice } from "./components";
 import { FILTER_KEYS, hasFilterParams, readFilters, refreshFilterNow, setTTFilters } from "./filters";
-import { NavLeft, ProjectPickerTitle, useCurrentPage } from "./nav";
+import { ProjectPickerTitle, TTNavLeft, useCurrentPage } from "./nav";
 import { TT_PAGES } from "./pages";
 import { Sheet, SheetItem } from "./sheet";
 import { CommandPalette, HealthDot } from "./shell";
@@ -193,7 +193,7 @@ export function TTScreen({
 							/>
 						),
 						headerBackVisible: current.detail,
-						headerLeft: current.detail ? undefined : () => <NavLeft account={account} />,
+						headerLeft: current.detail ? undefined : () => <TTNavLeft account={account} />,
 						headerRight: () => (
 							<View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
 								<HealthDot backendId={backendId} />
