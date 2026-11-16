@@ -34,9 +34,9 @@ export const TT_PAGES: TTPage[] = [
 	{ key: "performance", title: "Performance", icon: "pulse-outline", description: "FPS, memory, ping, TPS", status: "todo" },
 	{ key: "economy", title: "Economy", icon: "cash-outline", description: "Currency sources and sinks", status: "ready" },
 	{ key: "monetization", title: "Monetization", icon: "card-outline", description: "Purchases and products", status: "ready" },
-	{ key: "query", title: "Query", icon: "code-slash-outline", description: "Named queries and SQL", status: "todo" },
-	{ key: "audit", title: "Audit log", icon: "document-text-outline", description: "Who changed what", status: "todo", adminOnly: true },
-	{ key: "backend-stats", title: "Backend stats", icon: "hardware-chip-outline", description: "The server's own metrics", status: "todo", adminOnly: true },
+	{ key: "query", title: "Query", icon: "code-slash-outline", description: "Named queries and SQL", status: "ready" },
+	{ key: "audit", title: "Audit log", icon: "document-text-outline", description: "Who changed what", status: "ready", adminOnly: true },
+	{ key: "backend-stats", title: "Backend stats", icon: "hardware-chip-outline", description: "The server's own metrics", status: "ready", adminOnly: true },
 ];
 
 /** The route of a page (overview is the backend's index). */

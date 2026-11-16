@@ -51,6 +51,7 @@ export function LineChart({
 	axisFormat,
 	timeLabel = dayLabel,
 	area = true,
+	marks,
 }: {
 	series: ChartSeries[];
 	height?: number;
@@ -58,6 +59,8 @@ export function LineChart({
 	axisFormat?: (v: number) => string;
 	timeLabel?: (t: number) => string;
 	area?: boolean;
+	/** Dashed vertical lines at these times (deploys, releases), drawn when inside the chart's span. */
+	marks?: { t: number; color?: string }[];
 }) {
 	const p = useTheme();
 	const [width, setWidth] = useState(0);
@@ -128,6 +131,11 @@ export function LineChart({
 								</SvgText>
 							</>
 						) : null}
+						{times.length > 1
+							? (marks ?? [])
+									.filter((m) => m.t >= (times[0] as number) && m.t <= (times[times.length - 1] as number))
+									.map((m, i) => <Line key={`m${i}`} x1={x(m.t)} x2={x(m.t)} y1={PAD.top} y2={PAD.top + plotH} stroke={m.color ?? p.warning} strokeWidth={1} strokeDasharray="2,3" opacity={0.8} />)
+							: null}
 						{series.map((s, si) => {
 							const pts = s.points.filter((pt) => pt.v !== null).sort((a, b) => a.t - b.t);
 							if (!pts.length) return null;

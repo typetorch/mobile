@@ -11,7 +11,7 @@ import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import type { Api } from "@/api/backend";
 import type { FunnelProgress, RobloxProductInfo } from "@/api/tt/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Icon, SkeletonList, Txt } from "@/components/ui";
-import { compactJson, fmtPct, fmtTime, shortId } from "@/lib/format";
+import { compactJson, fmtPct, fmtTime, prettyJson, shortId } from "@/lib/format";
 import { useBackend } from "@/store/accounts";
 import { radius, space, toneColor, useTheme, type Tone } from "@/theme";
 
@@ -413,5 +413,19 @@ export function NamedPlayerRow({ backendId, row, detail, right }: { backendId: s
 			{right}
 			<Icon name="chevron-forward" size={14} color={p.mutedForeground} />
 		</Pressable>
+	);
+}
+
+/** A value as pretty JSON text in a box that scrolls both ways (untrusted content is only ever shown as text). */
+export function JsonBlock({ value, max = 400 }: { value: unknown; max?: number }) {
+	const p = useTheme();
+	return (
+		<ScrollView horizontal style={{ maxHeight: max, backgroundColor: p.muted, borderRadius: 6 }} nestedScrollEnabled>
+			<ScrollView nestedScrollEnabled>
+				<Txt variant="mono" selectable style={{ fontSize: 11, padding: 8 }}>
+					{prettyJson(value)}
+				</Txt>
+			</ScrollView>
+		</ScrollView>
 	);
 }

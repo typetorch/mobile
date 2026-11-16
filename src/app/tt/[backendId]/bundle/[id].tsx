@@ -4,12 +4,12 @@
  */
 import { useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { View } from "react-native";
 
 import { asList, asRecord, bundlePlayers, field, logEntries, plain, playerLogOwners } from "@/api/tt/server-history";
 import type { DebugBundle, RemoteLogEntry } from "@/api/tt/types";
 import { Badge, Card, Chips, EmptyState, ErrorState, KV, List, Skeleton, Txt } from "@/components/ui";
-import { CopyButton, Note, Panel } from "@/features/typetorch/bits";
+import { CopyButton, JsonBlock, Note, Panel } from "@/features/typetorch/bits";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { TTScreen } from "@/features/typetorch/screen";
 import { fmtBytes, fmtInt, fmtTime, prettyJson, shortId } from "@/lib/format";
@@ -28,20 +28,6 @@ function Bundle({ backendId, id, readOnly }: { backendId: string; id: string; re
 	if (q.error) return q.error && "status" in q.error && (q.error as { status: number }).status === 404 ? <EmptyState title="This bundle is gone" body="Bundles are kept 30 days, 20 per server." /> : <ErrorState error={q.error} title="Could not load this bundle" onRetry={() => q.refetch()} />;
 	if (!q.data) return <Skeleton height={240} />;
 	return <BundleBody bundle={q.data} readOnly={readOnly} />;
-}
-
-function JsonBlock({ value, max = 400 }: { value: unknown; max?: number }) {
-	const p = useTheme();
-	const text = prettyJson(value);
-	return (
-		<ScrollView horizontal style={{ maxHeight: max, backgroundColor: p.muted, borderRadius: 6 }} nestedScrollEnabled>
-			<ScrollView nestedScrollEnabled>
-				<Txt variant="mono" selectable style={{ fontSize: 11, padding: 8 }}>
-					{text}
-				</Txt>
-			</ScrollView>
-		</ScrollView>
-	);
 }
 
 function LogLines({ entries, empty }: { entries: RemoteLogEntry[]; empty: string }) {
