@@ -47,7 +47,11 @@ import type {
 	StorageReport,
 	TestAlertResult,
 	WatchReply,
+	LiveMapServer,
+	ServerStreams,
 } from "./tt/types";
+import { decodeGeometry, type ExportStatus, type MapGeometry, type MapOverride, type MapsView, type Vec3 } from "@/features/maps/maps";
+import { openEventStream, type SseConnection, type SseHandlers } from "./tt/sse";
 import type { DeployMark, PerfServer, ServerMetricPoint } from "./tt/perf";
 import type { DeployDetail, DeployPage } from "./tt/deploys";
 import { deadline } from "./http";
@@ -168,6 +172,32 @@ export function createApi(options: ApiOptions) {
 		}
 		if (body === undefined) throw new ApiError(response.status, "the answer is not JSON", path);
 		return body as T;
+	}
+
+	/** A GET whose answer is bytes (map geometry, images): the status, the content type, the bytes; never throws on a status. */
+	async function binary(path: string, outer?: AbortSignal, timeoutMs = options.timeoutMs ?? 30_000): Promise<{ status: number; contentType: string; bytes: ArrayBuffer; error?: string }> {
+		const { signal, done } = deadline(timeoutMs, outer);
+		try {
+			const response = await doFetch(`${base}${path}`, { signal, headers: { authorization: `Bearer ${options.token}` } });
+			const bytes = await response.arrayBuffer();
+			const contentType = response.headers.get("content-type") ?? "";
+			let error: string | undefined;
+			if (!response.ok && contentType.includes("json")) {
+				try {
+					error = (JSON.parse(String.fromCharCode(...new Uint8Array(bytes.slice(0, 4096)))) as { error?: string }).error;
+				} catch {
+					// not JSON
+				}
+			}
+			if (response.status === 401) options.onUnauthorized?.();
+			return { status: response.status, contentType, bytes, ...(error ? { error } : {}) };
+		} catch (error) {
+			if (outer?.aborted) throw error;
+			const reason = signal.aborted ? ((signal.reason as Error | undefined)?.message ?? "aborted") : (error as Error).message;
+			throw new ApiError(0, `cannot reach the backend: ${reason}`, path);
+		} finally {
+			done();
+		}
 	}
 
 	const post = <T>(path: string, body: unknown, signal?: AbortSignal) =>
@@ -312,6 +342,34 @@ export function createApi(options: ApiOptions) {
 		ackAlert: (id: number, by?: string, signal?: AbortSignal) => post<{ ok: boolean }>(`/v1/fleet/alerts/${id}/ack`, by ? { by } : {}, signal),
 		/** The SSE stream's URL (EventSource can't set headers; the proxy adds the token). */
 		streamUrl: (params: { branch?: string; types?: string } = {}) => `${base}/v1/fleet/stream${qs(params)}`,
+		/**
+		 * An SSE stream with the Bearer token (React Native has no EventSource): `/v1/fleet/stream?branch` or
+		 * `/v1/live?topics=error`. The caller reopens it when `onClose` comes (useEventStream).
+		 */
+		eventStream: (path: string, handlers: SseHandlers): SseConnection => openEventStream(`${base}${path}`, { authorization: `Bearer ${options.token}` }, handlers),
+		/** Plans/34: one server's declared streams and its frames after `since` (owners; the server watch makes the kernel post them). */
+		serverStreams: (job: string, since?: number, signal?: AbortSignal) => get<ServerStreams>(`/v1/fleet/servers/${encodeURIComponent(job)}/streams${qs({ since })}`, signal),
+		/** Plans/34: the live map is open (every 20 s; lapses after 60 s): live servers post positions every 3 s. Owners only. */
+		watchLiveMap: (signal?: AbortSignal) => post<{ ok: true; until: number; wake: boolean }>("/v1/fleet/live-map/watch", {}, signal),
+		/** Plans/34: every live server's latest positions. Owners only. */
+		liveMap: (signal?: AbortSignal) => get<{ servers: LiveMapServer[]; watchedUntil: number | null }>("/v1/fleet/live-map", signal),
+		/** Plans/33: the exported maps, the export's state, out of date, the overrides. */
+		maps: (signal?: AbortSignal) => get<MapsView>("/v1/maps", signal),
+		/** Starts an export (owners; one at a time); `names` adds map names to look for. */
+		exportMaps: (names: string[] = []) => post<{ export: ExportStatus; names: string[] }>("/v1/maps/export", names.length ? { names } : {}),
+		/** A map's manual override (owners): the model path (next export) and / or an offset (at once). */
+		setMapOverride: (name: string, body: { path?: string; offset?: Vec3 }) =>
+			request<{ override: MapOverride | null }>(`/v1/maps/${encodeURIComponent(name)}/override`, { method: "PUT", body: JSON.stringify(body) }),
+		removeMapOverride: (name: string) => request<{ override: null }>(`/v1/maps/${encodeURIComponent(name)}/override`, { method: "DELETE" }),
+		/** One map's geometry (binary TTMP, v=2: with the texture section), decoded. */
+		async mapGeometry(name: string, signal?: AbortSignal): Promise<MapGeometry> {
+			const path = `/v1/maps/${encodeURIComponent(name)}/geometry`;
+			const answer = await binary(`${path}?v=2`, signal);
+			if (answer.status !== 200) throw new ApiError(answer.status, answer.error ?? `HTTP ${answer.status}`, path);
+			return decodeGeometry(new Uint8Array(answer.bytes));
+		},
+		/** A Roblox image from the backend's store: 200 the bytes, 202 still resolving, else none (never throws on a status). */
+		image: (id: string, signal?: AbortSignal) => binary(`/v1/images/${encodeURIComponent(id)}`, signal),
 	};
 }
 

@@ -9,7 +9,7 @@ import { useState } from "react";
 import { View } from "react-native";
 
 import { LineChart } from "@/charts/LineChart";
-import { Badge, Card, Dot, ErrorState, KV, List, Row, Section, Segmented, Skeleton, Stat, StatGrid, Txt } from "@/components/ui";
+import { Badge, Card, Dot, ErrorState, Icon, KV, List, Row, Section, Segmented, Skeleton, Stat, StatGrid, Txt } from "@/components/ui";
 import { healthTone, useTTQuery } from "@/features/typetorch/hooks";
 import { TTScreen } from "@/features/typetorch/screen";
 import { lifeStart, lifetimeMs, offlineText, timelineEvents, type TimelineEvent } from "@/api/tt/server-history";
@@ -84,6 +84,18 @@ function Server({ backendId, job, admin }: { backendId: string; job: string; adm
 				<Stat label="Memory" value={s.memMb !== null && s.memMb !== undefined ? `${fmtInt(s.memMb)} MB` : "–"} sub={s.luaMb !== null && s.luaMb !== undefined ? `Lua ${fmtInt(s.luaMb)} MB` : undefined} />
 				<Stat label="Physics" value={s.physFps !== null && s.physFps !== undefined ? `${fmtNum(s.physFps, 0)} FPS` : "–"} />
 			</StatGrid>
+
+			{admin && state === "live" ? (
+				<List>
+					<Row
+						chevron
+						left={<Icon name="locate-outline" size={18} />}
+						title="Live map"
+						subtitle="Players on the exported map at 2 Hz, 20 s trails, the game's markers"
+						onPress={() => router.push(`/tt/${backendId}/server-map/${encodeURIComponent(job)}`)}
+					/>
+				</List>
+			) : null}
 
 			<Section title="Last hours" right={<Segmented options={METRIC_RANGES} value={hours} onChange={setHours} style={{ width: 210 }} />}>
 				{metrics.error ? (

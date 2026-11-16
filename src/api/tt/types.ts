@@ -753,6 +753,7 @@ export interface QueryResults {
 	monetization: MonetizationResult;
 	"monetization-players": MonetizationPlayers;
 	"monetization-purchases": MonetizationPurchases;
+	"map-positions": MapPositionsResult;
 }
 
 export type QueryName = keyof QueryResults;
@@ -1852,4 +1853,72 @@ export interface BackupsStatus {
 	backups: BackupInfo[];
 	/** The data disk (null before the first check, or where it can't be measured). */
 	disk: DiskStatus | null;
+}
+
+// Plans/34: game-defined debug streams and the live map (backend src/fleet/live-debug.ts; web lib/types.ts) ---------------
+
+/** A read-only command the game declared (op `game.<n>`). */
+export interface GameCommand {
+	n: string;
+	l?: string;
+	d?: string;
+}
+
+/** A stream the game declared (key `game.<n>` in a frame). */
+export interface GameStream {
+	n: string;
+	hz: number;
+	k: "points" | "json";
+	l?: string;
+}
+
+/** The built-in `positions` stream's player. x / y / z absent with st "none" (no character). */
+export interface LivePlayer {
+	u: number;
+	n: string;
+	x?: number;
+	y?: number;
+	z?: number;
+	yaw?: number;
+	hp?: number;
+	st: "alive" | "dead" | "none";
+}
+
+/** A `points` stream's point. */
+export interface StreamPoint {
+	x: number;
+	y: number;
+	z: number;
+	label?: string;
+	color?: string;
+}
+
+/** One sample: the kernel's time (unix ms) and each stream's value (`positions`, `game.<name>`). */
+export interface StreamFrame {
+	t: number;
+	s: { positions?: { players: LivePlayer[] } } & Record<string, unknown>;
+}
+
+/** GET /v1/fleet/servers/<job>/streams. */
+export interface ServerStreams {
+	declared: { streams: GameStream[]; commands: GameCommand[] };
+	frames: StreamFrame[];
+}
+
+/** GET /v1/fleet/live-map: each live server's latest positions. */
+export interface LiveMapServer {
+	job: string;
+	branch: string | null;
+	artifact: string | null;
+	at: number;
+	players: LivePlayer[];
+}
+
+/** The map-positions query's answer (backend src/queries/maps.ts): positioned events (px / py / pz props) per heat cell. */
+export interface MapPositionsResult {
+	mapKey: string;
+	cell: number;
+	names: { name: string; events: number }[];
+	cells: { map: string; event: string; x: number; z: number; y: number | null; ylo: number | null; n: number }[];
+	truncated: boolean;
 }

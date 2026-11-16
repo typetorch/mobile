@@ -21,7 +21,7 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 
 | Item | Web file | Route(s) | Role | App |
 | --- | --- | --- | --- | --- |
-| Sidebar from one config, 5 groups (Overview; Players & gameplay; Observe & troubleshoot; Data; Admin), collapsible, phone drawer | `lib/nav.ts`, `components/SidebarNav.tsx`, `lib/nav-state.ts` | – | owner items hidden for `web` role | partial: `features/typetorch/pages.ts` is a flat list of 20 pages; missing Demographics, Notifications, Feedback, Recordings, Maps, Live events, Session time, Live map; no groups |
+| Sidebar from one config, 5 groups (Overview; Players & gameplay; Observe & troubleshoot; Data; Admin), collapsible, phone drawer | `lib/nav.ts`, `components/SidebarNav.tsx`, `lib/nav-state.ts` | – | owner items hidden for `web` role | partial: `features/typetorch/pages.ts` is a flat list of 20 pages; missing Demographics, Notifications, Feedback, Recordings, Live events, Session time (Maps and Live map added by maps-live); no groups |
 | Header: page title, server status dot (GET `/healthz` every 30 s, 502/503/504 wording), theme menu, user menu / sign out | `components/AppShell.tsx` (`ServerStatus`, `ThemeToggle`, `UserMenu`) | `/healthz`, POST `/v1/auth/logout` | all | partial: health only on `tt/settings.tsx`; theme is app-wide (`(tabs)/settings.tsx`); no status dot in the TT header |
 | Place card (icon, name, live players, link to roblox.com) and tab title "<page> \| <place>" | `components/PlaceCard.tsx` | GET `/v1/place` | all | partial: name used in `app/backend/connect.tsx`; no card / live count in `features/typetorch/components.tsx` `BackendHeader` |
 | Top-bar "Find player" (pid, part of pid or UserId → Players) | `components/Identity.tsx` `FindPlayer` | GET `/v1/identity?uid=` | all | partial: only the Players page search (`tt/players.tsx`) |
@@ -177,13 +177,13 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 | --- | --- | --- | --- |
 | Live servers table (DataTable `fleet-servers`): health badge + reasons popover, players, build, branch, kernel, TPS, memory, place version, budget pressure (DataStore / HTTP vs Roblox limits), country, address (owners), JobId → server page; branch filter (`branch`) | GET `/v1/fleet/servers?branch` | all; IP owner | partial: list + branch chips + versions; no budget, location or table features |
 | Game-declared columns (hidden until picked in Columns) | GET `/v1/fleet/columns` | all | missing |
-| Live events feed (SSE: server, alert, alert_ack, report, deploy) and query invalidation | SSE GET `/v1/fleet/stream?branch` | all | missing (app polls every 5 s) |
+| Live events feed (SSE: server, alert, alert_ack, report, deploy) and query invalidation | SSE GET `/v1/fleet/stream?branch` | all | present: `features/typetorch/live-feeds.ts` `useFleetStream` (XHR streaming with the Bearer token, reopened with a backoff), refetches servers / gone / alerts / reports, "Live events" log (50); polls every 5 s only while the stream is down |
 | Latest deploy: results, server reports, deploy errors (DataTables `fleet-results`, `fleet-reports`, `fleet-deploy-errors`) | GET `/v1/fleet/reports?latest&branch` (or `?seq` / `?artifact`) | all | missing (app home shows the latest deploy row only) |
 | By country (DataTable `fleet-countries`) + DB-IP credit | from servers | all | missing |
 | Alerts (90 days, newest first, bundle link) | GET `/v1/fleet/alerts` | all | partial: home shows 5 recent alerts; ack only on `tt/deploy/[seq].tsx` |
 | Recently gone (DataTable `fleet-gone`) | GET `/v1/fleet/servers?gone=1` | all | present (+ `tt/server-history.tsx`) |
 
-### Live map (`/live`) — see §5 maps-live.
+### Live map (`/live`) — see Maps and Live map below (§5), app `tt/live.tsx`.
 
 ### Server (`/servers/:jobId`) — `pages/Server.tsx`, `pages/server/*`, `lib/remote-debug.ts`, `lib/live-streams.ts`
 | Item | Route(s) | Role | App (`tt/server/[job].tsx`) |
@@ -199,7 +199,7 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 | Logs tab: server log ring (`logs`, "Fetch newer"), player client logs (`player.logs`) | ops | owner | missing |
 | Players tab (`players`: dev, ping, account age, client start; "Logs") | op | owner | missing |
 | Game tab: game commands (`game.<name>`, table / kv / JSON answers), Streams latest values (~1 s) | ops, GET `.../streams?since` | owner | missing |
-| Live map tab (positions 2 Hz on the exported map, 20 s trail, `points` markers) | GET `.../streams`, maps geometry | owner | missing |
+| Live map tab (positions 2 Hz on the exported map, 20 s trail, `points` markers) | GET `.../streams`, maps geometry | owner | present as its own screen `tt/server-map/[job].tsx` (linked from the server page for live servers; holds the server watch 20 s, polls streams ~1 s, `features/maps/LiveMap.tsx`) so drags move the map, not the page |
 | State tab (`state`: roots, 100-entry pages, key filter, breadcrumb) | op | owner | missing |
 | Dex tab (`dex.children` lazy tree, `dex.props` properties / attributes / tags) | ops | owner | missing |
 | Modules / Builds / Budget / Errors / Network tabs (13 tables) | ops `modules`, `assets`, `builds`, `budget`, `errors`, `network` | owner | missing |
@@ -224,7 +224,7 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 | Window, realm, search `q`, build, branch filters; sort (`sort=`) | GET `/v1/errors?window&realm&q&build&branch&sort` | all | partial: window / realm / q only |
 | Trend chart with step choice and deploy marks | same | all | partial: sparkline per kind; no total trend / marks |
 | Kinds table (`errors-kinds`) | same | all | present as a list |
-| Live new errors (SSE topic `error`) | SSE GET `/v1/live?topics=error` | all | missing |
+| Live new errors (SSE topic `error`) | SSE GET `/v1/live?topics=error` | all | present: `useErrorStream` (debounced 1.5 s refetch, status badge live / connecting / retrying; polls every 30 s while down) |
 | Kind side sheet (`fp`): where, stack, by side / build (→ deploy or Performance) / branch, servers | GET `/v1/errors/<fp>` | all | present (`tt/error/[fp].tsx`) |
 | Players who hit it (`errors-players`) | GET `/v1/errors/<fp>/players` | all | missing (`errorPlayers` defined, unused) |
 | Drop rules: list with drop counts, editor with live preview, save | GET `/v1/errors/drop-rules`, POST `.../preview`, PATCH `/v1/admin/settings` (`errorDropRules`) | list all; edit owner | missing |
@@ -285,18 +285,18 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 
 | Item | Route(s) | Role | App |
 | --- | --- | --- | --- |
-| Export card: last export (when, place version, parts), out of date, Export (owners) with progress, maps without a model | GET `/v1/maps`, POST `/v1/maps/export` | export owner | missing |
-| Map picker, 2D / 3D, Y band (floors, free range), draw toggles (decorative meshes, markers), draw rule | GET `/v1/maps/<name>/geometry` (binary TTMP) | all | missing |
-| Layers: one per positioned event (`px/py/pz`), dots or heat cells 0.5 / 1 / 2 studs, filter bar applies | `/v1/query/map-positions`, `/v1/query/recording-layers` | all | missing |
-| Alignment: positioned events vs geometry or recordings; apply suggested offset / set model path; remove | PUT / DELETE `/v1/maps/<name>/override` | owner | missing |
-| Textures / decals | GET `/v1/images/<id>` (200 / 202) | all | missing |
-| View state in URL (map, view, band, toggles, cell) | – | all | missing |
+| Export card: last export (when, place version, parts), out of date, Export (owners) with progress, maps without a model | GET `/v1/maps`, POST `/v1/maps/export` | export owner | present (`tt/maps.tsx`; Export behind a confirm, 1.5 s poll while running, geometry refetched when done; + earlier exports line) |
+| Map picker, 2D / 3D, Y band (floors, free range), draw toggles (decorative meshes, markers), draw rule | GET `/v1/maps/<name>/geometry` (binary TTMP) | all | present (`features/maps/maps.ts` TTMP v1 / v2 decoder, `BandControls.tsx` floors + two-thumb range, "Bigger" map toggle) |
+| Layers: one per positioned event (`px/py/pz`), dots or heat cells 0.5 / 1 / 2 studs, filter bar applies | `/v1/query/map-positions`, `/v1/query/recording-layers` | all | present |
+| Alignment: positioned events vs geometry or recordings; apply suggested offset / set model path; remove | PUT / DELETE `/v1/maps/<name>/override` | owner | present (recordings fallback via `recording-layers`, unconfirmed-zone note; offset and remove behind confirms) |
+| Textures / decals | GET `/v1/images/<id>` (200 / 202) | all | present (`features/maps/images.ts`: 200 written once to the cache dir, uploaded as an expo-gl `{ localUri }` texture; 202 / 429 / 5xx retried 4 s .. 2 min; decals, textures, MaterialVariants, material look) |
+| View state in URL (map, view, band, toggles, cell) | – | all | partial: one view state per backend in memory (`features/maps/hooks.ts` useMapView, shared by Maps / Live / server live map), not in a link (`map-view.ts` keeps the URL form) |
 
 ### Live map (`/live`) — `pages/Live.tsx`, `pages/live/LiveMap.tsx`, `lib/live-map.ts`, `lib/live-streams.ts`
 
 | Item | Route(s) | Role | App |
 | --- | --- | --- | --- |
-| Fleet-wide watch every 20 s, read latest positions every 3 s, dots moved between frames, colour per server, list per server, map switcher, follow player (cut roofs), name on hover, trail, `points` markers; read-only role gets a note | POST `/v1/fleet/live-map/watch`, GET `/v1/fleet/live-map` | owner | missing |
+| Fleet-wide watch every 20 s, read latest positions every 3 s, dots moved between frames, colour per server, list per server, map switcher, follow player (cut roofs), name on hover, trail, `points` markers; read-only role gets a note | POST `/v1/fleet/live-map/watch`, GET `/v1/fleet/live-map` | owner | present (`tt/live.tsx`, `features/maps/LiveMap.tsx`): hover is a tap (name label + follow); following also keeps the player in the middle of the view |
 
 ### Recordings (`/recordings`) — `pages/Recordings.tsx`, `pages/recordings/*`, `components/maps/PlayerScene.tsx`, `components/maps/avatar.ts`, `lib/anim-clips.ts`, `lib/asset-images.ts`
 
@@ -324,7 +324,7 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 | Explain panel (`explain=<metric>`, headline, per dimension rate / mix diverging chart, tables, one-level drill) | `components/ExplainPanel.tsx`, `lib/explain.ts` | missing |
 | Drawn node graph (React Flow + dagre, pan / zoom, facet, moments) + Copy Mermaid | `components/GraphView.tsx`, `components/LazyGraph.tsx`, `lib/graph.ts` | partial: list + Copy Mermaid (`features/typetorch/graph.tsx`) |
 | Charts: DayBars (per day / step, previous dashed, bar click), PerfChart, Sparkline, recharts | `components/DayBars.tsx`, `PerfChart.tsx`, `Sparkline.tsx` | partial: `charts/LineChart.tsx` (LineChart scrub, BarChart tap, Sparkline, ShareBars); no previous-period overlay on bars |
-| 3D / 2D map renderer (three.js instanced meshes, orbit + fly keys, ortho 2D, clipping band, see-through looks, textures) | `components/maps/{map-renderer.ts,MapScene.tsx,BandControls.tsx}` | missing (three@0.187.0 + expo-gl now installed) |
+| 3D / 2D map renderer (three.js instanced meshes, orbit + fly keys, ortho 2D, clipping band, see-through looks, textures) | `components/maps/{map-renderer.ts,MapScene.tsx,BandControls.tsx}` | present: `features/maps/{renderer.ts,MapScene.tsx,BandControls.tsx}` on expo-gl + three (one finger turns / pans, two fingers pan, pinch zooms toward the fingers, tap picks, Fit, `focus`; actors / `setView` / `pickActor` kept for the recordings' Player view); WASD fly keys have no phone twin. Types for three in `src/types/three.d.ts`. Not yet run on a device (typechecked only) |
 | Shareable / persisted state (every `useParam`) | `lib/hooks.ts` | missing (no AsyncStorage, no deep-link params) |
 | Benchmarks (50th / 90th) kept per browser | `lib/benchmarks.ts` | present per backend on the phone (secure store) |
 
@@ -332,24 +332,26 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 
 | Stream | Route | Web user | App |
 | --- | --- | --- | --- |
-| Fleet SSE (server, alert, alert_ack, report, deploy) | GET `/v1/fleet/stream?branch` | Fleet | missing (5 s poll) |
-| Errors SSE | GET `/v1/live?topics=error` | Errors | missing |
+| Fleet SSE (server, alert, alert_ack, report, deploy) | GET `/v1/fleet/stream?branch` | Fleet | present (XHR streaming, `api/tt/sse.ts`; 5 s poll while down) |
+| Errors SSE | GET `/v1/live?topics=error` | Errors | present (30 s poll while down) |
 | Server watch (20 s) + command result poll (600 ms) | POST `.../watch`, GET `.../commands/<id>` | Server | missing |
-| Server streams (~1 s) | GET `/v1/fleet/servers/<job>/streams?since` | Server Game / Live map tabs | missing |
-| Live map watch (20 s) + poll (3 s) | POST `/v1/fleet/live-map/watch`, GET `/v1/fleet/live-map` | Live | missing |
+| Server streams (~1 s) | GET `/v1/fleet/servers/<job>/streams?since` | Server Game / Live map tabs | present for the live map (`features/maps/live-streams.ts` useServerStreams, + useServerWatch 20 s); Game tab is ops |
+| Live map watch (20 s) + poll (3 s) | POST `/v1/fleet/live-map/watch`, GET `/v1/fleet/live-map` | Live | present (`useLiveMap`; paused while the app is in the background, watch renewed on return) |
 | Health 30 s, storage 30 s, busy note 30 s, realtime 30 s, notify status / inbox 15 s, live events 60 s, alert rules 60 s, backups 60 s, backend stats 2 s | various | various | only health (on open), realtime, backend stats |
 
 ## 8. API client gaps (`src/api/backend.ts` vs `web/src/lib/api.ts`)
 
 Missing methods: `cancelLiveEvent`, `createLiveEvent`, `liveEvents`, `liveEventLift`, `errorDropRules`, `previewDropRule`,
-`experimentChange`, `fleetColumns`, `liveMap`, `watchLiveMap`, `serverStreams`, `migrateStatus`, `migrateAction`,
+`experimentChange`, `fleetColumns`, `migrateStatus`, `migrateAction`,
 `migrateResolve`, `migrateStart`, `notifyConfig`, `notifyRecent`, `notifyStatus`, `notifyTest`, `notifyUser`,
-`notifyUsers` (+ CSV), `robloxDemographics`, `downloadBackup`; plus `lib/maps.ts` (`/v1/maps*`), `/v1/images/<id>`,
-`/v1/anims/<id>`. Defined but unused: `remoteCommand`, `remoteResult`, `watchServer`, `debugAudit`, `saveSettings`,
+`notifyUsers` (+ CSV), `robloxDemographics`, `downloadBackup`; plus `/v1/anims/<id>`. (Added by maps-live: `liveMap`,
+`watchLiveMap`, `serverStreams`, `eventStream` (SSE), `maps`, `exportMaps`, `setMapOverride`, `removeMapOverride`,
+`mapGeometry`, `image`.) Defined but unused: `remoteCommand`, `remoteResult`, `watchServer`, `debugAudit`, `saveSettings`,
 `testAlert`, `alertRules`, `backups`, `backupNow`, `devices`, `revokeDevice`, `storage`, `fleetReport`,
 `robloxServerLogs`, `errorPlayers`, `liveUrl`, `streamUrl`. Missing types (`api/tt/types.ts`): Churn*, Ltv*, Explain*,
 Demographic*/RobloxDemographic*, SessionTime*, Feedback*, Notify*, Migrate*, Rec*/Recording*/QuitAutopsy*/FirstAction*,
-Ext* (tt-ext-1), GameColumn*/GameCommand/GameStream/StreamFrame/StreamPoint/ServerStreams/LiveMapServer/LivePlayer,
+Ext* (tt-ext-1), GameColumn* (GameCommand / GameStream / StreamFrame / StreamPoint / ServerStreams / LiveMapServer /
+LivePlayer / MapPositionsResult added by maps-live),
 ErrorDropRule*/DropPreview, ExperimentChangeRequest/PreparedExperimentChange/AssignmentCheck, IngestPressure,
 QueueStats, `AccountAge` and the audience `Filters` keys.
 
@@ -369,16 +371,19 @@ payouts (no Open Cloud API).
 ## Build groups (every non-present item)
 
 ### maps-live
-- Maps page `tt/maps.tsx` (web `pages/Maps.tsx`): export card + Export (owner) — GET `/v1/maps`, POST `/v1/maps/export`
-- Maps: map picker, 2D / 3D, Y band floors / range, decorative / marker toggles — GET `/v1/maps/<name>/geometry` (TTMP decoder `lib/maps.ts`)
-- Maps: positioned-event layers, dots / heat 0.5 / 1 / 2 studs — `/v1/query/map-positions`, `/v1/query/recording-layers`
-- Maps: alignment, apply offset / model path / remove (owner) — PUT / DELETE `/v1/maps/<name>/override`
-- Maps: textures — GET `/v1/images/<id>` (`lib/map-textures.ts`)
-- 3D map renderer on expo-gl + three (port `components/maps/map-renderer.ts`, `MapScene.tsx`, `BandControls.tsx`): instanced meshes, orbit / pan / pinch, ortho 2D, clipping band, see-through looks
-- Live map page `tt/live.tsx` (web `pages/Live.tsx`, `pages/live/LiveMap.tsx`, `lib/live-map.ts`): watch 20 s + poll 3 s, interpolated dots, per-server list, map switcher, follow, trail, `points` (owner) — POST `/v1/fleet/live-map/watch`, GET `/v1/fleet/live-map`
-- Server Live map tab (web `pages/server/LiveMapTab.tsx`): positions 2 Hz, 20 s trail — GET `/v1/fleet/servers/<job>/streams`
-- Live streams hooks (port `lib/live-streams.ts`): server stream poll ~1 s, live-map watch / poll, ticker; Fleet SSE `/v1/fleet/stream` and Errors SSE `/v1/live?topics=error` via fetch streaming or polling fallback
-- Types: LiveMapServer, LivePlayer, ServerStreams, StreamFrame, StreamPoint, GameStream; API: `liveMap`, `watchLiveMap`, `serverStreams`, maps client
+
+Done on `feat/phone-parity` (typechecked; not yet run on a device: expo-gl texture upload from `{ localUri }` through three's texStorage path and the XHR SSE streaming are the parts to check first).
+
+- [x] Maps page `tt/maps.tsx` (web `pages/Maps.tsx`): export card + Export (owner) — GET `/v1/maps`, POST `/v1/maps/export`
+- [x] Maps: map picker, 2D / 3D, Y band floors / range, decorative / marker toggles — GET `/v1/maps/<name>/geometry` (TTMP decoder `lib/maps.ts`)
+- [x] Maps: positioned-event layers, dots / heat 0.5 / 1 / 2 studs — `/v1/query/map-positions`, `/v1/query/recording-layers`
+- [x] Maps: alignment, apply offset / model path / remove (owner) — PUT / DELETE `/v1/maps/<name>/override`
+- [x] Maps: textures — GET `/v1/images/<id>` (`lib/map-textures.ts`)
+- [x] 3D map renderer on expo-gl + three (port `components/maps/map-renderer.ts`, `MapScene.tsx`, `BandControls.tsx`): instanced meshes, orbit / pan / pinch, ortho 2D, clipping band, see-through looks
+- [x] Live map page `tt/live.tsx` (web `pages/Live.tsx`, `pages/live/LiveMap.tsx`, `lib/live-map.ts`): watch 20 s + poll 3 s, interpolated dots, per-server list, map switcher, follow, trail, `points` (owner) — POST `/v1/fleet/live-map/watch`, GET `/v1/fleet/live-map`
+- [x] Server Live map tab (web `pages/server/LiveMapTab.tsx`): positions 2 Hz, 20 s trail — GET `/v1/fleet/servers/<job>/streams`
+- [x] Live streams hooks (port `lib/live-streams.ts`): server stream poll ~1 s, live-map watch / poll, ticker; Fleet SSE `/v1/fleet/stream` and Errors SSE `/v1/live?topics=error` via fetch streaming or polling fallback
+- [x] Types: LiveMapServer, LivePlayer, ServerStreams, StreamFrame, StreamPoint, GameStream; API: `liveMap`, `watchLiveMap`, `serverStreams`, maps client
 
 ### recordings
 - Recordings page `tt/recordings.tsx` (web `pages/Recordings.tsx`), 4 tabs, state in params

@@ -1,6 +1,7 @@
 /**
- * Fleet: the live servers (the web page streams SSE; the app polls every 5 s while the screen is open), the
- * versions they run, and the recently gone ones.
+ * Fleet: the live servers, the versions they run, and the recently gone ones. Live updates come over the fleet SSE
+ * stream (GET /v1/fleet/stream, like the web; features/typetorch/live-feeds.ts) with a log of its events; while the
+ * stream is down the screen polls every 5 s.
  */
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
@@ -10,6 +11,7 @@ import type { FleetServer } from "@/api/tt/types";
 import { ShareBars } from "@/charts/LineChart";
 import { Badge, Button, Card, Chips, Dot, EmptyState, ErrorState, List, Row, Section, SkeletonList, Stat, StatGrid, Txt } from "@/components/ui";
 import { healthTone, useTTQuery } from "@/features/typetorch/hooks";
+import { streamLabel, useFleetStream } from "@/features/typetorch/live-feeds";
 import { TTScreen } from "@/features/typetorch/screen";
 import { fmtAgo, fmtInt, fmtNum, shortId } from "@/lib/format";
 import { useTheme } from "@/theme";
@@ -73,7 +75,9 @@ export default function FleetScreen() {
 function Fleet({ backendId }: { backendId: string }) {
 	const [branch, setBranch] = useState<string>("");
 	const [showGone, setShowGone] = useState(false);
-	const servers = useTTQuery(backendId, ["fleet", "servers"], (api, s) => api.fleetServers(undefined, s), { refetchInterval: 5_000 });
+	const stream = useFleetStream(backendId, "");
+	const live = stream.status === "live";
+	const servers = useTTQuery(backendId, ["fleet", "servers"], (api, s) => api.fleetServers(undefined, s), { refetchInterval: live ? 60_000 : 5_000 });
 	const gone = useTTQuery(backendId, ["fleet", "gone"], (api, s) => api.fleetGoneServers(undefined, s), { enabled: showGone });
 
 	const branches = useMemo(() => Array.from(new Set((servers.data?.servers ?? []).map((s) => s.branch ?? "–"))).sort(), [servers.data]);
@@ -104,7 +108,7 @@ function Fleet({ backendId }: { backendId: string }) {
 				</Section>
 			) : null}
 
-			<Section title={`Live servers · every 5 s`}>
+			<Section title={`Live servers · ${live ? "streaming" : "every 5 s"}`} right={<Badge label={streamLabel(stream.status).text} tone={streamLabel(stream.status).tone} />}>
 				{list.length ? (
 					<List>
 						{list.map((s) => (
@@ -115,6 +119,16 @@ function Fleet({ backendId }: { backendId: string }) {
 					<EmptyState icon="server-outline" title="No live servers" body="When a game server with the TypeTorch kernel starts, it shows up here within a heartbeat." />
 				)}
 			</Section>
+
+			{stream.log.length ? (
+				<Section title="Live events">
+					<List>
+						{stream.log.slice(0, 20).map((e, i) => (
+							<Row key={`${e.at}:${i}`} title={e.text} subtitle={`${e.type} · ${fmtAgo(e.at)}`} numberOfLines={2} />
+						))}
+					</List>
+				</Section>
+			) : null}
 
 			<Section title="Recently gone">
 				{!showGone ? (

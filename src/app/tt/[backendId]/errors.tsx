@@ -1,4 +1,4 @@
-/** Errors: the error kinds seen in a window (GET /v1/errors), searchable, by realm, with their trend. */
+/** Errors: the error kinds seen in a window (GET /v1/errors), searchable, by realm, with their trend; new errors refetch the list live (SSE GET /v1/live?topics=error, features/typetorch/live-feeds.ts). */
 import { router } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
@@ -6,6 +6,7 @@ import { View } from "react-native";
 import { Sparkline } from "@/charts/LineChart";
 import { Badge, Button, Chips, EmptyState, ErrorState, List, Row, SearchBar, Section, Segmented, SkeletonList, Stat, StatGrid, Txt } from "@/components/ui";
 import { useTTQuery } from "@/features/typetorch/hooks";
+import { streamLabel, useErrorStream } from "@/features/typetorch/live-feeds";
 import { TTScreen } from "@/features/typetorch/screen";
 import { compact, fmtAgo } from "@/lib/format";
 import { useTheme } from "@/theme";
@@ -27,10 +28,15 @@ function Errors({ backendId }: { backendId: string }) {
 	const [realm, setRealm] = useState("");
 	const [search, setSearch] = useState("");
 	const [q, setQ] = useState("");
+	const stream = useErrorStream(backendId);
+	const streamText = streamLabel(stream.status);
 	const list = useTTQuery(backendId, ["errors", window, realm, q], (api, s) => api.errors({ window, limit: 100, ...(realm ? { realm } : {}), ...(q ? { q } : {}) }, s), { staleTime: 30_000 });
 	return (
 		<>
-			<Segmented options={WINDOWS} value={window} onChange={setWindow} />
+			<View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+				<Segmented options={WINDOWS} value={window} onChange={setWindow} style={{ flex: 1 }} />
+				<Badge label={streamText.text} tone={streamText.tone} />
+			</View>
 			<SearchBar
 				value={search}
 				onChangeText={(t) => {
