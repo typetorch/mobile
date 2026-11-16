@@ -15,7 +15,7 @@
  * the key owner can manage, or whose role can manage group universes, are listed whatever the rank. The other groups
  * appear in `otherGroups` and load their experiences on demand (useGroupProjects).
  */
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { keepPreviousData, useQueries, useQuery } from "@tanstack/react-query";
 
 import { mapLimit } from "@/api/http";
 import { hasScope, keyGroupIds, keyUniverseIds, type CloudUniverse, type KeyInfo, type OpenCloud } from "@/api/opencloud";
@@ -70,6 +70,8 @@ export interface Project {
 	active: boolean | null;
 	/** legacy-develop permissions multiget; null when the key lacks legacy-universe:manage. */
 	canManage: boolean | null;
+	/** `playing` comes from the game's TypeTorch backend (its live fleet), not Roblox's games v1. */
+	playingFromTT?: boolean;
 }
 
 export interface ProjectSection {
@@ -574,4 +576,33 @@ export function useAddedProjects(ids: readonly number[]) {
 			return { projects, warnings: warnings.done() };
 		},
 	});
+}
+
+/**
+ * Live players per universe from the connected TypeTorch backends (their fleet: every live server's heartbeat), every
+ * 15 s, shared with the dashboard's own fleet query. Roblox's games v1 count lags minutes behind; this is the game's own.
+ * Signed-out backends and ones without a universe are left out.
+ */
+export function useTTLivePlayers(): Map<number, number> {
+	const { backends, backendApi } = useAccounts();
+	const live = backends.filter((b) => b.universeId && !b.signedOut);
+	const results = useQueries({
+		queries: live.map((b) => ({
+			queryKey: ["tt", b.id, "fleet", "servers"],
+			queryFn: ({ signal }: { signal: AbortSignal }) => {
+				const api = backendApi(b.id);
+				if (!api) throw new Error("not connected");
+				return api.fleetServers(undefined, signal);
+			},
+			refetchInterval: 15_000,
+			staleTime: 10_000,
+		})),
+	});
+	const out = new Map<number, number>();
+	results.forEach((r, i) => {
+		const players = (r.data as { players?: number } | undefined)?.players;
+		const universe = live[i]?.universeId;
+		if (universe && typeof players === "number") out.set(universe, Math.max(out.get(universe) ?? 0, players));
+	});
+	return out;
 }

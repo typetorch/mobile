@@ -9,7 +9,7 @@ import { Pressable, View } from "react-native";
 import { PinStar, ProjectRow } from "@/components/ProjectRow";
 import { Button, Card, Chips, confirm, EmptyState, ErrorState, Icon, List, Screen, SearchBar, Section, SkeletonList, Txt } from "@/components/ui";
 import { compareProjects, removeProject, seedAdded, SORT_OPTIONS, togglePin, useAddedIds, usePins, useProjectSort, type ProjectSort } from "@/features/project/pins";
-import { useAddedProjects, type Project } from "@/features/project/projects";
+import { useAddedProjects, useTTLivePlayers, type Project } from "@/features/project/projects";
 import { compact } from "@/lib/format";
 import { useAccounts } from "@/store/accounts";
 import { useTheme } from "@/theme";
@@ -28,13 +28,17 @@ export default function ProjectsScreen() {
 	}, [added.loaded, added.unset, pins, prefs.extraUniverseIds]);
 
 	const list = useAddedProjects(added.ids);
+	// Projects with a TypeTorch backend show its live CCU (every 15 s) instead of Roblox's lagging count.
+	const ttPlayers = useTTLivePlayers();
 	const ttUniverses = useMemo(() => new Set(backends.map((b) => b.universeId).filter((u): u is number => !!u)), [backends]);
 	const q = search.trim().toLowerCase();
 
 	const { pinned, rest, missing } = useMemo(() => {
 		const onList = new Set(added.ids);
 		// A removed id can still be in a kept previous answer for a moment: show only what is on the list now.
-		const all = (list.data?.projects ?? []).filter((x) => onList.has(x.universeId));
+		const all = (list.data?.projects ?? [])
+			.filter((x) => onList.has(x.universeId))
+			.map((x) => (ttPlayers.has(x.universeId) ? { ...x, playing: ttPlayers.get(x.universeId) as number, playingFromTT: true } : x));
 		const shown = all.filter((x) => !q || x.name.toLowerCase().includes(q) || String(x.universeId).includes(q) || x.creator.name.toLowerCase().includes(q)).sort(compareProjects(sortBy));
 		const pinSet = new Set(pins);
 		const found = new Set(all.map((x) => x.universeId));
@@ -43,7 +47,7 @@ export default function ProjectsScreen() {
 			rest: shown.filter((x) => !pinSet.has(x.universeId)),
 			missing: list.data && !list.isPlaceholderData ? added.ids.filter((id) => !found.has(id)) : [],
 		};
-	}, [list.data, list.isPlaceholderData, added.ids, pins, q, sortBy]);
+	}, [list.data, list.isPlaceholderData, added.ids, pins, q, sortBy, ttPlayers]);
 
 	const playing = [...pinned, ...rest].reduce((n, x) => n + x.playing, 0);
 	const empty = added.loaded && !added.unset && added.ids.length === 0;

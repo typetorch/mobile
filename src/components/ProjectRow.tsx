@@ -78,6 +78,7 @@ function ProjectStats({ project, rating }: { project: Project; rating: number | 
 			<View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
 				<Dot tone={project.playing > 0 ? "good" : "muted"} size={6} />
 				<Txt variant="small">{compact(project.playing)} playing</Txt>
+				{project.playingFromTT ? <Icon name="flame" size={11} color={p.brand} /> : null}
 			</View>
 			<Txt variant="small">{compact(project.visits)} visits</Txt>
 			{project.updated ? <Txt variant="small">updated {fmtAgo(project.updated)}</Txt> : null}
