@@ -1,6 +1,6 @@
 /** Errors: the error kinds seen in a window (GET /v1/errors), searchable, by realm, with their trend; new errors refetch the list live (SSE GET /v1/live?topics=error, features/typetorch/live-feeds.ts). */
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 
 import { Sparkline } from "@/charts/LineChart";
@@ -8,8 +8,10 @@ import { Badge, Button, Chips, EmptyState, ErrorState, List, Row, SearchBar, Sec
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { streamLabel, useErrorStream } from "@/features/typetorch/live-feeds";
 import { TTScreen } from "@/features/typetorch/screen";
+import { DataTable, type DataColumn } from "@/features/typetorch/table";
 import { usePageParam } from "@/features/typetorch/view-link";
-import { compact, fmtAgo } from "@/lib/format";
+import type { ErrorKind } from "@/api/tt/types";
+import { compact, fmtAgo, shortId } from "@/lib/format";
 import { useTheme } from "@/theme";
 
 const WINDOWS = [
@@ -33,6 +35,38 @@ function Errors({ backendId }: { backendId: string }) {
 	const [search, setSearch] = useState(q);
 	useEffect(() => setSearch(q), [q]);
 	const stream = useErrorStream(backendId);
+	const kindColumns = useMemo<DataColumn<ErrorKind>[]>(
+		() => [
+			{
+				id: "template",
+				header: "Error",
+				width: 230,
+				accessor: (k) => k.template,
+				searchText: (k) => `${k.topFrame ?? ""} ${k.fp}`,
+				cell: (k) => (
+					<View style={{ gap: 2 }}>
+						<Txt variant="mono" numberOfLines={3} style={{ fontSize: 11 }}>
+							{k.template}
+						</Txt>
+						{k.topFrame ? (
+							<Txt variant="small" numberOfLines={1} style={{ fontFamily: "monospace", fontSize: 10 }}>
+								{k.topFrame}
+							</Txt>
+						) : null}
+					</View>
+				),
+			},
+			{ id: "realm", header: "Side", type: "enum", width: 70, accessor: (k) => k.realm, cell: (k) => <Badge label={k.realm} tone={k.realm === "server" ? "brand" : "muted"} /> },
+			{ id: "count", header: "Count", type: "number", width: 66, accessor: (k) => k.count, cell: (k) => compact(k.count) },
+			{ id: "players", header: "Players", type: "number", width: 66, accessor: (k) => k.players },
+			{ id: "trend", header: "Trend", title: "Sorts by the errors in the newest step", type: "number", width: 80, filter: false, accessor: (k) => k.spark[k.spark.length - 1] ?? 0, exportValue: (k) => k.spark.join(" "), cell: (k) => <Sparkline values={k.spark} color={p.destructive} /> },
+			{ id: "lastAt", header: "Last", type: "date", width: 84, accessor: (k) => k.lastAt, format: (_v, k) => fmtAgo(k.lastAt) },
+			{ id: "firstAt", header: "First", type: "date", width: 84, accessor: (k) => k.firstAt, format: (_v, k) => fmtAgo(k.firstAt), defaultHidden: true },
+			{ id: "total", header: "All time", type: "number", width: 76, accessor: (k) => k.total, cell: (k) => compact(k.total), defaultHidden: true },
+			{ id: "fp", header: "Fingerprint", width: 100, mono: true, accessor: (k) => k.fp, format: (_v, k) => shortId(k.fp, 8), defaultHidden: true },
+		],
+		[p.destructive],
+	);
 	const streamText = streamLabel(stream.status);
 	const list = useTTQuery(backendId, ["errors", window, realm, q], (api, s) => api.errors({ window, limit: 100, ...(realm ? { realm } : {}), ...(q ? { q } : {}) }, s), { staleTime: 30_000 });
 	return (
@@ -73,26 +107,16 @@ function Errors({ backendId }: { backendId: string }) {
 					</StatGrid>
 					{list.data.kinds.length ? (
 						<Section title={list.data.more ? `Top ${list.data.kinds.length} kinds (${list.data.more} more)` : "Kinds"}>
-							<List>
-								{list.data.kinds.map((k) => (
-									<Row
-										key={k.fp}
-										chevron
-										onPress={() => router.push(`/tt/${backendId}/error/${encodeURIComponent(k.fp)}?window=${window}`)}
-										title={k.template}
-										numberOfLines={2}
-										subtitle={
-											<View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-												<Badge label={k.realm} tone={k.realm === "server" ? "brand" : "muted"} />
-												<Txt variant="small">
-													{compact(k.count)}× · {k.players} players · {fmtAgo(k.lastAt)}
-												</Txt>
-											</View>
-										}
-										right={<Sparkline values={k.spark} color={p.destructive} />}
-									/>
-								))}
-							</List>
+							<DataTable
+								id="errors-kinds"
+								label="Error kinds"
+								columns={kindColumns}
+								data={list.data.kinds}
+								rowId={(k) => k.fp}
+								onRowPress={(k) => router.push(`/tt/${backendId}/error/${encodeURIComponent(k.fp)}?window=${window}`)}
+								defaultSort={[{ id: "count", desc: true }]}
+								density="compact"
+							/>
 						</Section>
 					) : (
 						<EmptyState icon="checkmark-circle-outline" title="No errors" body="Nothing in this window. Pick a longer one to see older errors." />
