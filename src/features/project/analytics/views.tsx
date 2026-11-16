@@ -116,7 +116,7 @@ export function CohortTable({ universeId, range }: { universeId: number; range: 
 			{q.error ? <CloudError error={q.error} what="Cohort retention" onRetry={() => q.refetch()} /> : null}
 			{q.data && !times.length ? <Txt variant="muted">No cohort data in this range.</Txt> : null}
 			{times.length ? (
-				<ScrollView horizontal showsHorizontalScrollIndicator>
+				<ScrollView horizontal style={{ flexGrow: 0, flexShrink: 0 }} showsHorizontalScrollIndicator>
 					<View style={{ gap: 2 }}>
 						<View style={{ flexDirection: "row", gap: 2 }}>
 							<View style={{ width: 64 }}>

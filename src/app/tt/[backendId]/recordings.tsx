@@ -262,7 +262,7 @@ function LayersTab({ backendId, openReplay }: { backendId: string; openReplay: (
 
 	const controls = (sceneControls: ReactNode, note: ReactNode) => (
 		<>
-			<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }} accessibilityLabel="Maps">
+			<ScrollView horizontal style={{ flexGrow: 0, flexShrink: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }} accessibilityLabel="Maps">
 				{data.maps.map((m) => (
 					<ToggleChip
 						key={m.map}
@@ -657,7 +657,7 @@ function SplitTable({ title, rows }: { title: string; rows: FirstActionSplit[] }
 	const actions = rows[0]?.stats.map((s) => s.action) ?? [];
 	const cell = { width: 76, textAlign: "right" as const };
 	return (
-		<ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityLabel={title}>
+		<ScrollView horizontal style={{ flexGrow: 0, flexShrink: 0 }} showsHorizontalScrollIndicator={false} accessibilityLabel={title}>
 			<View>
 				<View style={{ flexDirection: "row", gap: space.sm, paddingBottom: 4, borderBottomWidth: 1, borderColor: p.border }}>
 					<Txt variant="label" style={{ width: 120 }}>

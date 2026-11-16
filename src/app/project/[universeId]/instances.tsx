@@ -84,7 +84,7 @@ function Instances({ universeId, cloud, canWrite }: { universeId: number; cloud:
 					}}
 				/>
 			</Section>
-			<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4, alignItems: "center" }}>
+			<ScrollView horizontal style={{ flexGrow: 0, flexShrink: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 4, alignItems: "center" }}>
 				{stack.map((c, i) => (
 					<View key={`${c.id}-${i}`} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
 						{i ? <Txt variant="small">›</Txt> : null}
@@ -175,7 +175,7 @@ function InstanceDetail({ universeId, placeId, instanceId, cloud, canWrite, onCl
 					) : (
 						<>
 							<Txt variant="label">Properties</Txt>
-							<ScrollView horizontal>
+							<ScrollView horizontal style={{ flexGrow: 0, flexShrink: 0 }}>
 								<Txt variant="mono" selectable>
 									{prettyJson(inst.data.engineInstance?.Details ?? {})}
 								</Txt>

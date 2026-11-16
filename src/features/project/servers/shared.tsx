@@ -29,7 +29,7 @@ export function placeName(places: PlaceInfo[] | undefined, placeId: number | str
 export function MultiChips<T extends string | number>({ options, value, onChange }: { options: { value: T; label: string }[]; value: T[]; onChange: (v: T[]) => void }) {
 	const p = useTheme();
 	return (
-		<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+		<ScrollView horizontal style={{ flexGrow: 0, flexShrink: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
 			{options.map((o) => {
 				const active = value.includes(o.value);
 				return (

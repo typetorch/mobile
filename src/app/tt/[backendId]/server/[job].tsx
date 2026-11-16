@@ -392,7 +392,7 @@ function Server({ backendId, job, admin, readOnly }: { backendId: string; job: s
 						<Txt variant="small">
 							{readOnly ? "Heartbeats and the audit only: no commands go to the server from this session." : "Read only. Every fetch is one audited command; answers stay in this screen (gone when you leave it)."}
 						</Txt>
-						<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+						<ScrollView horizontal style={{ flexGrow: 0, flexShrink: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
 							{tabs.map((t) => {
 								const on = t.id === tab;
 								return (

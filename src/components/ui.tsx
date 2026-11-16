@@ -383,7 +383,7 @@ export function Segmented<T extends string | number>({
 export function Chips<T extends string | number>({ options, value, onChange }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
 	const p = useTheme();
 	return (
-		<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+		<ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0 }} contentContainerStyle={{ gap: 6, alignItems: "center" }}>
 			{options.map((o) => {
 				const active = o.value === value;
 				return (

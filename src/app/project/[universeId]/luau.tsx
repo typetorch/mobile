@@ -231,7 +231,7 @@ function RunResult({ run, cloud, placeName }: { run: Run; cloud: OpenCloud; plac
 				{t.state === "COMPLETE" ? (
 					<>
 						<Txt variant="label">Returned</Txt>
-						<ScrollView horizontal>
+						<ScrollView horizontal style={{ flexGrow: 0, flexShrink: 0 }}>
 							<Txt variant="mono" selectable>
 								{results.length ? results.map((x) => prettyJson(x)).join("\n") : "(nothing)"}
 							</Txt>

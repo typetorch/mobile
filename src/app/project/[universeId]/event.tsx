@@ -294,7 +294,7 @@ function EventView({ universeId, cloud, eventId, canWrite }: { universeId: numbe
 				{media.isLoading ? (
 					<Skeleton height={90} />
 				) : mediaItems.length ? (
-					<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+					<ScrollView horizontal style={{ flexGrow: 0, flexShrink: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
 						{mediaItems.map((m) => {
 							const idx = draft.thumbs.indexOf(m.imageId!);
 							const url = media.data?.urls[m.imageId!];

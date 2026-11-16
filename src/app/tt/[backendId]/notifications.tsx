@@ -190,7 +190,7 @@ function Notifications({ backendId, account }: { backendId: string; account: Bac
 				<Stat label="Came back next day" value={t?.players ? fmtPct(t.returnRate) : "–"} sub={t ? `+${fmtInt(t.assisted)} assisted (back without opening)` : undefined} />
 			</StatGrid>
 
-			<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+			<ScrollView horizontal style={{ flexGrow: 0, flexShrink: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
 				{visible.map((id) => {
 					const on = id === tab;
 					return (

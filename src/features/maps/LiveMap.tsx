@@ -133,7 +133,7 @@ export function LiveMap({
 				{header}
 				{list.length ? (
 					<>
-						<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, alignItems: "center" }}>
+						<ScrollView horizontal style={{ flexGrow: 0, flexShrink: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, alignItems: "center" }}>
 							<Txt variant="label">Map</Txt>
 							{list.map((m) => (
 								<ToggleChip

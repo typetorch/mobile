@@ -106,7 +106,7 @@ function Maps({ backendId, owner }: { backendId: string; owner: boolean }) {
 			map={map}
 			view={view}
 			picker={
-				<ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+				<ScrollView horizontal style={{ flexGrow: 0, flexShrink: 0 }} showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
 					{maps.map((m) => (
 						<ToggleChip key={m.name} label={`${m.name === LOBBY ? "Lobby" : m.name}${m.kind === "map" && m.alignment.state === "off" ? " (not aligned)" : ""}`} pressed={m.name === map.name} onPress={() => setPicked(m.name)} />
 					))}

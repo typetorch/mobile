@@ -348,7 +348,7 @@ export function DataTable<T>({
 				)}
 
 				<View style={{ backgroundColor: p.card, borderColor: p.border, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.lg, overflow: "hidden" }}>
-					<ScrollView horizontal showsHorizontalScrollIndicator nestedScrollEnabled>
+					<ScrollView horizontal style={{ flexGrow: 0, flexShrink: 0 }} showsHorizontalScrollIndicator nestedScrollEnabled>
 						<View>
 							<View style={{ flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, borderColor: p.border }}>
 								{visibleCols.map((col) => {
