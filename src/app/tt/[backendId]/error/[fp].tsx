@@ -18,6 +18,8 @@ import { PlayerHover } from "@/features/typetorch/cards";
 import { ERROR_WINDOWS, errorWindow } from "@/features/typetorch/errors";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { chartMarks, DeployMarksToggle, useDeployMarks, useMarkCard } from "@/features/typetorch/marks";
+import { DropRulesSheet, exactRuleFor } from "@/features/typetorch/drop-rules";
+import { isReadOnly } from "@/features/typetorch/roles";
 import { TTScreen } from "@/features/typetorch/screen";
 import { DataTable, type DataColumn } from "@/features/typetorch/table";
 import { usePageParam } from "@/features/typetorch/view-link";
@@ -27,11 +29,12 @@ import { useTheme } from "@/theme";
 export default function ErrorScreen() {
 	const { fp } = useLocalSearchParams<{ fp: string }>();
 	const id = decodeURIComponent(String(fp ?? ""));
-	return <TTScreen title="Error">{({ backendId }) => <ErrorKindView backendId={backendId} fp={id} />}</TTScreen>;
+	return <TTScreen title="Error">{({ backendId, account }) => <ErrorKindView backendId={backendId} fp={id} canEdit={!isReadOnly(account)} />}</TTScreen>;
 }
 
-function ErrorKindView({ backendId, fp }: { backendId: string; fp: string }) {
+function ErrorKindView({ backendId, fp, canEdit }: { backendId: string; fp: string; canEdit: boolean }) {
 	const p = useTheme();
+	const [dropDraft, setDropDraft] = useState<string | undefined>();
 	// The web's parameters: window (every window of the list) and the list's realm, branch and build, so they travel in a link.
 	const [windowParam, setWindow] = usePageParam("window", "24h");
 	const window = errorWindow(windowParam);
@@ -72,6 +75,8 @@ function ErrorKindView({ backendId, fp }: { backendId: string; fp: string }) {
 					}}
 					style={{ alignSelf: "flex-start" }}
 				/>
+				{canEdit ? <Button title="Drop errors like this" small icon="funnel-outline" onPress={() => setDropDraft(exactRuleFor(d.kind.template))} style={{ alignSelf: "flex-start" }} /> : null}
+				<DropRulesSheet backendId={backendId} open={dropDraft !== undefined} onClose={() => setDropDraft(undefined)} canEdit={canEdit} draft={dropDraft} />
 			</Card>
 			<Segmented options={[...ERROR_WINDOWS]} value={window} onChange={setWindow} />
 			{realm || branch || build ? (

@@ -21,6 +21,8 @@ import { bucketLabel, ERROR_WINDOWS, errorKindHref, errorWindow, errorWindowLabe
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { chartMarks, DeployMarksToggle, useDeployMarks, useMarkCard } from "@/features/typetorch/marks";
 import { streamLabel, useErrorStream } from "@/features/typetorch/live-feeds";
+import { DropRulesSheet, useDropRules } from "@/features/typetorch/drop-rules";
+import { isReadOnly } from "@/features/typetorch/roles";
 import { TTScreen } from "@/features/typetorch/screen";
 import { DataTable, type DataColumn, type SortSpec } from "@/features/typetorch/table";
 import { usePageParam, usePageParams } from "@/features/typetorch/view-link";
@@ -28,7 +30,7 @@ import { compact, fmtAgo, shortId } from "@/lib/format";
 import { useTheme } from "@/theme";
 
 export default function ErrorsScreen() {
-	return <TTScreen title="Errors">{({ backendId }) => <Errors backendId={backendId} />}</TTScreen>;
+	return <TTScreen title="Errors">{({ backendId, account }) => <Errors backendId={backendId} canEdit={!isReadOnly(account)} />}</TTScreen>;
 }
 
 /** The build choices: the builds with errors in the window, plus the picked one when the window no longer has it (a link). */
@@ -38,8 +40,13 @@ function artifactOptions(builds: { build: string }[] | undefined, current: strin
 	return out;
 }
 
-function Errors({ backendId }: { backendId: string }) {
+function Errors({ backendId, canEdit }: { backendId: string; canEdit: boolean }) {
 	const p = useTheme();
+	// ?drop=1 (the Settings screen's link) opens the drop rules on arrival; after that it's plain state.
+	const [dropParam] = usePageParam("drop");
+	const [dropOpen, setDropOpen] = useState(dropParam === "1");
+	const dropRules = useDropRules(backendId);
+	const activeRules = dropRules.data?.rules.filter((r) => r.on).length ?? 0;
 	// The web's URL parameters: window, realm, branch, build, q, fp (the kind: its own page here), vs.
 	const [windowParam, setWindow] = usePageParam("window", "24h");
 	const window = errorWindow(windowParam);
@@ -130,6 +137,8 @@ function Errors({ backendId }: { backendId: string }) {
 				<Segmented options={[...ERROR_WINDOWS]} value={window} onChange={setWindow} style={{ flex: 1 }} />
 				<Badge label={streamText.text} tone={streamText.tone} />
 			</View>
+			<Button title={`Drop rules${activeRules ? ` (${activeRules})` : ""}`} small icon="funnel-outline" onPress={() => setDropOpen(true)} style={{ alignSelf: "flex-start" }} />
+			<DropRulesSheet backendId={backendId} open={dropOpen} onClose={() => setDropOpen(false)} canEdit={canEdit} />
 			<SearchBar
 				value={search}
 				onChangeText={(t) => {
