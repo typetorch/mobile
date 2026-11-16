@@ -19,12 +19,15 @@ export function TTScreen({
 	children,
 	refreshKeys,
 	scroll = true,
+	notice = true,
 }: {
 	title: string | ((account: BackendAccount) => string);
 	children: (ctx: { account: BackendAccount; api: Api; backendId: string }) => ReactNode;
 	/** Which of this backend's queries a pull refreshes (default: all of them). */
 	refreshKeys?: readonly unknown[];
 	scroll?: boolean;
+	/** Show the signed-out notice (off where the body shows it itself). */
+	notice?: boolean;
 }) {
 	const backendId = useBackendParam();
 	const { account, api } = useBackend(backendId);
@@ -49,7 +52,7 @@ export function TTScreen({
 	return (
 		<Screen refreshing={refreshing} onRefresh={scroll ? onRefresh : undefined} scroll={scroll}>
 			<Stack.Screen options={{ title: typeof title === "function" ? title(account) : title }} />
-			<SignedOutNotice account={account} />
+			{notice ? <SignedOutNotice account={account} /> : null}
 			{children({ account, api, backendId })}
 		</Screen>
 	);

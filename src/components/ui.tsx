@@ -311,7 +311,7 @@ export function Field({ label, hint, style, ...props }: TextInputProps & { label
 	);
 }
 
-export function SearchBar({ value, onChangeText, placeholder }: { value: string; onChangeText: (t: string) => void; placeholder?: string }) {
+export function SearchBar({ value, onChangeText, placeholder, onSubmit }: { value: string; onChangeText: (t: string) => void; placeholder?: string; onSubmit?: () => void }) {
 	const p = useTheme();
 	return (
 		<View
@@ -334,6 +334,8 @@ export function SearchBar({ value, onChangeText, placeholder }: { value: string;
 				placeholderTextColor={p.mutedForeground}
 				autoCapitalize="none"
 				autoCorrect={false}
+				returnKeyType={onSubmit ? "search" : "done"}
+				onSubmitEditing={onSubmit}
 				style={{ flex: 1, color: p.foreground, paddingVertical: 9, fontSize: font.md }}
 			/>
 			{value ? (

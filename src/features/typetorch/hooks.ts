@@ -2,6 +2,7 @@
 import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
 
 import type { Api } from "@/api/backend";
+import type { DeployOutcome } from "@/api/tt/deploys";
 import type { Filters } from "@/api/tt/types";
 import { useBackend } from "@/store/accounts";
 
@@ -39,4 +40,8 @@ export function healthTone(health: string | null | undefined): "good" | "warning
 	if (h === "ok" || h === "healthy" || h === "good") return "good";
 	if (h === "critical" || h === "failed" || h === "error" || h === "down") return "critical";
 	return "warning";
+}
+
+export function outcomeTone(o: DeployOutcome): "good" | "critical" | "muted" | "warning" {
+	return o === "ok" ? "good" : o === "failed" ? "critical" : o === "no_reports" ? "muted" : "warning";
 }
