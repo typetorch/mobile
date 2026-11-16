@@ -10,9 +10,12 @@ import { keepPreviousData } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Pressable, View } from "react-native";
 
+import { ACCOUNT_AGE, audienceChoices, JOIN_SOURCES, joinSourceName, type DemographicsResult } from "@/api/tt/audience";
 import { ACCOUNT_AGES, DEVICES, type AccountAge, type Device, type Filters, type QueryName, type QueryResults } from "@/api/tt/types";
 import { Button, Chips, Field, Icon, Segmented, Txt } from "@/components/ui";
 import { radius, space, useTheme } from "@/theme";
+
+import { cleanFilters } from "@/api/backend";
 
 import { useTTQuery } from "./hooks";
 import { readStored, writeStored } from "./persist";
@@ -302,6 +305,20 @@ export function useTTAnalytics<N extends QueryName>(backendId: string, name: N, 
 	});
 }
 
+/**
+ * A named query whose answer type isn't in QueryResults (`demographics`, `churn`): POST /v1/query/<name> through
+ * `api.raw`, with the filter bar's filters (or `opts.filters`), cached like useTTAnalytics.
+ */
+export function useTTRawQuery<T>(backendId: string, name: string, options: object = {}, opts: AnalyticsOptions = {}) {
+	const { apiFilters, pending } = useTTFilters(backendId);
+	const filters = opts.filters ?? apiFilters;
+	return useTTQuery<T>(backendId, ["query", name, filters, options], (api, signal) => api.raw(name, { filters: cleanFilters(filters), options }, signal).then((r) => r.result as T), {
+		enabled: (opts.enabled ?? true) && (!!opts.filters || !pending),
+		staleTime: opts.staleTime ?? 30_000,
+		...(opts.keepPrevious ? { placeholderData: keepPreviousData } : {}),
+	});
+}
+
 // The bar ---------------------------------------------------------------------------------------------------------------
 
 const ANY = "";
@@ -395,26 +412,83 @@ export function FilterBar({ backendId, ranges }: { backendId: string; ranges?: R
 							set({ exp: v.slice(0, at), variant: v.slice(at + 1) });
 						}}
 					/>
-					{audienceFilterCount(state) ? (
-						<>
-							<Txt variant="label">Audience</Txt>
-							<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-								{AUDIENCE_KEYS.filter((k) => state[k]).map((k) => (
-									<Pressable key={k} onPress={() => set({ [k]: undefined })} hitSlop={4} style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 3, paddingHorizontal: 8, borderRadius: 999, borderWidth: 1, borderColor: p.border, backgroundColor: p.muted }}>
-										<Txt variant="small" color={p.foreground}>
-											{AUDIENCE_LABELS[k]}: {state[k]}
-										</Txt>
-										<Icon name="close" size={12} color={p.mutedForeground} />
-									</Pressable>
-								))}
-							</View>
-						</>
-					) : null}
+					<AudienceSection backendId={backendId} state={state} set={set} range={range} />
 					{values.error ? <Txt variant="small">Couldn't load the branches and artifacts: {values.error.message}</Txt> : null}
 					<View style={{ flexDirection: "row", gap: space.sm }}>
 						{count ? <Button title="Clear" small icon="refresh" onPress={reset} /> : null}
 						<Button title="Done" small variant="ghost" onPress={() => setOpen(false)} />
 					</View>
+				</View>
+			) : null}
+		</View>
+	);
+}
+
+/** "France, Premium" / "Audience (3)": what the audience filters say, short. */
+function audienceSummary(state: FilterState): string {
+	const parts: string[] = [];
+	if (state.country) parts.push(state.country);
+	if (state.lang) parts.push(state.lang);
+	if (state.age) parts.push(ACCOUNT_AGE[state.age]);
+	if (state.prem) parts.push(state.prem === "true" ? "Premium" : "Not Premium");
+	if (state.source) parts.push(joinSourceName(state.source).replace(/ \(.*\)$/, ""));
+	return parts.length <= 2 ? parts.join(", ") : `${parts.length} set`;
+}
+
+/**
+ * The web's Audience popover (components/FilterBar.tsx AudienceFilters): country and language from the values our join
+ * events carry in the range (the `demographics` query, asked once the section opens), account age, Premium and join
+ * source from the framework's fixed lists. Player-level: a player is in when one of their joins in the range says so.
+ */
+function AudienceSection({ backendId, state, set, range }: { backendId: string; state: FilterState; set(patch: Partial<FilterState>): void; range: Filters }) {
+	const p = useTheme();
+	const count = audienceFilterCount(state);
+	const [open, setOpen] = useState(count > 0);
+	const demographics = useTTRawQuery<DemographicsResult>(backendId, "demographics", {}, { filters: range, enabled: open, staleTime: 120_000 });
+	const { countries, languages } = audienceChoices(demographics.data, state);
+	const any = (label: string) => ({ value: ANY, label });
+	return (
+		<View style={{ gap: space.sm }}>
+			<Pressable onPress={() => setOpen((o) => !o)} hitSlop={6} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+				<Txt variant="label" style={{ flex: 1 }}>
+					Audience{count ? `: ${audienceSummary(state)}` : ""}
+				</Txt>
+				<Icon name={open ? "chevron-up" : "chevron-down"} size={16} color={p.mutedForeground} />
+			</Pressable>
+			{open ? (
+				<>
+					<Txt variant="small">Players whose joins in the range say so (all their rows then count). From our join events: older framework builds send no language.</Txt>
+					<Txt variant="small">Country</Txt>
+					<Chips options={[any("any country"), ...countries]} value={state.country ?? ANY} onChange={(v) => set({ country: v || undefined })} />
+					<Txt variant="small">Language</Txt>
+					<Chips options={[any("any language"), ...languages]} value={state.lang ?? ANY} onChange={(v) => set({ lang: v || undefined })} />
+					{demographics.error ? <Txt variant="small">Couldn't load the countries and languages: {demographics.error.message}</Txt> : demographics.isPending ? <Txt variant="small">Loading countries and languages…</Txt> : null}
+					<Txt variant="small">Account age</Txt>
+					<Chips options={[any("any account age"), ...ACCOUNT_AGES.map((a) => ({ value: a as string, label: ACCOUNT_AGE[a] }))]} value={state.age ?? ANY} onChange={(v) => set({ age: (v || undefined) as AccountAge | undefined })} />
+					<Txt variant="small">Premium</Txt>
+					<Segmented
+						options={[
+							{ value: ANY, label: "Premium or not" },
+							{ value: "true", label: "Premium" },
+							{ value: "false", label: "Not Premium" },
+						]}
+						value={state.prem ?? ANY}
+						onChange={(v) => set({ prem: (v || undefined) as FilterState["prem"] })}
+					/>
+					<Txt variant="small">Join source</Txt>
+					<Chips options={[any("any join source"), ...Object.entries(JOIN_SOURCES).map(([value, label]) => ({ value, label })), ...(state.source && !(state.source in JOIN_SOURCES) ? [{ value: state.source, label: state.source }] : [])]} value={state.source ?? ANY} onChange={(v) => set({ source: v || undefined })} />
+					{count ? <Button title="Clear audience" small variant="ghost" icon="refresh" onPress={() => set({ country: undefined, lang: undefined, age: undefined, prem: undefined, source: undefined })} style={{ alignSelf: "flex-start" }} /> : null}
+				</>
+			) : count ? (
+				<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+					{AUDIENCE_KEYS.filter((k) => state[k]).map((k) => (
+						<Pressable key={k} onPress={() => set({ [k]: undefined })} hitSlop={4} style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 3, paddingHorizontal: 8, borderRadius: 999, borderWidth: 1, borderColor: p.border, backgroundColor: p.muted }}>
+							<Txt variant="small" color={p.foreground}>
+								{AUDIENCE_LABELS[k]}: {state[k]}
+							</Txt>
+							<Icon name="close" size={12} color={p.mutedForeground} />
+						</Pressable>
+					))}
 				</View>
 			) : null}
 		</View>
