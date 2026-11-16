@@ -191,19 +191,21 @@ export function Legend({ items }: { items: { label: string; color: string }[] })
 	);
 }
 
-/** Vertical bars over time (counts per bucket). */
+/** Vertical bars over time (counts per bucket). `onPick`: called with the bar under the finger when it lifts. */
 export function BarChart({
 	points,
 	height = 120,
 	color,
 	format = shortNumber,
 	timeLabel = dayLabel,
+	onPick,
 }: {
 	points: ChartPoint[];
 	height?: number;
 	color?: string;
 	format?: (v: number) => string;
 	timeLabel?: (t: number) => string;
+	onPick?: (point: ChartPoint) => void;
 }) {
 	const p = useTheme();
 	const [width, setWidth] = useState(0);
@@ -216,6 +218,10 @@ export function BarChart({
 	const c = color ?? p.brand;
 	const pick = (px: number) => setHover(points.length ? Math.max(0, Math.min(points.length - 1, Math.floor((px - PAD.left) / slot))) : null);
 	const hp = hover !== null ? points[hover] : undefined;
+	const release = () => {
+		if (onPick && hp) onPick(hp);
+		setHover(null);
+	};
 	return (
 		<View style={{ gap: 6 }}>
 			<View
@@ -225,7 +231,7 @@ export function BarChart({
 				onMoveShouldSetResponder={() => true}
 				onResponderGrant={(e) => pick(e.nativeEvent.locationX)}
 				onResponderMove={(e) => pick(e.nativeEvent.locationX)}
-				onResponderRelease={() => setHover(null)}
+				onResponderRelease={release}
 				onResponderTerminate={() => setHover(null)}
 			>
 				{width > 0 ? (
