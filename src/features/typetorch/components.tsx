@@ -6,13 +6,15 @@ import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { Switch, View } from "react-native";
 
-import type { FleetAlert } from "@/api/tt/types";
-import { BarChart } from "@/charts/LineChart";
+import { change } from "@/api/tt/benchmarks";
+import type { FleetAlert, OverviewResult } from "@/api/tt/types";
+import { BarChart, type ChartMark } from "@/charts/LineChart";
 import { Badge, Button, Card, Dot, ErrorState, Icon, List, Row, Section, Segmented, Skeleton, Stat, StatGrid, Txt } from "@/components/ui";
 import { compact, fmtAgo, fmtInt, fmtMinutes, fmtNum } from "@/lib/format";
 import { useAccounts, useBackend, type BackendAccount } from "@/store/accounts";
 import { useTheme } from "@/theme";
 
+import { ChangeChip } from "./bits";
 import { dayRange, useTTQuery } from "./hooks";
 import { chartMarks, DeployMarksToggle, useDeployMarks, useMarkCard } from "./marks";
 import { pageHref, TT_PAGES } from "./pages";
@@ -92,28 +94,55 @@ function alertTone(level: FleetAlert["level"]): "critical" | "warning" | "muted"
 	return level === "critical" ? "critical" : level === "warning" ? "warning" : "muted";
 }
 
-/** The Overview: live fleet, the analytics overview query, errors, the latest deploy and alerts. */
-export function TTHome({ backendId, poll = true }: { backendId: string; poll?: boolean }) {
+/** The web Overview's tiles: label, the number its change chip compares, and the text (pages/Overview.tsx TILES). */
+const TILES: { label: string; value(d: OverviewResult): number; text(d: OverviewResult): string }[] = [
+	{ label: "Players", value: (d) => d.players, text: (d) => fmtInt(d.players) },
+	{ label: "New players", value: (d) => d.newPlayers, text: (d) => fmtInt(d.newPlayers) },
+	{ label: "Returning", value: (d) => d.returningPlayers, text: (d) => fmtInt(d.returningPlayers) },
+	{ label: "Sessions", value: (d) => d.sessions, text: (d) => fmtInt(d.sessions) },
+	{ label: "Events", value: (d) => d.events, text: (d) => compact(d.events) },
+	{ label: "Playtime", value: (d) => d.playtimeHours, text: (d) => `${fmtNum(d.playtimeHours, 1)} h` },
+	{ label: "Avg session", value: (d) => d.avgSessionMinutes, text: (d) => fmtMinutes(d.avgSessionMinutes) },
+	{ label: "Playtime per player", value: (d) => d.playtimePerPlayerMinutes, text: (d) => fmtMinutes(d.playtimePerPlayerMinutes) },
+];
+
+/** The web Overview's four DayBars. */
+const CHARTS: { key: "players" | "newPlayers" | "sessions" | "playtimeHours"; label: string; format?: (v: number) => string }[] = [
+	{ key: "players", label: "Players" },
+	{ key: "newPlayers", label: "New players" },
+	{ key: "sessions", label: "Sessions" },
+	{ key: "playtimeHours", label: "Playtime (hours)", format: (v) => fmtNum(v, 1) },
+];
+
+const DAY_MS = 86_400_000;
+
+/**
+ * The Overview: live fleet, the analytics overview query, errors, the latest deploy and alerts. `compare` is "vs
+ * previous period" (the route's `vs=prev` on the Overview page, so it travels in a link); without it, a local switch.
+ */
+export function TTHome({ backendId, poll = true, compare }: { backendId: string; poll?: boolean; compare?: { on: boolean; set(on: boolean): void } }) {
 	const p = useTheme();
 	const { account } = useBackend(backendId);
 	const [days, setDays] = useState<number>(7);
+	const [localPrev, setLocalPrev] = useState(false);
+	const vsPrev = compare ? compare.on : localPrev;
+	const setVsPrev = compare ? compare.set : setLocalPrev;
 	const fleet = useTTQuery(backendId, ["fleet", "servers"], (api, s) => api.fleetServers(undefined, s), { refetchInterval: poll ? 15_000 : false });
 	const overview = useTTQuery(backendId, ["query", "overview", days], (api, s) => api.query("overview", dayRange(days), {}, s), { staleTime: 60_000 });
 	const errors = useTTQuery(backendId, ["errors", "24h", ""], (api, s) => api.errors({ window: "24h", limit: 5 }, s), { staleTime: 60_000 });
 	const deploys = useTTQuery(backendId, ["deploys", "latest"], (api, s) => api.fleetDeploys({ limit: 1 }, s), { staleTime: 60_000 });
 	const alerts = useTTQuery(backendId, ["alerts", "recent"], (api, s) => api.fleetAlerts({ limit: 5 }, s), { staleTime: 30_000 });
-	// Deploy marks on the players chart (a tap opens a mark's card).
+	// Deploy marks on every chart (a tap opens a mark's card).
 	const dayStart = Date.parse(`${dayRange(days).from}T00:00:00Z`);
-	const markRange = useMemo(() => ({ from: dayStart, to: dayStart + days * 86_400_000 }), [dayStart, days]);
+	const markRange = useMemo(() => ({ from: dayStart, to: dayStart + days * DAY_MS }), [dayStart, days]);
 	const marksQ = useDeployMarks(backendId, markRange, undefined, { enabled: !!overview.data });
-	// "vs previous period": the same number of days right before, drawn dashed over the bars (the web's DayBars `previous`).
-	const [vsPrev, setVsPrev] = useState(false);
-	const prevFrom = new Date(dayStart - days * 86_400_000).toISOString().slice(0, 10);
-	const prevTo = new Date(dayStart - 86_400_000).toISOString().slice(0, 10);
+	// "vs previous period": the same number of days right before, up to the same time of day (the web's previousPeriod),
+	// for the tiles' change chips and drawn dashed over the bars (the web's DayBars `previous`).
+	const shift = days * DAY_MS;
+	const prevFrom = new Date(dayStart - shift).toISOString().slice(0, 10);
+	const prevTo = new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000 - shift).toISOString();
 	const prevQ = useTTQuery(backendId, ["query", "overview", "prev", prevFrom, prevTo], (api, s) => api.query("overview", { from: prevFrom, to: prevTo }, {}, s), { staleTime: 60_000, enabled: vsPrev });
-	const shift = days * 86_400_000;
-	const prevDays = useMemo(() => new Map((prevQ.data?.days ?? []).map((d) => [Date.parse(d.date) + shift, d.players])), [prevQ.data, shift]);
-	const prevSteps = useMemo(() => new Map((prevQ.data?.buckets ?? []).map((b) => [b.t + shift, b.players])), [prevQ.data, shift]);
+	const prev = vsPrev ? prevQ.data : undefined;
 	const card = useMarkCard(backendId);
 	if (!account) return null;
 
@@ -143,40 +172,17 @@ export function TTHome({ backendId, poll = true }: { backendId: string; poll?: b
 				{!o && !overview.error ? <Skeleton height={120} /> : null}
 				{o ? (
 					<>
+						<PrevToggle on={vsPrev} onChange={setVsPrev} />
+						{vsPrev && prevQ.error ? <Txt variant="small">Couldn't load the previous period: {prevQ.error.message}</Txt> : null}
 						<StatGrid>
-							<Stat label="Players" value={fmtInt(o.players)} sub={`${fmtInt(o.newPlayers)} new · ${fmtInt(o.returningPlayers)} returning`} />
-							<Stat label="Sessions" value={fmtInt(o.sessions)} sub={`${fmtMinutes(o.avgSessionMinutes)} avg`} />
-							<Stat label="Playtime" value={`${fmtNum(o.playtimeHours, 1)} h`} sub={`${fmtMinutes(o.playtimePerPlayerMinutes)} per player`} />
-							<Stat label="Events" value={compact(o.events)} />
+							{TILES.map((t) => (
+								<Stat key={t.label} label={t.label} value={t.text(o)} {...(prev ? { sub: <ChangeChip change={change(t.value(o), t.value(prev))} /> } : {})} />
+							))}
 						</StatGrid>
-						{o.days.length > 1 ? (
-							<Card style={{ gap: 6 }}>
-								<Txt variant="label">Players per day</Txt>
-								<BarChart
-									points={o.days.map((d) => ({ t: Date.parse(d.date), v: d.players }))}
-									format={compact}
-									marks={chartMarks(p, marksQ.marks)}
-									onMarkPress={card.open}
-									{...(vsPrev && prevQ.data ? { previous: o.days.map((d) => prevDays.get(Date.parse(d.date)) ?? null) } : {})}
-								/>
-								<PrevToggle on={vsPrev} onChange={setVsPrev} />
-								<DeployMarksToggle {...marksQ} />
-							</Card>
-						) : o.buckets?.length ? (
-							<Card style={{ gap: 6 }}>
-								<Txt variant="label">Players per step</Txt>
-								<BarChart
-									points={o.buckets.map((b) => ({ t: b.t, v: b.players }))}
-									format={compact}
-									timeLabel={(t) => new Date(t).toISOString().slice(11, 16)}
-									marks={chartMarks(p, marksQ.marks)}
-									onMarkPress={card.open}
-									{...(vsPrev && prevQ.data ? { previous: o.buckets.map((b) => prevSteps.get(b.t) ?? null) } : {})}
-								/>
-								<PrevToggle on={vsPrev} onChange={setVsPrev} />
-								<DeployMarksToggle {...marksQ} />
-							</Card>
-						) : null}
+						<DeployMarksToggle {...marksQ} />
+						{CHARTS.map((c) => (
+							<OverviewBars key={c.key} data={o} previous={prev} shiftMs={shift} chart={c} marks={chartMarks(p, marksQ.marks)} onMarkPress={card.open} />
+						))}
 					</>
 				) : null}
 			</Section>
@@ -224,12 +230,55 @@ export function TTHome({ backendId, poll = true }: { backendId: string; poll?: b
 	);
 }
 
+/** One of the four charts: per day, or per step for a day (the backend's buckets); the previous period dashed. */
+function OverviewBars({
+	data,
+	previous,
+	shiftMs,
+	chart,
+	marks,
+	onMarkPress,
+}: {
+	data: OverviewResult;
+	previous: OverviewResult | undefined;
+	shiftMs: number;
+	chart: (typeof CHARTS)[number];
+	marks: ChartMark[];
+	onMarkPress(mark: ChartMark): void;
+}) {
+	const byDay = data.days.length > 1 || !data.buckets?.length;
+	const points = byDay ? data.days.map((d) => ({ t: Date.parse(d.date), v: d[chart.key] })) : (data.buckets ?? []).map((b) => ({ t: b.t, v: b[chart.key] }));
+	let before: (number | null)[] | undefined;
+	if (previous) {
+		const at = new Map<number, number>(byDay ? previous.days.map((d) => [Date.parse(d.date) + shiftMs, d[chart.key]]) : (previous.buckets ?? []).map((b) => [b.t + shiftMs, b[chart.key]]));
+		before = points.map((pt) => at.get(pt.t) ?? null);
+	}
+	if (!points.length) return null;
+	return (
+		<Card style={{ gap: 6 }}>
+			<Txt variant="label">{chart.label}</Txt>
+			<Txt variant="small">
+				{byDay ? "Per day (UTC), by the day a session started" : "Per step (UTC), by the time a session started"}
+				{before ? "; dashed: the previous period" : ""}
+			</Txt>
+			<BarChart
+				points={points}
+				format={chart.format ?? compact}
+				marks={marks}
+				onMarkPress={onMarkPress}
+				{...(byDay ? {} : { timeLabel: (t: number) => new Date(t).toISOString().slice(11, 16) })}
+				{...(before ? { previous: before } : {})}
+			/>
+		</Card>
+	);
+}
+
 function PrevToggle({ on, onChange }: { on: boolean; onChange(on: boolean): void }) {
 	return (
 		<View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
 			<Switch value={on} onValueChange={onChange} />
 			<Txt variant="small" style={{ flex: 1 }}>
-				vs previous period (dashed)
+				vs previous period: change chips on the tiles, the period before dashed on the charts
 			</Txt>
 		</View>
 	);
