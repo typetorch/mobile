@@ -14,7 +14,8 @@ import { Badge, Button, Card, Chips, EmptyState, Icon, List, Segmented, Skeleton
 import { CopyButton, EventItem, FunnelBar, FunnelStepList, Note, Panel, ProductName, productKindLabel, QueryState } from "@/features/typetorch/bits";
 import { DataTable } from "@/features/typetorch/table";
 import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
-import { GraphControls, MermaidButton, PathStrip, SparseNote, StateList } from "@/features/typetorch/graph";
+import { GraphControls, GraphPanelBody, isFacet, MermaidButton, PathStrip, SparseNote } from "@/features/typetorch/graph";
+import { useFlagParam, usePageParam } from "@/features/typetorch/view-link";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { TTScreen } from "@/features/typetorch/screen";
 import { fmtAgo, fmtInt, fmtMinutes, fmtNum, fmtTime, plural, shortId } from "@/lib/format";
@@ -40,9 +41,12 @@ export default function PlayerScreen() {
 }
 
 function Player({ backendId, pid }: { backendId: string; pid: string }) {
-	const [view, setView] = useState<PlayerView>("spending");
-	const [show, setShow] = useState<Show>("chart");
-	const [sid, setSid] = useState("");
+	// The web's URL parameters (view, show, sid; facet and moments in the timeline).
+	const [viewParam, setView] = usePageParam("view", "spending");
+	const [showParam, setShow] = usePageParam("show", "chart");
+	const [sid, setSid] = usePageParam("sid");
+	const view: PlayerView = VIEWS.some((v) => v.value === viewParam) ? (viewParam as PlayerView) : "spending";
+	const show: Show = showParam === "table" ? "table" : "chart";
 	const stats = useTTAnalytics(backendId, "player-stats", { pid });
 	return (
 		<>
@@ -352,8 +356,10 @@ function SessionsView({ backendId, stats, show, onShow, onSession }: ViewProps &
 // Timeline --------------------------------------------------------------------------------------------------------------
 
 function TimelineView({ backendId, pid, sid, setSid }: { backendId: string; pid: string; sid: string; setSid(s: string): void }) {
-	const [facet, setFacet] = useState<Facet>("all");
-	const [moments, setMoments] = useState(false);
+	const [facetParam, setFacet] = usePageParam("facet", "all");
+	const facet: Facet = isFacet(facetParam) ? facetParam : "all";
+	const [moments, setMoments] = useFlagParam("moments");
+	const [mode, setMode] = usePageParam("graph", "drawn");
 	const timeline = useTTAnalytics(backendId, "timeline", { pid, limit: 2000 });
 	const sessions = timeline.data?.sessions ?? [];
 	const session = sessions.find((s) => s.sid === sid);
@@ -362,7 +368,7 @@ function TimelineView({ backendId, pid, sid, setSid }: { backendId: string; pid:
 		<>
 			<Panel
 				title={session ? `Session ${fmtTime(session.start)}` : "Node graph, all sessions"}
-				note={session ? `${fmtMinutes(session.minutes)}, ${plural(session.events, "event")}: the moves in order, and the time in each state.` : "States and the moves between them (tap a state for its moves out)."}
+				note={session ? `${fmtMinutes(session.minutes)}, ${plural(session.events, "event")}: the moves in order, and the time in each state.` : "States and the moves between them (tap a state for what happened there and its moves)."}
 			>
 				<Chips
 					options={[{ value: "", label: "All sessions" }, ...(sid && !session ? [{ value: sid, label: `session ${shortId(sid)}` }] : []), ...[...sessions].reverse().map((s) => ({ value: s.sid, label: `${fmtTime(s.start).slice(5, 16)} (${fmtMinutes(s.minutes)})` }))]}
@@ -376,7 +382,7 @@ function TimelineView({ backendId, pid, sid, setSid }: { backendId: string; pid:
 						<View style={{ gap: space.sm }}>
 							<SparseNote graph={g} backendId={backendId} pid={pid} />
 							<PathStrip graph={g} />
-							<StateList graph={g} />
+							<GraphPanelBody graph={g} mode={mode === "list" ? "list" : "drawn"} onMode={setMode} />
 						</View>
 					)}
 				</QueryState>
@@ -455,7 +461,7 @@ function errorParamsFor(filters: Filters, realm: string): ErrorParams {
 function ErrorsView({ backendId, pid }: { backendId: string; pid: string }) {
 	const p = useTheme();
 	const { apiFilters } = useTTFilters(backendId);
-	const [realm, setRealm] = useState("");
+	const [realm, setRealm] = usePageParam("realm");
 	const params = errorParamsFor(apiFilters, realm);
 	const q = useTTQuery(backendId, ["errors", "player", pid, params], (api, s) => api.playerErrors(pid, params, s), { refetchInterval: 30_000 });
 	return (

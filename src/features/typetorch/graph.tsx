@@ -1,19 +1,21 @@
 /**
- * The node graph (Flow, a player's timeline) for a phone. The web draws it with React Flow + dagre; here the same data
- * is a list: the states (busiest first, tap one for its moves out), a one-session path in order, where sessions end and
- * the busiest moves. "Copy Mermaid" gives the drawn graph as text, like the web's button.
+ * The node graph (Flow, a player's timeline) for a phone: drawn (graph-view.tsx: dagre + react-native-svg, pan, pinch,
+ * tap a state) or as lists (the states busiest first, tap one for its moves out), a one-session path in order, where
+ * sessions end and the busiest moves. "Copy Mermaid" gives the drawing as text, like the web's button.
  */
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, Switch, View } from "react-native";
 
 import { eventsLine, exits, LEFT, nodeKind, realStates, START, stateLines, stepsLine, toMermaid, topEdges } from "@/api/tt/graph-text";
-import { FACETS, type Facet, type GraphData } from "@/api/tt/types";
-import { Badge, Chips, Icon, List, Txt } from "@/components/ui";
+import { FACETS, type Facet, type GraphData, type GraphEdge } from "@/api/tt/types";
+import { Badge, Chips, Icon, List, Segmented, Txt } from "@/components/ui";
 import { fmtDuration, fmtInt, fmtPct, plural } from "@/lib/format";
 import { space, useTheme } from "@/theme";
 
-import { CopyButton, Note, Panel, ShareRow } from "./bits";
+import { CopyButton, Note, Panel, ShareBar, ShareRow } from "./bits";
+import { GraphView } from "./graph-view";
+import { DataTable, type DataColumn } from "./table";
 
 const name = (id: string) => stateLines(id).join(" · ");
 
@@ -162,6 +164,44 @@ export function StateList({ graph }: { graph: GraphData }) {
 	);
 }
 
+type Exit = ReturnType<typeof exits>[number];
+
+const EXIT_COLUMNS: DataColumn<Exit>[] = [
+	{ id: "state", header: "State", width: 200, accessor: (e) => name(e.state), filter: "text" },
+	{ id: "count", header: "Sessions", width: 80, accessor: (e) => e.count, cell: (e) => fmtInt(e.count) },
+	{ id: "share", header: "Share", width: 110, accessor: (e) => e.share, format: (v) => fmtPct(v as number), cell: (e) => <ShareCell share={e.share} />, filter: false },
+];
+
+const MOVE_COLUMNS: DataColumn<GraphEdge>[] = [
+	{ id: "from", header: "From", width: 170, accessor: (e) => name(e.from) },
+	{ id: "to", header: "To", width: 170, accessor: (e) => name(e.to) },
+	{ id: "count", header: "Times", width: 70, accessor: (e) => e.count, cell: (e) => fmtInt(e.count) },
+	{ id: "share", header: "Share", width: 70, accessor: (e) => e.share, cell: (e) => fmtPct(e.share), format: (v) => fmtPct(v as number) },
+	{
+		id: "before",
+		header: "Avg before",
+		title: "Average time in the state before the move",
+		width: 90,
+		accessor: (e) => (e.from === START ? null : e.count ? e.dwellMs / e.count : 0),
+		cell: (e) => (e.from === START ? "–" : fmtDuration(e.count ? e.dwellMs / e.count : 0)),
+		format: (_v, e) => (e.from === START ? "" : fmtDuration(e.count ? e.dwellMs / e.count : 0)),
+		exportValue: (e) => (e.from === START ? null : (e.count ? e.dwellMs / e.count : 0) / 1000),
+	},
+];
+
+function ShareCell({ share }: { share: number }) {
+	return (
+		<View style={{ flexDirection: "row", alignItems: "center", gap: 6, width: "100%" }}>
+			<View style={{ flex: 1 }}>
+				<ShareBar share={share} />
+			</View>
+			<Txt variant="small" style={{ width: 40, textAlign: "right" }}>
+				{fmtPct(share)}
+			</Txt>
+		</View>
+	);
+}
+
 /** Where sessions end, and the busiest moves (the web Flow page's two tables). */
 export function GraphTables({ graph }: { graph: GraphData }) {
 	const out = exits(graph);
@@ -169,32 +209,29 @@ export function GraphTables({ graph }: { graph: GraphData }) {
 	return (
 		<>
 			<Panel title="Where sessions end" note="The last state before leaving (sessions that are over).">
-				{out.length ? (
-					<List>
-						{out.map((e) => (
-							<ShareRow key={e.state} label={name(e.state)} value={fmtPct(e.share)} share={e.share} sub={`${fmtInt(e.count)} sessions`} />
-						))}
-					</List>
-				) : (
-					<Txt variant="muted">No session in this range is over yet.</Txt>
-				)}
+				{out.length ? <DataTable id="flow-exits" label="Where sessions end" columns={EXIT_COLUMNS} data={out} rowId={(e) => e.state} /> : <Txt variant="muted">No session in this range is over yet.</Txt>}
 			</Panel>
 			<Panel title="Busiest moves" note="Share = of all moves out of the same state; time = average in the state before the move.">
-				<List>
-					{moves.map((e) => (
-						<View key={`${e.from}>${e.to}`} style={{ paddingVertical: 8, paddingHorizontal: space.md, gap: 2 }}>
-							<Txt numberOfLines={2}>
-								{name(e.from)} → {name(e.to)}
-							</Txt>
-							<Txt variant="small">
-								{plural(e.count, "time")} · {fmtPct(e.share)}
-								{e.from === START ? "" : ` · ${fmtDuration(e.count ? e.dwellMs / e.count : 0)} before`}
-							</Txt>
-						</View>
-					))}
-				</List>
+				<DataTable id="flow-moves" label="Busiest moves" columns={MOVE_COLUMNS} data={moves} rowId={(e) => `${e.from}>${e.to}`} />
 			</Panel>
 		</>
+	);
+}
+
+/** Drawn (pan, pinch, tap a state) or as lists (the states busiest first, tap one for its moves out). */
+export function GraphPanelBody({ graph, mode, onMode }: { graph: GraphData; mode: "drawn" | "list"; onMode(mode: "drawn" | "list"): void }) {
+	return (
+		<View style={{ gap: space.sm }}>
+			<Segmented
+				options={[
+					{ value: "drawn", label: "Drawn" },
+					{ value: "list", label: "List" },
+				]}
+				value={mode}
+				onChange={onMode}
+			/>
+			{mode === "drawn" ? <GraphView graph={graph} /> : <StateList graph={graph} />}
+		</View>
 	);
 }
 
