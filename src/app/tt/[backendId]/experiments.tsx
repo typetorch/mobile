@@ -1,13 +1,18 @@
 /**
- * Experiments: per-variant numbers and how sure each difference is (query `experiment`), every experiment with its state
- * and weights (read-only, GET /v1/experiments), and the players in an experiment or variant (GET /v1/experiments/<e>/players).
+ * Experiments: per-variant numbers and how sure each difference is (query `experiment`), the sample ratio check (a loud
+ * alert on a mismatch), every experiment with its state and weights (GET /v1/experiments), the players in an experiment
+ * or variant (GET /v1/experiments/<e>/players), and for owners the controls (Start / Stop / Clear / Change split /
+ * Settle: POST /v1/experiments/<e>/change answers the signed CLI command to run in the game's folder).
  */
+import { useMutation } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { View } from "react-native";
 
-import type { Comparison, ExperimentOverride, ExperimentOverrides, ExperimentPlayer, ExperimentResult } from "@/api/tt/types";
-import { Badge, Button, Chips, Segmented, Txt } from "@/components/ui";
-import { Note, openPlayer, Panel, QueryState, ShareBar } from "@/features/typetorch/bits";
+import type { AssignmentCheck, Comparison, ExperimentChangeRequest, ExperimentOverride, ExperimentOverrides, ExperimentPlayer, ExperimentResult, PreparedExperimentChange } from "@/api/tt/types";
+import { Badge, Button, Chips, Field, Segmented, Txt } from "@/components/ui";
+import { Callout } from "@/features/typetorch/analytics-bits";
+import { CopyButton, Note, openPlayer, Panel, QueryState, ShareBar } from "@/features/typetorch/bits";
+import { useBackend } from "@/store/accounts";
 import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { playerColumns } from "@/features/typetorch/cards";
@@ -15,7 +20,7 @@ import { TTScreen } from "@/features/typetorch/screen";
 import { DataTable, type DataColumn } from "@/features/typetorch/table";
 import { usePageParam, usePageParams } from "@/features/typetorch/view-link";
 import { fmtAgo, fmtInt, fmtNum, fmtPct, plural } from "@/lib/format";
-import { space, useTheme, type Tone } from "@/theme";
+import { radius, space, useTheme, type Tone } from "@/theme";
 
 type Results = Extract<ExperimentResult, { variants: unknown }>;
 type Variant = Results["variants"][number];
@@ -185,7 +190,11 @@ function PlayerScope({ backendId }: { backendId: string }) {
 	const setAssigned = (a: { experiment: string; variant: string } | null) => setParams({ assigned: a?.experiment ?? null, assignedVariant: a?.variant || null });
 	const names = list.data && list.data.experiment === null ? [...new Set(list.data.experiments.map((e) => e.experiment))] : [];
 	const name = picked || names[0] || "";
-	const results = useTTAnalytics(backendId, "experiment", { experiment: name, scope: "player" }, { enabled: Boolean(name) });
+	const override = overrides.data?.experiments[name];
+	// The intended split for the sample ratio check: the override's weights while it runs on them.
+	const weights = override && override.active !== false && !override.variant && override.weights?.length ? override.weights : undefined;
+	const results = useTTAnalytics(backendId, "experiment", { experiment: name, scope: "player", ...(weights ? { weights } : {}) }, { enabled: Boolean(name) });
+	const owner = useBackend(backendId).account?.role === "admin";
 	const rows = useMemo(() => (list.data && list.data.experiment === null ? experimentRows(list.data.experiments, overrides.data) : []), [list.data, overrides.data]);
 	const p = useTheme();
 	const experimentColumns = useMemo(() => experimentListColumns(p), [p]);
@@ -198,11 +207,14 @@ function PlayerScope({ backendId }: { backendId: string }) {
 					<QueryState q={results}>
 						{(data) =>
 							data.experiment === null ? null : (
-								<ResultsView
-									data={data}
-									selectedVariant={assigned?.experiment === data.experiment ? assigned.variant : undefined}
-									onOpenVariant={(v) => setAssigned({ experiment: data.experiment as string, variant: v })}
-								/>
+								<>
+									<ResultsView
+										data={data}
+										selectedVariant={assigned?.experiment === data.experiment ? assigned.variant : undefined}
+										onOpenVariant={(v) => setAssigned({ experiment: data.experiment as string, variant: v })}
+									/>
+									{owner ? <ExperimentControl key={data.experiment} backendId={backendId} experiment={data.experiment} variants={gameVariants(data)} {...(override ? { override } : {})} /> : null}
+								</>
 							)
 						}
 					</QueryState>
@@ -324,9 +336,10 @@ function ResultsView({ data, onOpenVariant, selectedVariant }: { data: Results; 
 					{...(onOpenVariant ? { onRowPress: (v: Variant) => onOpenVariant(v.variant) } : {})}
 				/>
 			</Panel>
+			{data.assignment ? <SampleRatio check={data.assignment} /> : null}
 			<Panel
 				title="How sure"
-				note={`Each variant against the control: two-proportion test for shares, bootstrap (or Welch) for averages.${data.variants.length > 2 ? ` With ${data.variants.length - 1} variants against the control, "sure" is Holm-corrected so more variants don't mean more lucky wins.` : ""} Can detect and time to tell assume 80% power at the range's traffic.`}
+				note={`Each variant against the control: two-proportion test for shares, bootstrap (or Welch) for averages.${data.variants.length > 2 ? ` With ${data.variants.length - 1} variants against the control, "sure" is Holm-corrected so more variants don't mean more lucky wins.` : ""}${data.forcedPlayers ? ` ${plural(data.forcedPlayers, "forced player")} left out (they didn't get a random variant).` : ""} Can detect and time to tell assume 80% power at the range's traffic.`}
 			>
 				{data.comparisons.length ? (
 					<DataTable id="experiment-comparisons" label="Comparisons with the control" columns={comparisons} data={data.comparisons as ComparisonRow[]} rowId={(c) => `${c.variant}-${c.metric}`} density="compact" />
@@ -335,6 +348,141 @@ function ResultsView({ data, onOpenVariant, selectedVariant }: { data: Results; 
 				)}
 			</Panel>
 		</>
+	);
+}
+
+/**
+ * The sample ratio check: a loud warning when players didn't land where the split says (the numbers can't be trusted),
+ * else one quiet line. Each variant's players against the share it should get.
+ */
+export function SampleRatio({ check }: { check: AssignmentCheck }) {
+	const srm = check.srm;
+	const total = check.variants.reduce((s, v) => s + v.players, 0);
+	const weightTotal = (check.weights ?? []).reduce((s, w) => s + w, 0);
+	const rows = check.variants.map((v, i) => `${v.variant} ${fmtInt(v.players)} (${fmtPct(total ? v.players / total : 0, 1)}${check.weights && weightTotal ? `, should be ${fmtPct((check.weights[i] ?? 0) / weightTotal, 1)}` : ""})`);
+	const split = check.weightsFrom === "settings" ? "the settings' weights" : "an even split";
+	if (srm?.mismatch) {
+		return (
+			<Callout tone="critical" title="Sample ratio mismatch: don't trust these numbers">
+				<Txt variant="small">
+					Players didn't land where {split} says: {rows.join(", ")}. Chi-square p = {srm.pValue < 0.0001 ? srm.pValue.toExponential(1) : fmtNum(srm.pValue, 4)} (a fair split gets this less than 1 time in 1000). Look for a variant that crashes or loses its events, a bug in when the game asks for the variant, bots, or a split changed in this range.
+				</Txt>
+				{check.note ? <Txt variant="small">{check.note}</Txt> : null}
+			</Callout>
+		);
+	}
+	return (
+		<Note>
+			{srm ? `Split check: ${srm.enough ? `players per variant fit ${split} (p = ${fmtNum(srm.pValue, 3)})` : "too few players to check the split yet"}. ${rows.join(", ")}.` : `Split check: ${check.note ?? "not run."}`}
+			{srm && check.note ? ` ${check.note}` : ""}
+		</Note>
+	);
+}
+
+/**
+ * The experiment's variants for the controls: in the game's order when the rows carry it (`known`), else by name (then
+ * weights are labelled by position: only the game knows its order).
+ */
+export function gameVariants(data: Results): { names: string[]; known: boolean } {
+	const check = data.assignment;
+	if (check && check.order === "game" && check.variants.every((v) => v.index !== null && !v.variant.startsWith("("))) return { names: check.variants.map((v) => v.variant), known: true };
+	return { names: data.variants.map((v) => v.variant).sort(), known: false };
+}
+
+const ACTION_LABEL: Record<ExperimentChangeRequest["action"], string> = { start: "Start", stop: "Stop", split: "Change split", settle: "Settle", clear: "Clear" };
+
+/** A command in a box with a copy button. */
+function CommandBox({ label, command }: { label: string; command: string }) {
+	const p = useTheme();
+	return (
+		<View style={{ gap: 4 }}>
+			<View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+				<Txt variant="small" style={{ flex: 1 }}>
+					{label}
+				</Txt>
+				<CopyButton text={command} />
+			</View>
+			<View style={{ borderWidth: 1, borderColor: p.border, backgroundColor: p.muted, borderRadius: radius.sm, padding: space.sm }}>
+				<Txt variant="mono" selectable style={{ fontSize: 11 }}>
+					{command}
+				</Txt>
+			</View>
+		</View>
+	);
+}
+
+/**
+ * Owners: start, stop, re-split, settle or clear the experiment. The split is in the game's signed settings and the
+ * signing keys stay on the owners' machines, so this prepares the change (checked and audited by the server) and hands
+ * over the exact command that applies it.
+ */
+function ExperimentControl({ backendId, experiment, variants, override }: { backendId: string; experiment: string; variants: { names: string[]; known: boolean }; override?: ExperimentOverride }) {
+	const p = useTheme();
+	const { api } = useBackend(backendId);
+	const count = variants.names.length;
+	const [weights, setWeights] = useState<string[]>(() => Array.from({ length: count }, (_, i) => String(override?.weights && override.weights.length === count ? override.weights[i] : 1)));
+	const [settleOn, setSettleOn] = useState(variants.names[0] ?? "");
+	const prepare = useMutation({
+		mutationFn: (change: ExperimentChangeRequest) => {
+			if (!api) throw new Error("This backend isn't connected.");
+			return api.experimentChange(experiment, change);
+		},
+	});
+	const label = (i: number) => (variants.known ? (variants.names[i] ?? `variant ${i + 1}`) : `variant ${i + 1}`) + (i === 0 ? " (control)" : "");
+	const parsed = weights.map((w) => Number(w));
+	const weightsOk = parsed.length > 0 && parsed.every((w) => Number.isFinite(w) && w >= 0) && parsed.some((w) => w > 0) && weights.every((w) => w.trim() !== "");
+	const run = (change: ExperimentChangeRequest) => prepare.mutate(change);
+	const listed = variants.known ? { variants: variants.names } : {};
+	const prepared: PreparedExperimentChange | undefined = prepare.data;
+	return (
+		<Panel
+			title="Run it"
+			note="Start, stop, change the split or settle on a winner. The split lives in the game's signed settings and only your keys sign them (they never reach this server), so this gives you the command to run in the game's folder; servers apply it within seconds, no deploy."
+		>
+			<View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+				<Button title="Start" small onPress={() => run({ action: "start" })} disabled={prepare.isPending} />
+				<Button title="Stop" small onPress={() => run({ action: "stop" })} disabled={prepare.isPending} />
+				<Button title="Clear override" small onPress={() => run({ action: "clear" })} disabled={prepare.isPending} />
+			</View>
+			{count > 0 ? (
+				<View style={{ gap: space.sm }}>
+					<Txt style={{ fontWeight: "600" }}>Split</Txt>
+					<View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+						{weights.map((w, i) => (
+							<View key={i} style={{ width: 120 }}>
+								<Field label={label(i)} keyboardType="decimal-pad" value={w} onChangeText={(t) => setWeights((list) => list.map((x, j) => (j === i ? t : x)))} />
+							</View>
+						))}
+					</View>
+					<Button title="Change split" small variant="primary" onPress={() => run({ action: "split", weights: parsed, ...listed })} disabled={!weightsOk || prepare.isPending} style={{ alignSelf: "flex-start" }} />
+					{variants.known ? null : <Note>These rows don't carry the game's variant order (framework 0.7.1+ adds it): weights go in the order the game lists its variants.</Note>}
+				</View>
+			) : null}
+			{count > 0 ? (
+				<View style={{ gap: space.sm }}>
+					<Txt variant="small">Everyone gets</Txt>
+					<Chips options={variants.names.map((n) => ({ value: n, label: n }))} value={settleOn} onChange={setSettleOn} />
+					<Button title="Settle" small onPress={() => run({ action: "settle", variant: settleOn, variants: variants.names })} disabled={!settleOn || prepare.isPending} style={{ alignSelf: "flex-start" }} />
+				</View>
+			) : null}
+			{prepare.isError ? (
+				<Txt variant="small" color={p.destructive}>
+					{(prepare.error as Error).message}
+				</Txt>
+			) : null}
+			{prepared ? (
+				<View style={{ gap: space.sm, borderWidth: 1, borderColor: p.border, borderRadius: radius.md, padding: space.sm }}>
+					<Txt style={{ fontWeight: "600" }}>
+						{ACTION_LABEL[prepared.action]} {prepared.experiment}: {prepared.effect}
+					</Txt>
+					<CommandBox label="Run in the game's folder" command={prepared.command} />
+					<CommandBox label="See the change first (writes nothing)" command={prepared.dryRun} />
+					{prepared.notes.map((n) => (
+						<Note key={n}>{n}</Note>
+					))}
+				</View>
+			) : null}
+		</Panel>
 	);
 }
 
