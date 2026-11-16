@@ -136,3 +136,21 @@ export function topSeries(series: AnalyticsSeries[], n: number): AnalyticsSeries
 	const total = (s: AnalyticsSeries) => s.dataPoints.reduce((a, p) => a + (p.value ?? 0), 0);
 	return [...series].sort((a, b) => total(b) - total(a)).slice(0, n);
 }
+
+/** At most `n` analytics queries in flight across the app (Roblox: 30 queries a minute per key owner). */
+function limiter(n: number) {
+	let active = 0;
+	const waiting: (() => void)[] = [];
+	return async function run<T>(task: () => Promise<T>): Promise<T> {
+		if (active >= n) await new Promise<void>((go) => waiting.push(go));
+		active++;
+		try {
+			return await task();
+		} finally {
+			active--;
+			waiting.shift()?.();
+		}
+	};
+}
+
+export const analyticsSlot = limiter(2);

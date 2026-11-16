@@ -246,3 +246,18 @@ export async function placeUniverse(placeId: number): Promise<number | null> {
 	const r = await requestJson<{ universeId: number | null }>(`https://apis.roblox.com/universes/v1/places/${placeId}/universe`);
 	return r.universeId ?? null;
 }
+
+async function idIcons(path: string, param: string, ids: number[]): Promise<Record<number, string>> {
+	const list = Array.from(new Set(ids.filter((n) => n > 0)));
+	if (!list.length) return {};
+	const pages = await mapLimit(chunk(list, 100), 3, (b) =>
+		requestJson<{ data: ThumbAnswer[] }>(`${THUMBS}${path}${qs({ [param]: b.join(","), size: "150x150", format: "Png", isCircular: false })}`),
+	);
+	const out: Record<number, string> = {};
+	for (const p of pages) for (const t of p.data ?? []) if (t.imageUrl) out[t.targetId] = t.imageUrl;
+	return out;
+}
+
+export const badgeIcons = (ids: number[]) => idIcons("/v1/badges/icons", "badgeIds", ids);
+export const gamePassIcons = (ids: number[]) => idIcons("/v1/game-passes", "gamePassIds", ids);
+export const productIcons = (ids: number[]) => idIcons("/v1/developer-products/icons", "developerProductIds", ids);
