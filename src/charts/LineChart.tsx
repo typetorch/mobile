@@ -319,7 +319,12 @@ export function BarChart({
 			if (!(m.t >= (starts[0] as number)) || m.t >= last + step) continue;
 			let i = 0;
 			while (i + 1 < starts.length && (starts[i + 1] as number) <= m.t) i++;
-			out.set(i, m);
+			const before = out.get(i);
+			// Several lines on one bar: one line, every mark in its tap (the web groups them per bar too).
+			if (before && Array.isArray(before.data) && Array.isArray(m.data)) {
+				const data = [...(before.data as unknown[]), ...(m.data as unknown[])];
+				out.set(i, { ...m, data, ...(m.label ? { label: `${m.label.replace(/ \+\d+$/, "")} +${data.length - 1}` } : {}) });
+			} else out.set(i, m);
 		}
 		return out;
 	}, [marks, points]);
