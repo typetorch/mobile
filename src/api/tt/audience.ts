@@ -3,6 +3,7 @@
  * and their types in lib/types.ts): names for the join data's codes (country, language, account age, join source), the
  * `demographics` and `churn` query answers. Kept apart from types.ts; the queries go through `api.raw` (useTTRawQuery).
  */
+import { COUNTRY_NAMES, LANGUAGE_NAMES } from "./locale-names";
 import { ACCOUNT_AGES, type AccountAge, type Filters } from "./types";
 
 // The `demographics` query ------------------------------------------------------------------------------------------------
@@ -28,7 +29,7 @@ export interface DemographicsResult {
 
 function displayNames(type: "region" | "language"): { of(code: string): string | undefined } | undefined {
 	try {
-		// Hermes may not have Intl.DisplayNames; then the codes stay as they are.
+		// Hermes (Expo Go) may not have Intl.DisplayNames; then the static English tables in locale-names.ts name them.
 		const Ctor = (Intl as unknown as { DisplayNames?: new (locales: string[], options: { type: string }) => { of(code: string): string | undefined } }).DisplayNames;
 		return Ctor ? new Ctor(["en"], { type }) : undefined;
 	} catch {
@@ -39,25 +40,28 @@ function displayNames(type: "region" | "language"): { of(code: string): string |
 const regionNames = displayNames("region");
 const languageNames = displayNames("language");
 
-/** "US" -> "United States"; anything Intl doesn't know stays as it is. */
+/** Intl's name when it has a real one (not the code back), else undefined. */
+function intlName(names: { of(code: string): string | undefined } | undefined, code: string): string | undefined {
+	try {
+		const name = names?.of(code);
+		return name && name.toLowerCase() !== code.toLowerCase() ? name : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+/** "US" -> "United States"; anything neither Intl nor the static table knows stays as it is. */
 export function countryName(code: string): string {
 	if (!/^[A-Za-z]{2}$/.test(code)) return code;
-	try {
-		return regionNames?.of(code.toUpperCase()) ?? code;
-	} catch {
-		return code;
-	}
+	const upper = code.toUpperCase();
+	return intlName(regionNames, upper) ?? COUNTRY_NAMES[upper] ?? code;
 }
 
 /** "en" / "en-us" -> "English" (the language without the region). */
 export function languageName(code: string): string {
 	const base = code.split(/[-_]/)[0]?.toLowerCase() ?? "";
 	if (!/^[a-z]{2,3}$/.test(base)) return code;
-	try {
-		return languageNames?.of(base) ?? code;
-	} catch {
-		return code;
-	}
+	return intlName(languageNames, base) ?? LANGUAGE_NAMES[base] ?? code;
 }
 
 export const ACCOUNT_AGE: Record<AccountAge, string> = {

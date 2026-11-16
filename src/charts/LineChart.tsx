@@ -77,6 +77,25 @@ function dayLabel(t: number): string {
 	return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 }
 
+/** A series' values in time order as runs to draw: one run with the nulls left out, or (`gaps`) a new run after each null. */
+function valueRuns(points: readonly ChartPoint[], gaps: boolean): { t: number; v: number }[][] {
+	const sorted = [...points].sort((a, b) => a.t - b.t);
+	const runs: { t: number; v: number }[][] = [];
+	let run: { t: number; v: number }[] = [];
+	for (const pt of sorted) {
+		if (pt.v === null || pt.v === undefined) {
+			if (gaps && run.length) {
+				runs.push(run);
+				run = [];
+			}
+			continue;
+		}
+		run.push({ t: pt.t, v: pt.v });
+	}
+	if (run.length) runs.push(run);
+	return runs;
+}
+
 export function LineChart({
 	series,
 	height = 160,
@@ -86,6 +105,7 @@ export function LineChart({
 	area = true,
 	marks,
 	onMarkPress,
+	gaps = false,
 }: {
 	series: ChartSeries[];
 	height?: number;
@@ -97,6 +117,9 @@ export function LineChart({
 	marks?: ChartMark[];
 	/** A tap on (near) a mark. */
 	onMarkPress?: (mark: ChartMark) => void;
+	/** A null point breaks the line (recharts' connectNulls={false}): one path per run of values, a dot for a lone value.
+	 * Default off: the line joins the values on either side of a null. */
+	gaps?: boolean;
 }) {
 	const p = useTheme();
 	const [width, setWidth] = useState(0);
@@ -205,18 +228,24 @@ export function LineChart({
 							<MarkLine key={`m${i}`} x={x(m.t)} top={PAD.top} bottom={PAD.top + plotH} mark={m} fallback={p.warning} labels={inMarks.length <= MAX_LABELLED} muted={p.mutedForeground} />
 						))}
 						{series.map((s, si) => {
-							const pts = s.points.filter((pt) => pt.v !== null).sort((a, b) => a.t - b.t);
-							if (!pts.length) return null;
-							const line = pts.map((pt, i) => `${i ? "L" : "M"}${x(pt.t).toFixed(1)},${y(pt.v as number).toFixed(1)}`).join(" ");
-							const fill =
-								area && series.length === 1 && pts.length > 1
-									? `${line} L${x((pts[pts.length - 1] as ChartPoint).t).toFixed(1)},${y(Math.max(0, minV)).toFixed(1)} L${x((pts[0] as ChartPoint).t).toFixed(1)},${y(Math.max(0, minV)).toFixed(1)} Z`
-									: null;
+							const runs = valueRuns(s.points, gaps);
+							if (!runs.length) return null;
+							const base = y(Math.max(0, minV)).toFixed(1);
 							return (
 								<G key={si}>
-									{fill ? <Path d={fill} fill={colors[si]} opacity={0.12} /> : null}
-									<Path d={line} stroke={colors[si]} strokeWidth={s.dashed ? 1.5 : 2} strokeDasharray={s.dashed ? "4,3" : undefined} fill="none" strokeLinejoin="round" strokeLinecap="round" />
-									{pts.length === 1 ? <Circle cx={x((pts[0] as ChartPoint).t)} cy={y((pts[0] as ChartPoint).v as number)} r={3} fill={colors[si]} /> : null}
+									{runs.map((pts, ri) => {
+										const line = pts.map((pt, i) => `${i ? "L" : "M"}${x(pt.t).toFixed(1)},${y(pt.v).toFixed(1)}`).join(" ");
+										const first = pts[0] as { t: number; v: number };
+										const last = pts[pts.length - 1] as { t: number; v: number };
+										const fill = area && series.length === 1 && pts.length > 1 ? `${line} L${x(last.t).toFixed(1)},${base} L${x(first.t).toFixed(1)},${base} Z` : null;
+										return (
+											<G key={ri}>
+												{fill ? <Path d={fill} fill={colors[si]} opacity={0.12} /> : null}
+												<Path d={line} stroke={colors[si]} strokeWidth={s.dashed ? 1.5 : 2} strokeDasharray={s.dashed ? "4,3" : undefined} fill="none" strokeLinejoin="round" strokeLinecap="round" />
+												{pts.length === 1 ? <Circle cx={x(first.t)} cy={y(first.v)} r={3} fill={colors[si]} /> : null}
+											</G>
+										);
+									})}
 								</G>
 							);
 						})}

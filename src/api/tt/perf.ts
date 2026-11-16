@@ -187,6 +187,16 @@ export function groupLabel(by: PerfGroupBy, key: string, seq?: number | null): s
 	return KEY_LABELS[by]?.[key] ?? key;
 }
 
+/** A fixed palette slot per device class (web lib/perf.ts DEVICE_COLORS: desktop chart-1, phone chart-2, tablet chart-3,
+ * console chart-4, vr chart-5, unknown chart-7, anything else chart-8), so one device keeps its colour on every chart
+ * whichever devices are in the data. An index into the theme's `chart` array. */
+export const DEVICE_COLORS: Record<string, number> = { desktop: 0, phone: 1, tablet: 2, console: 3, vr: 4, unknown: 6 };
+
+/** A device class's colour from the theme's chart palette (`p.chart`). */
+export function deviceColor(chart: readonly string[], device: string): string {
+	return chart[DEVICE_COLORS[device] ?? 7] ?? chart[0] ?? "#888888";
+}
+
 /** A color per series slot (chart-1..8), in order. */
 export const SERIES_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)", "var(--chart-6)", "var(--chart-7)", "var(--chart-8)"];
 

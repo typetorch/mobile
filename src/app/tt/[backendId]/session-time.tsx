@@ -9,7 +9,7 @@ import { useMemo } from "react";
 import { View } from "react-native";
 
 import { change } from "@/api/tt/benchmarks";
-import { groupLabel } from "@/api/tt/perf";
+import { deviceColor, groupLabel } from "@/api/tt/perf";
 import type { Filters, SessionTimeBucket, SessionTimeResult, SessionTimeSummary } from "@/api/tt/types";
 import { StatGrid, Txt } from "@/components/ui";
 import { BarChart, Legend, LineChart, type ChartSeries } from "@/charts/LineChart";
@@ -220,12 +220,12 @@ function TrendChart({ r, metric, total, split, smooth }: { r: SessionTimeResult;
 		const line = (values: (number | null)[]) => rollingAverage(values, smooth).map((v, i) => ({ t: r.buckets[i]!.t, v }));
 		return [
 			{ label: metric === "session" ? (total === "roblox" ? "Total (avg of devices)" : "Total (weighted)") : "Total", color: p.foreground, points: line(r.buckets.map((b) => bucketValue(b, metric, total))) },
-			...devs.map((d, i) => ({ label: groupLabel("dev", d), color: p.chart[i % p.chart.length], points: line(r.buckets.map((b) => bucketValue(b, metric, total, d))) })),
+			...devs.map((d) => ({ label: groupLabel("dev", d), color: deviceColor(p.chart, d), points: line(r.buckets.map((b) => bucketValue(b, metric, total, d))) })),
 		];
 	}, [r, metric, total, split, smooth, spec.byDevice, p]);
 	return (
 		<View style={{ gap: 6 }}>
-			<LineChart series={series} height={200} area={false} format={spec.format} axisFormat={(v) => fmtNum(v, metric === "sessions" ? 0 : 1)} timeLabel={(t) => bucketLabel(new Date(t).toISOString(), r.bucketMinutes)} />
+			<LineChart series={series} height={200} area={false} gaps format={spec.format} axisFormat={(v) => fmtNum(v, metric === "sessions" ? 0 : 1)} timeLabel={(t) => bucketLabel(new Date(t).toISOString(), r.bucketMinutes)} />
 			{series.length > 1 ? <Legend items={series.map((s) => ({ label: s.label, color: s.color ?? p.brand }))} /> : null}
 		</View>
 	);

@@ -14,7 +14,7 @@ import { Pressable, View } from "react-native";
 
 import { ApiError } from "@/api/backend";
 import { barMax, change, estimatePercentile, loadBenchmarks, type Benchmark, type BenchmarkKey, type Benchmarks } from "@/api/tt/benchmarks";
-import { groupLabel } from "@/api/tt/perf";
+import { deviceColor, groupLabel } from "@/api/tt/perf";
 import type { BenchmarkPeriod, Filters, RealtimeResult, RobloxAcquisition, RobloxAcquisitionPeriod, TrendValues } from "@/api/tt/types";
 import { Legend, LineChart } from "@/charts/LineChart";
 import { Badge, Button, Card, Chips, EmptyState, Field, Icon, List, Segmented, Txt } from "@/components/ui";
@@ -413,7 +413,7 @@ function DeviceCcu({ backendId, filters }: { backendId: string; filters: Filters
 	const [pick, setPick] = usePageParam("devCcu", "avg");
 	const metric = pick === "peak" ? "peak" : "avg";
 	const span = Math.max(24, Math.min(hours, 30 * 24));
-	const color = (i: number) => p.chart[i % p.chart.length] ?? p.brand;
+	const color = (device: string) => deviceColor(p.chart, device);
 	return (
 		<Panel
 			title="Concurrent players by device"
@@ -438,11 +438,11 @@ function DeviceCcu({ backendId, filters }: { backendId: string; filters: Filters
 						<View style={{ gap: space.sm }}>
 							<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
 								<Badge label={`Live now: ${fmtInt(liveTotal)}`} tone="brand" />
-								{names.map((n, i) => {
+								{names.map((n) => {
 									const v = d.now[n] ?? 0;
 									return (
 										<View key={n} style={{ flexDirection: "row", alignItems: "center", gap: 4, borderWidth: 1, borderColor: p.border, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 }}>
-											<View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color(i) }} />
+											<View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color(n) }} />
 											<Txt variant="small" color={p.foreground}>
 												{groupLabel("dev", n)}: {fmtInt(v)}
 											</Txt>
@@ -460,9 +460,9 @@ function DeviceCcu({ backendId, filters }: { backendId: string; filters: Filters
 									const iso = new Date(t).toISOString();
 									return `${iso.slice(5, 10)} ${iso.slice(11, 13)}h`;
 								}}
-								series={names.map((n, i) => ({ label: groupLabel("dev", n), color: color(i), points: rows.map((x) => ({ t: Date.parse(x.hour), v: x.values[n] ?? 0 })) }))}
+								series={names.map((n) => ({ label: groupLabel("dev", n), color: color(n), points: rows.map((x) => ({ t: Date.parse(x.hour), v: x.values[n] ?? 0 })) }))}
 							/>
-							<Legend items={names.map((n, i) => ({ label: groupLabel("dev", n), color: color(i) }))} />
+							<Legend items={names.map((n) => ({ label: groupLabel("dev", n), color: color(n) }))} />
 							<Tip label="Ours" text="From player sessions (first to last event) and the device class the client reported, not from the servers' heartbeats: totals can differ a little from Concurrent users." />
 						</View>
 					);
@@ -628,7 +628,7 @@ function Trends({ backendId, filters }: { backendId: string; filters: Filters })
 					];
 					return (
 						<View style={{ gap: 6 }}>
-							<LineChart area={false} height={200} format={spec.format} timeLabel={(x) => trendTick(x, hoursPer)} series={series} />
+							<LineChart area={false} gaps height={200} format={spec.format} timeLabel={(x) => trendTick(x, hoursPer)} series={series} />
 							<Legend items={series.map((x) => ({ label: x.label, color: x.color }))} />
 							{last?.partial ? <Note>The last point is the running {hoursPer < 24 ? `${hoursPer} hours` : "day"}, so far.</Note> : null}
 						</View>

@@ -219,10 +219,12 @@ function TotalTrend({ backendId, data, branch }: { backendId: string; data: Erro
 	const points = useMemo(() => {
 		const n = Math.max(0, ...data.kinds.map((k) => k.spark.length));
 		const sums = Array.from({ length: n }, (_, i) => data.kinds.reduce((s, k) => s + (k.spark[i] ?? 0), 0));
-		// The spark's last bucket ends at the window's end.
-		const first = to - n * stepMs;
+		// As the backend's bucketIndex (errors/store.ts): bucket i starts at floor(from / step) * step + i * step (UTC
+		// epoch-aligned), and the last one holds `to`. A window that isn't step-aligned (24 h at 1 h steps, now 10:30)
+		// starts its first bucket before `from`.
+		const first = Math.floor(from / stepMs) * stepMs;
 		return sums.map((v, i) => ({ t: first + i * stepMs, v }));
-	}, [data.kinds, to, stepMs]);
+	}, [data.kinds, from, stepMs]);
 	const markRange = useMemo(() => ({ from, to }), [from, to]);
 	const deploys = useDeployMarks(backendId, markRange, branch || undefined);
 	const card = useMarkCard(backendId);

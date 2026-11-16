@@ -43,7 +43,7 @@ function ErrorKindView({ backendId, fp }: { backendId: string; fp: string }) {
 	const q = useTTQuery(backendId, ["errors", "kind", fp, params], (api, s) => api.errorKind(fp, params, s), { refetchInterval: 30_000 });
 	// Deploy marks on the bar each release falls in (a tap opens its card and deploy).
 	const markRange = useMemo(() => (q.data ? { from: Date.parse(q.data.window.from), to: Date.parse(q.data.window.to) } : null), [q.data]);
-	const deploys = useDeployMarks(backendId, markRange);
+	const deploys = useDeployMarks(backendId, markRange, branch || undefined);
 	const card = useMarkCard(backendId);
 	if (q.error) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
 	if (!q.data) return <Skeleton height={240} />;

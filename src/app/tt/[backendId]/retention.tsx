@@ -6,15 +6,16 @@
  *     player (creator revenue after Roblox's cut, or Robux paid) or the share who had paid (`ltv` param).
  * "Explain the D1 change" opens the Explain panel (`explain=d1`).
  */
-import { useMemo } from "react";
-import { View } from "react-native";
+import { useMemo, useState } from "react";
+import { Pressable, View } from "react-native";
 
 import type { LtvCell, LtvResult, RetentionResult } from "@/api/tt/types";
-import { Button, Segmented, Txt } from "@/components/ui";
+import { Button, KV, Segmented, Txt } from "@/components/ui";
 import { Picker } from "@/features/typetorch/analytics-bits";
 import { Note, Panel, QueryState } from "@/features/typetorch/bits";
 import { ExplainPanel, useExplain } from "@/features/typetorch/explain";
 import { FilterBar, useTTAnalytics } from "@/features/typetorch/filters";
+import { Sheet } from "@/features/typetorch/sheet";
 import { TTScreen } from "@/features/typetorch/screen";
 import { DataTable, type DataColumn } from "@/features/typetorch/table";
 import { usePageParam } from "@/features/typetorch/view-link";
@@ -221,6 +222,8 @@ function LtvBody({ data, metric }: { data: LtvResult; metric: LtvMetric }) {
 		return mx;
 	}, [data.cohorts, metric]);
 	const elapsed = data.todayElapsed ?? 0;
+	// The web's cell tooltip (Robux paid in total, payers, the in-progress text) as a sheet on a tap.
+	const [detail, setDetail] = useState<{ row: LtvRow; day: number; cell: LtvCell } | null>(null);
 	const columns = useMemo<DataColumn<LtvRow>[]>(
 		() => [
 			{ id: "joined", header: "Joined (UTC)", width: 100, type: "date", accessor: (r) => (r.average ? null : r.date), cell: (r) => (r.average ? "Weighted average" : r.date), format: (_v, r) => (r.average ? "Weighted average" : r.date) },
@@ -239,7 +242,13 @@ function LtvBody({ data, metric }: { data: LtvResult; metric: LtvMetric }) {
 					},
 					cell: (r) => {
 						const c = r.days[d];
-						return <HeatBox text={c ? ltvText(c, metric) : null} share={c && max > 0 ? ltvValue(c, metric) / max : 0} {...(c?.partial ? { partial: true } : {})} />;
+						const box = <HeatBox text={c ? ltvText(c, metric) : null} share={c && max > 0 ? ltvValue(c, metric) / max : 0} {...(c?.partial ? { partial: true } : {})} />;
+						if (!c) return box;
+						return (
+							<Pressable onPress={() => setDetail({ row: r, day: d, cell: c })} hitSlop={4} accessibilityRole="button" accessibilityLabel={`${r.average ? "Weighted average" : r.date} D${d}: ${ltvText(c, metric)}`}>
+								{box}
+							</Pressable>
+						);
 					},
 					format: (_v, r) => {
 						const c = r.days[d];
@@ -256,9 +265,25 @@ function LtvBody({ data, metric }: { data: LtvResult; metric: LtvMetric }) {
 	return (
 		<Panel
 			title="Revenue per cohort (LTV)"
-			note={`${plural(data.cohorts.length, "cohort")}, ${plural(total, "new player")}. A cell = what the cohort spent from its join day (D0) through that day, per new player (revenue: after Roblox's ${cut}). Orange = today (UTC), so far; it can still go up and isn't in the average. – = not started. The filter bar applies: pick a join source or country to see whether those players paid back. Long-press a cell for the Robux paid and payers.`}
+			note={`${plural(data.cohorts.length, "cohort")}, ${plural(total, "new player")}. A cell = what the cohort spent from its join day (D0) through that day, per new player (revenue: after Roblox's ${cut}). Orange = today (UTC), so far; it can still go up and isn't in the average. – = not started. The filter bar applies: pick a join source or country to see whether those players paid back. Tap a cell for the Robux paid and payers.`}
 		>
 			<DataTable id="retention-ltv" label="Revenue per cohort" columns={columns} data={rows} rowId={(r) => r.date} pinnedRows={average} defaultSort={[{ id: "joined", desc: true }]} />
+			<Sheet
+				open={!!detail}
+				onClose={() => setDetail(null)}
+				title={detail ? `${detail.row.average ? "Weighted average" : `Joined ${detail.row.date}`} · D${detail.day}` : ""}
+				subtitle={detail ? `${LTV_METRICS[metric].title}${detail.day === 0 ? " (D0 = the join day)" : ""}.` : ""}
+			>
+				{detail ? (
+					<>
+						<KV label={LTV_METRICS[metric].label} value={`${ltvText(detail.cell, metric)}${detail.cell.partial ? " so far" : ""}`} />
+						<KV label="Robux paid in total" value={`${fmtInt(detail.cell.robux)} R$`} />
+						<KV label="Payers" value={`${fmtInt(detail.cell.payers)} (${fmtPct(detail.cell.payerShare, 1)})`} />
+						<KV label={detail.row.average ? "Weighted over" : "Cohort"} value={plural(detail.cell.players ?? detail.row.size, "new player")} />
+						{detail.cell.partial ? <Note>{`In progress: today (UTC) so far, ${Math.round(elapsed * 100)}% of the day over. Can still go up until midnight UTC.`}</Note> : null}
+					</>
+				) : null}
+			</Sheet>
 		</Panel>
 	);
 }

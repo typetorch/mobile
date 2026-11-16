@@ -10,7 +10,7 @@
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { View } from "react-native";
+import { ScrollView, View } from "react-native";
 
 import { useBackend } from "@/store/accounts";
 import { compactJson, fmtAgo, fmtInt, fmtMinutes, fmtNum, fmtPct } from "@/lib/format";
@@ -123,11 +123,43 @@ function Copyable({ label, text }: { label: string; text: string }) {
 				</Txt>
 				<CopyButton text={text} />
 			</View>
-			<View style={{ backgroundColor: p.muted, borderRadius: radius.sm, padding: space.sm, maxHeight: 160 }}>
+			{/* The bash command inlines the whole schedule JSON: scroll inside the box (the web's max-h-40 overflow-auto). */}
+			<ScrollView style={{ backgroundColor: p.muted, borderRadius: radius.sm, maxHeight: 160 }} contentContainerStyle={{ padding: space.sm }} nestedScrollEnabled>
 				<Txt variant="mono" selectable style={{ fontSize: 11 }}>
 					{text}
 				</Txt>
-			</View>
+			</ScrollView>
+		</View>
+	);
+}
+
+/** Download JSON (the file the PowerShell command reads) through the share sheet; when that fails, say so and offer a copy. */
+function DownloadJson({ json }: { json: string }) {
+	const [busy, setBusy] = useState(false);
+	const [failed, setFailed] = useState(false);
+	return (
+		<View style={{ gap: 6 }}>
+			<Button
+				title="Download JSON"
+				small
+				icon="download-outline"
+				loading={busy}
+				onPress={async () => {
+					setBusy(true);
+					const ok = await shareTextFile("live-events.json", json, "application/json", false);
+					setBusy(false);
+					setFailed(!ok);
+				}}
+				style={{ alignSelf: "flex-start" }}
+			/>
+			{failed ? (
+				<View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+					<Txt variant="small" style={{ flexShrink: 1 }}>
+						Couldn't share the file on this phone. Copy the JSON instead and save it as live-events.json in the folder you run the PowerShell command from.
+					</Txt>
+					<CopyButton text={json} title="Copy JSON" />
+				</View>
+			) : null}
 		</View>
 	);
 }
@@ -154,7 +186,7 @@ function SigningCard({ view, canEdit, refreshing, onRefresh }: { view: LiveEvent
 					<>
 						<Copyable label="bash / zsh" text={view.commands.bash} />
 						<Copyable label="PowerShell (after Download JSON)" text={view.commands.powershell} />
-						<Button title="Download JSON" small icon="download-outline" onPress={() => void shareTextFile("live-events.json", view.commands.json, "application/json", false)} style={{ alignSelf: "flex-start" }} />
+						<DownloadJson json={view.commands.json} />
 					</>
 				) : null}
 				{refresh}
