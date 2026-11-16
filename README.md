@@ -29,7 +29,12 @@ Part of TypeTorch. Read `../TypeTorch.md` (hub) and `../plans/07-web-mobile.md` 
     memory store sorted maps and queues (read; a queue read is a peek with `invisibilityWindow=0s`), MessagingService
     publish, restart all servers (confirm), bans (list, log, ban / unban with confirm), game passes / developer
     products / badges.
-  - **TypeTorch** (only when a backend is connected for that universe): the backend's dashboard, native, inside the app.
+  - **TypeTorch** (only when a backend is connected for that universe): the backend's dashboard, native, inside the app:
+    every page of the web explorer (Overview, Roblox, Retention, Funnels, Players + a player page, Flow, Experiments,
+    First session, Events, Fleet + server pages with their offline history and debug bundles, Server history, Deploys,
+    Errors, Performance, Economy, Monetization, Query, Settings; owners also Audit log and Backend stats). The web's
+    filter bar (range, branch, artifact, device, new / returning, variant) is one state per backend that follows you from
+    page to page; Roblox benchmarks are kept on the phone per backend.
 - **Backends**: connect TypeTorch backends by URL (several at once), sign in with the browser or the admin token.
 - **Settings**: the Open Cloud key (checked with Roblox, which scopes are missing for which feature), the Roblox user
   whose experiences to list, group rank filter, appearance (system / dark / light).
@@ -92,46 +97,69 @@ Dashboard (Bearer, client in `src/api/backend.ts`, ported from `../backend/web/s
 `/v1/servers/<job>/errors`, `/v1/fleet/deploys`, `/v1/fleet/deploys/<seq>`, `/v1/fleet/alerts`,
 `/v1/fleet/alerts/<id>/ack`, `/v1/errors`, `/v1/errors/<fp>`, `/v1/admin/settings`.
 
+Phase 2 pages add: `POST /v1/query/<name>` (retention, funnel, funnel-progress, playtime-funnel, funnel-players,
+players, player-stats, timeline, player-graph, flow, experiment, confusion, top-events, events, values, benchmarks,
+realtime, trends, perf-client, perf-server, perf-compare, economy, monetization, monetization-players,
+monetization-purchases, and any name on the Query page), `/v1/queries`, `POST /v1/sql`, `/v1/saved-queries` (+ POST,
+PATCH, DELETE `/<id>`), `/v1/experiments`, `/v1/experiments/<e>/players`, `/v1/identity` (+ `/backfill`,
+`/<pid>/profile`), `/v1/players/<pid>/errors`, `/v1/roblox/products`, `/v1/roblox/analytics/acquisition`,
+`/v1/fleet/marks`, `/v1/fleet/bundles/<id>`, `/v1/admin/audit`, `/v1/admin/stats`.
+
 ## Code layout
 
 ```
 src/app/                 expo-router routes
   (tabs)/                Projects, Backends, Settings
   project/[universeId]/  index (tabs) + datastores, datastore, entry, ordered, memory, messaging, bans, monetization
-  tt/[backendId]/        TypeTorch dashboard: index (Overview), fleet, server/[job], deploys, deploy/[seq], errors, error/[fp], settings
+  tt/[backendId]/        TypeTorch dashboard: index (Overview), fleet, server/[job], bundle/[id], server-history, deploys,
+                         deploy/[seq], errors, error/[fp], settings, roblox, retention, funnels, players, player/[pid],
+                         flow, experiments, first-session, events, performance, economy, monetization, query, audit,
+                         backend-stats
   backend/connect.tsx    connect / sign in again
-src/api/                 http.ts, opencloud.ts, roblox-public.ts, backend.ts, backend-auth.ts, tt/ (web types, copied)
+src/api/                 http.ts, opencloud.ts, roblox-public.ts, backend.ts, backend-auth.ts, tt/ (web types and pure
+                         helpers, copied: types, format, perf, perf-thresholds, deploys, benchmarks, graph-text,
+                         server-history, compare)
 src/store/accounts.tsx   key, backends, tokens, prefs (secure store)
-src/features/            project (projects list, analytics, tabs), typetorch (pages registry, hooks, shared UI)
-src/components/ui.tsx    design system;  src/charts/LineChart.tsx  LineChart, BarChart, Sparkline, ShareBars
+src/features/            project (projects list, analytics, tabs), typetorch (pages registry, hooks, screen frame,
+                         filters.tsx = the filter bar + useTTAnalytics, bits.tsx = query state / tables / share bars /
+                         player rows / products / JSON, graph.tsx = the node graph as lists, marks.tsx, roblox-cards.ts)
+src/components/ui.tsx    design system;  src/charts/LineChart.tsx  LineChart (dashed series, deploy marks), BarChart (tap
+                         a bar), Sparkline, ShareBars
 ```
 
 ### Adding a TypeTorch page
 
 1. `src/app/tt/[backendId]/<key>.tsx`: `export default function X() { return <TTScreen title="…">{({ backendId }) => …}</TTScreen> }`,
-   data through `useTTQuery(backendId, [...key], (api, signal) => api.<method>(…, signal))`.
+   data through `useTTQuery(backendId, [...key], (api, signal) => api.<method>(…, signal))`, or for a named query
+   under the filter bar `useTTAnalytics(backendId, "<name>", options)` with `<FilterBar backendId={backendId} />` on top.
 2. In `src/features/typetorch/pages.ts`, set the page's `status` to `"ready"` (the menu links it).
 3. Types and API methods are already there (`src/api/tt/types.ts`, `src/api/backend.ts`, same names as the web).
 
 ## TODO
 
-Phase 2 TypeTorch pages (web: `../backend/web/src/pages/`), each listed greyed out in the menu:
+Phase 2 TypeTorch pages (web: `../backend/web/src/pages/`), all ported:
 
-- [ ] Roblox
-- [ ] Retention
-- [ ] Funnels
-- [ ] Players
-- [ ] Flow
-- [ ] Experiments
-- [ ] FirstSession
-- [ ] Events
-- [ ] ServerHistory
-- [ ] Performance
-- [ ] Economy
-- [ ] Monetization
-- [ ] Query
-- [ ] AuditLog (admin)
-- [ ] BackendStats (admin)
+- [x] Roblox
+- [x] Retention
+- [x] Funnels
+- [x] Players
+- [x] Flow
+- [x] Experiments
+- [x] FirstSession
+- [x] Events
+- [x] ServerHistory
+- [x] Performance
+- [x] Economy
+- [x] Monetization
+- [x] Query
+- [x] AuditLog (admin)
+- [x] BackendStats (admin)
+
+Where the phone differs from the web: the node graph (Flow, a player's timeline) is a list of states with their moves
+out, a one-session path and the exit / move tables, not a drawn graph ("Copy Mermaid" gives the drawing); tables are
+sideways-scrolling lists without the web's per-column filters, column picker or CSV export (the Query page copies TSV);
+the filter bar's state lives in memory per backend, not in a shareable URL; Roblox benchmarks are kept per backend on the
+phone (secure store), not per browser.
 
 Also not yet in the app: remote debug commands on the server page, changing runtime settings (read only here),
 deploy notifications (push needs a dev build), place versions (no Open Cloud read API).

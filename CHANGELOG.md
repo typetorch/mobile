@@ -4,6 +4,17 @@ All notable changes to this repo. Format: [Keep a Changelog](https://keepachange
 
 ## [Unreleased]
 ### Added
+- 2026-11-16: Phase 2 of the TypeTorch dashboard, every remaining web explorer page native: Roblox overview (benchmark
+  cards, benchmarks kept on the phone, realtime, acquisition from Roblox, 7-day trends per join source), Retention,
+  Funnels (compare, players who reached or dropped off at a step), Players (search by pid or UserId, server-side order,
+  funnel progress, identity backfill) with a player page (profile, funnels, spending, playtime, sessions, timeline with
+  the node graph as lists, errors), Flow, Experiments (variants, how sure, weights, players), First session, Events,
+  Server history plus the server page's offline history (timeline, debug bundles with a bundle screen, whole-life
+  charts), Performance (percentiles by group, chart steps, deploy marks, vs previous period, live servers, builds and
+  before-vs-after compare), Economy, Monetization (day and product buyers, top buyers, latest purchases), Query (named
+  queries, read-only SQL, saved queries), and for owners Audit log and Backend stats. A shared filter bar (range,
+  branch, artifact, device, new / returning, variant) per backend; line charts take dashed series and deploy marks, bar
+  charts a tap.
 - 2026-11-16: The app (Expo SDK 58, expo-router, TypeScript strict, Expo Go compatible; `eas.json` preview = APK).
   Projects home from the Open Cloud key's universes + the user's and their groups' experiences; per-experience
   Overview, Creator Hub analytics (Analytics Query API, react-native-svg charts), Open Cloud tools (data stores with
