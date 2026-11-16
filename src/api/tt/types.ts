@@ -2477,6 +2477,18 @@ export interface IngestPressure {
 }
 
 export type MigrateState = "idle" | "running" | "paused" | "waiting" | "done" | "failed" | "cancelled" | "needs_decision";
+/** `sent`: moved to Basin, not counted there (no Basin read settings on this server). */
+export type MigrateDayState = "pending" | "importing" | "match" | "missing" | "differs" | "duplicates" | "sent";
+
+export interface MigrateDay {
+	table: "events" | "recordings";
+	/** YYYY-MM-DD (UTC). */
+	day: string;
+	state: MigrateDayState;
+	rowsSource: number;
+	rowsTarget: number;
+	note: string;
+}
 
 /** GET /v1/admin/migrate, the part the history-importing banner reads (the Settings migration card is the admin group's). */
 export interface MigrateStatus {
@@ -2488,6 +2500,7 @@ export interface MigrateStatus {
 	rowsPerSecond: number;
 	rowsDone: number;
 	rowsTotal: number;
+	days: MigrateDay[];
 	waitingFor: string | null;
 	error: string | null;
 }

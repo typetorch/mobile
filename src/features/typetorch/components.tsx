@@ -17,6 +17,7 @@ import { useTheme } from "@/theme";
 import { ChangeChip } from "./bits";
 import { dayRange, useTTQuery } from "./hooks";
 import { chartMarks, DeployMarksToggle, useDeployMarks, useMarkCard } from "./marks";
+import { OverviewAnalytics } from "./overview";
 import { pageHref, TT_PAGES } from "./pages";
 
 export function SignedOutNotice({ account }: { account: BackendAccount }) {
@@ -117,8 +118,10 @@ const CHARTS: { key: "players" | "newPlayers" | "sessions" | "playtimeHours"; la
 const DAY_MS = 86_400_000;
 
 /**
- * The Overview: live fleet, the analytics overview query, errors, the latest deploy and alerts. `compare` is "vs
- * previous period" (the route's `vs=prev` on the Overview page, so it travels in a link); without it, a local switch.
+ * The Overview: live fleet, the analytics overview query, errors, the latest deploy and alerts. With `compare` (the
+ * Overview page: "vs previous period" is the route's `vs=prev`, so it travels in a link) the analytics part is the web
+ * Overview's (OverviewAnalytics: the filter bar, 8 tiles with Why?, 4 charts, pinned queries, owner cards); without it
+ * (the project's TypeTorch tab) a compact Today / 7 / 28 days summary with a local "vs previous period" switch.
  */
 export function TTHome({ backendId, poll = true, compare }: { backendId: string; poll?: boolean; compare?: { on: boolean; set(on: boolean): void } }) {
 	const p = useTheme();
@@ -128,7 +131,7 @@ export function TTHome({ backendId, poll = true, compare }: { backendId: string;
 	const vsPrev = compare ? compare.on : localPrev;
 	const setVsPrev = compare ? compare.set : setLocalPrev;
 	const fleet = useTTQuery(backendId, ["fleet", "servers"], (api, s) => api.fleetServers(undefined, s), { refetchInterval: poll ? 15_000 : false });
-	const overview = useTTQuery(backendId, ["query", "overview", days], (api, s) => api.query("overview", dayRange(days), {}, s), { staleTime: 60_000 });
+	const overview = useTTQuery(backendId, ["query", "overview", days], (api, s) => api.query("overview", dayRange(days), {}, s), { staleTime: 60_000, enabled: !compare });
 	const errors = useTTQuery(backendId, ["errors", "24h", ""], (api, s) => api.errors({ window: "24h", limit: 5 }, s), { staleTime: 60_000 });
 	const deploys = useTTQuery(backendId, ["deploys", "latest"], (api, s) => api.fleetDeploys({ limit: 1 }, s), { staleTime: 60_000 });
 	const alerts = useTTQuery(backendId, ["alerts", "recent"], (api, s) => api.fleetAlerts({ limit: 5 }, s), { staleTime: 30_000 });
@@ -141,7 +144,7 @@ export function TTHome({ backendId, poll = true, compare }: { backendId: string;
 	const shift = days * DAY_MS;
 	const prevFrom = new Date(dayStart - shift).toISOString().slice(0, 10);
 	const prevTo = new Date(Math.floor(Date.now() / 3_600_000) * 3_600_000 - shift).toISOString();
-	const prevQ = useTTQuery(backendId, ["query", "overview", "prev", prevFrom, prevTo], (api, s) => api.query("overview", { from: prevFrom, to: prevTo }, {}, s), { staleTime: 60_000, enabled: vsPrev });
+	const prevQ = useTTQuery(backendId, ["query", "overview", "prev", prevFrom, prevTo], (api, s) => api.query("overview", { from: prevFrom, to: prevTo }, {}, s), { staleTime: 60_000, enabled: vsPrev && !compare });
 	const prev = vsPrev ? prevQ.data : undefined;
 	const card = useMarkCard(backendId);
 	if (!account) return null;
@@ -167,7 +170,12 @@ export function TTHome({ backendId, poll = true, compare }: { backendId: string;
 				<Button title="Open fleet" small icon="server-outline" onPress={() => router.push(pageHref(backendId, "fleet"))} style={{ alignSelf: "flex-start" }} />
 			</Section>
 
-			<Section title="Players" right={<Segmented options={RANGES.map((r) => ({ value: r.value, label: r.label }))} value={days} onChange={setDays} style={{ width: 220 }} />}>
+			{compare ? (
+				<Section title="Overview">
+					<OverviewAnalytics backendId={backendId} compare={compare} />
+				</Section>
+			) : null}
+			{compare ? null : <Section title="Players" right={<Segmented options={RANGES.map((r) => ({ value: r.value, label: r.label }))} value={days} onChange={setDays} style={{ width: 220 }} />}>
 				{overview.error ? <ErrorState error={overview.error} onRetry={() => overview.refetch()} /> : null}
 				{!o && !overview.error ? <Skeleton height={120} /> : null}
 				{o ? (
@@ -185,7 +193,7 @@ export function TTHome({ backendId, poll = true, compare }: { backendId: string;
 						))}
 					</>
 				) : null}
-			</Section>
+			</Section>}
 
 			{latest ? (
 				<Section title="Latest deploy">

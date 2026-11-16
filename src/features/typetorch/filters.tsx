@@ -17,6 +17,7 @@ import { radius, space, useTheme } from "@/theme";
 
 import { cleanFilters } from "@/api/backend";
 
+import { HistoryImportingBanner } from "./history-banner";
 import { useTTQuery } from "./hooks";
 import { readStored, writeStored } from "./persist";
 
@@ -350,6 +351,7 @@ export function FilterBar({ backendId, ranges }: { backendId: string; ranges?: R
 
 	return (
 		<View style={{ gap: space.sm }}>
+			<HistoryImportingBanner backendId={backendId} />
 			<View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
 				<View style={{ flex: 1 }}>
 					{ranges && ranges.length === 0 ? (
