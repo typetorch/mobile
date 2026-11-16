@@ -1,8 +1,8 @@
 import { Image } from "expo-image";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 
 import type { Project } from "@/features/project/projects";
-import { compact } from "@/lib/format";
+import { compact, fmtAgo } from "@/lib/format";
 import { radius, useTheme } from "@/theme";
 
 import { Badge, Dot, Icon, Row, Txt } from "./ui";
@@ -18,12 +18,33 @@ export function GameIcon({ uri, size = 40 }: { uri: string | null | undefined; s
 	return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: radius.md, backgroundColor: p.muted }} contentFit="cover" transition={150} />;
 }
 
-export function ProjectRow({ project, hasBackend, onPress }: { project: Project; hasBackend: boolean; onPress: () => void }) {
+export function ProjectRow({
+	project,
+	hasBackend,
+	onPress,
+	pinned,
+	onTogglePin,
+}: {
+	project: Project;
+	hasBackend: boolean;
+	onPress: () => void;
+	pinned?: boolean;
+	onTogglePin?: () => void;
+}) {
+	const p = useTheme();
 	const rating = project.upVotes !== null && project.downVotes !== null && project.upVotes + project.downVotes > 0 ? Math.round((project.upVotes / (project.upVotes + project.downVotes)) * 100) : null;
 	return (
 		<Row
 			onPress={onPress}
-			chevron
+			onLongPress={onTogglePin}
+			chevron={!onTogglePin}
+			right={
+				onTogglePin ? (
+					<Pressable onPress={onTogglePin} hitSlop={10} accessibilityRole="button" accessibilityLabel={pinned ? `Unpin ${project.name}` : `Pin ${project.name}`}>
+						<Icon name={pinned ? "star" : "star-outline"} size={20} color={pinned ? p.warning : p.mutedForeground} />
+					</Pressable>
+				) : undefined
+			}
 			left={<GameIcon uri={project.icon} />}
 			title={
 				<View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -64,6 +85,7 @@ function ProjectStats({ project, rating }: { project: Project; rating: number | 
 				<Txt variant="small">{compact(project.playing)} playing</Txt>
 			</View>
 			<Txt variant="small">{compact(project.visits)} visits</Txt>
+			{project.updated ? <Txt variant="small">updated {fmtAgo(project.updated)}</Txt> : null}
 			{rating !== null ? <Txt variant="small">{rating}% likes</Txt> : null}
 			{project.viaKey ? <Icon name="key-outline" size={12} color={p.mutedForeground} /> : null}
 		</View>

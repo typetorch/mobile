@@ -160,6 +160,7 @@ export function Row({
 	left,
 	right,
 	onPress,
+	onLongPress,
 	chevron,
 	disabled,
 	titleColor,
@@ -170,6 +171,7 @@ export function Row({
 	left?: ReactNode;
 	right?: ReactNode;
 	onPress?: () => void;
+	onLongPress?: () => void;
 	chevron?: boolean;
 	disabled?: boolean;
 	titleColor?: string;
@@ -201,7 +203,7 @@ export function Row({
 	);
 	if (!onPress || disabled) return content;
 	return (
-		<Pressable onPress={onPress} android_ripple={{ color: p.accent }} style={({ pressed }) => [pressed && { backgroundColor: p.accent }]}>
+		<Pressable onPress={onPress} onLongPress={onLongPress} android_ripple={{ color: p.accent }} style={({ pressed }) => [pressed && { backgroundColor: p.accent }]}>
 			{content}
 		</Pressable>
 	);

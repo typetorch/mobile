@@ -7,6 +7,7 @@ import { developUniverses, gameDetails, placeUniverse } from "@/api/roblox-publi
 import { GameIcon, ProjectRow } from "@/components/ProjectRow";
 import { Badge, Button, Card, Chips, EmptyState, ErrorState, Field, Icon, List, Row, Screen, SearchBar, Section, SkeletonList, Txt } from "@/components/ui";
 import { CloudError } from "@/features/project/CloudError";
+import { compareProjects, sectionRank, SORT_OPTIONS, togglePin, usePins, useProjectSort, type ProjectSort } from "@/features/project/pins";
 import { useGroupProjects, useProjects, type GroupInfo, type Project } from "@/features/project/projects";
 import { compact } from "@/lib/format";
 import { useAccounts } from "@/store/accounts";
@@ -52,16 +53,25 @@ export default function ProjectsScreen() {
 
 	const ttUniverses = useMemo(() => new Set(backends.map((b) => b.universeId).filter((u): u is number => !!u)), [backends]);
 	const q = search.trim().toLowerCase();
-	const sections = useMemo(
-		() =>
-			(projects.data?.sections ?? [])
-				.map((s) => ({
-					...s,
-					projects: s.projects.filter((x) => matchesFilter(x, filter) && (!q || x.name.toLowerCase().includes(q) || String(x.universeId).includes(q) || s.title.toLowerCase().includes(q))),
-				}))
-				.filter((s) => s.projects.length),
-		[projects.data, q, filter],
-	);
+	const pins = usePins();
+	const [sortBy, setSortBy] = useProjectSort();
+	const sections = useMemo(() => {
+		const pinned = new Set(pins);
+		const cmp = compareProjects(sortBy);
+		const keep = (x: Project, title: string) => matchesFilter(x, filter) && (!q || x.name.toLowerCase().includes(q) || String(x.universeId).includes(q) || title.toLowerCase().includes(q));
+		const grouped = (projects.data?.sections ?? [])
+			.map((s) => ({ ...s, projects: s.projects.filter((x) => !pinned.has(x.universeId) && keep(x, s.title)).sort(cmp) }))
+			.filter((s) => s.projects.length);
+		// "My experiences" first, then the groups in the same order as their rows.
+		grouped.sort((a, b) => {
+			if (a.key === "me" || b.key === "me") return a.key === "me" ? -1 : 1;
+			const ra = sectionRank(sortBy, a.projects);
+			const rb = sectionRank(sortBy, b.projects);
+			return typeof ra === "string" && typeof rb === "string" ? ra.localeCompare(rb) : (ra as number) - (rb as number);
+		});
+		const pinnedRows = (projects.data?.all ?? []).filter((x) => pinned.has(x.universeId) && keep(x, "")).sort(cmp);
+		return pinnedRows.length ? [{ key: "pinned", title: `Pinned (${pinnedRows.length})`, icon: null, subtitle: "Long-press or tap the star to unpin", projects: pinnedRows }, ...grouped] : grouped;
+	}, [projects.data, q, filter, pins, sortBy]);
 	const totals = useMemo(() => {
 		const all = projects.data?.all ?? [];
 		const live = all.filter((x) => !x.archived);
@@ -157,6 +167,7 @@ export default function ProjectsScreen() {
 							onChange={setFilter}
 						/>
 					) : null}
+					{projects.data ? <Chips<ProjectSort> options={SORT_OPTIONS} value={sortBy} onChange={setSortBy} /> : null}
 				</>
 			) : null}
 
@@ -200,7 +211,14 @@ export default function ProjectsScreen() {
 				>
 					<List>
 						{s.projects.map((x) => (
-							<ProjectRow key={x.universeId} project={x} hasBackend={ttUniverses.has(x.universeId)} onPress={() => router.push(`/project/${x.universeId}`)} />
+							<ProjectRow
+								key={x.universeId}
+								project={x}
+								hasBackend={ttUniverses.has(x.universeId)}
+								onPress={() => router.push(`/project/${x.universeId}`)}
+								pinned={pins.includes(x.universeId)}
+								onTogglePin={() => togglePin(x.universeId)}
+							/>
 						))}
 					</List>
 				</Section>
@@ -275,6 +293,7 @@ export default function ProjectsScreen() {
 /** A group below the rank threshold: tap to load its experiences (games v2 + develop v1 lists, resolved like the home list). */
 function GroupRow({ group, filter, ttUniverses }: { group: GroupInfo; filter: Filter; ttUniverses: Set<number> }) {
 	const [open, setOpen] = useState(false);
+	const pins = usePins();
 	const list = useGroupProjects(group.id, open);
 	const shown = (list.data?.projects ?? []).filter((x) => matchesFilter(x, filter));
 	return (
@@ -292,7 +311,14 @@ function GroupRow({ group, filter, ttUniverses }: { group: GroupInfo; filter: Fi
 					{list.error ? <CloudError error={list.error} what="this group's experiences" onRetry={() => list.refetch()} /> : null}
 					{list.data && !shown.length ? <Txt variant="small" style={{ padding: 12 }}>{filter === "active" ? "No experiences Roblox shows for this group." : `No ${filter} experiences.`}</Txt> : null}
 					{shown.map((x) => (
-						<ProjectRow key={x.universeId} project={x} hasBackend={ttUniverses.has(x.universeId)} onPress={() => router.push(`/project/${x.universeId}`)} />
+						<ProjectRow
+							key={x.universeId}
+							project={x}
+							hasBackend={ttUniverses.has(x.universeId)}
+							onPress={() => router.push(`/project/${x.universeId}`)}
+							pinned={pins.includes(x.universeId)}
+							onTogglePin={() => togglePin(x.universeId)}
+						/>
 					))}
 					{list.data?.warnings.length ? <Txt variant="small" style={{ paddingHorizontal: 12, paddingBottom: 8 }}>{list.data.warnings.join("\n")}</Txt> : null}
 				</View>

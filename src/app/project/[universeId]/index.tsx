@@ -5,22 +5,26 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { View } from "react-native";
+import { Pressable, View } from "react-native";
 
 import { GameIcon } from "@/components/ProjectRow";
-import { Badge, Button, Card, Chips, ErrorState, Screen, Segmented, Skeleton, Txt } from "@/components/ui";
+import { Badge, Button, Card, Chips, ErrorState, Icon, Screen, Segmented, Skeleton, Txt } from "@/components/ui";
+import { togglePin, usePins } from "@/features/project/pins";
 import { AnalyticsTab } from "@/features/project/AnalyticsTab";
 import { OverviewTab } from "@/features/project/OverviewTab";
 import { useProject } from "@/features/project/projects";
 import { ToolsTab } from "@/features/project/ToolsTab";
 import { BackendHeader, TTHome, useUniverseBackends } from "@/features/typetorch/components";
 import { compact } from "@/lib/format";
+import { useTheme } from "@/theme";
 
 type Tab = "overview" | "analytics" | "tools" | "typetorch";
 
 export default function ProjectScreen() {
 	const { universeId, tab: initialTab } = useLocalSearchParams<{ universeId: string; tab?: Tab }>();
 	const id = Number(universeId);
+	const theme = useTheme();
+	const pinned = usePins().includes(id);
 	const project = useProject(id);
 	const backends = useUniverseBackends(id);
 	const [tab, setTab] = useState<Tab>(initialTab ?? (backends.length ? "typetorch" : "overview"));
@@ -49,7 +53,16 @@ export default function ProjectScreen() {
 
 	return (
 		<Screen refreshing={refreshing} onRefresh={onRefresh}>
-			<Stack.Screen options={{ title: project.data?.name ?? "Experience" }} />
+			<Stack.Screen
+				options={{
+					title: project.data?.name ?? "Experience",
+					headerRight: () => (
+						<Pressable onPress={() => togglePin(id)} hitSlop={10} accessibilityRole="button" accessibilityLabel={pinned ? "Unpin this experience" : "Pin this experience"}>
+							<Icon name={pinned ? "star" : "star-outline"} size={22} color={pinned ? theme.warning : theme.mutedForeground} />
+						</Pressable>
+					),
+				}}
+			/>
 			{project.error ? <ErrorState error={project.error} onRetry={() => project.refetch()} /> : null}
 			{project.data ? (
 				<View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>

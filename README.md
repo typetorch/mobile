@@ -69,19 +69,34 @@ dev client (`expo-secure-store`'s plugin only sets iOS Face ID text).
 
 ## Open Cloud key scopes
 
-Create the key on Creator Hub → Open Cloud → API Keys, add the experiences, and add what you want to use:
+Create the key on Creator Hub → Open Cloud → API Keys and add each experience to the per-experience scopes (group
+experiences: a key made under the group). Every feature needs only its own scopes; Settings lists what the key is missing.
 
-| Feature | Scopes |
+**Read-only (start here):** `universe:read`, `universe.place:read`, `universe.analytics:read`, `group:read`,
+`user.social:read`, `user.advanced:read`, `universe-datastores.control:list`, `universe-datastores.objects:list`,
+`universe-datastores.objects:read`, `universe-datastores.versions:list`, `universe-datastores.versions:read`,
+`universe.ordered-data-store.scope.entry:read`, `memory-store.sorted-map:read`, `universe.user-restriction:read`,
+`developer-product:read`, `game-pass:read`.
+
+| Write area (each action confirms first) | Scopes |
 | --- | --- |
-| Analytics | `universe.analytics:read` |
-| Data stores | `universe-datastores.control:list`, `universe-datastores.objects:list`, `universe-datastores.objects:read`; history `universe-datastores.versions:list`; edit `universe-datastores.objects:update`; delete `universe-datastores.objects:delete` |
-| Ordered data stores | `universe.ordered-data-store.scope.entry:read` |
-| Memory stores | `memory-store.sorted-map:read`, `memory-store.queue:dequeue` (peek) |
+| Experience and places | `universe:write` (also restart servers), `universe.place:write`, `universe-places:write` (publish) |
+| Data stores | `universe-datastores.objects:create`, `:update`, `:delete`, `universe-datastores.control:delete`, `universe-datastores.control:snapshot` |
+| Ordered data stores | `universe.ordered-data-store.scope.entry:write` |
+| Memory stores | `memory-store.sorted-map:write`, `memory-store.queue:add`, `memory-store.queue:dequeue`, `memory-store.queue:discard`, `memory-store:flush` |
 | Messaging | `universe-messaging-service:publish` |
-| Restart servers | `universe:write` |
-| Bans | `universe.user-restriction:read`; ban / unban `universe.user-restriction:write` |
-| Developer products | `developer-product:read` |
-| Game passes | `game-pass:read` (a public list without it) |
+| Bans | `universe.user-restriction:write` |
+| Products, passes, badges | `developer-product:write`, `game-pass:write`, `legacy-universe.badge:write`, `legacy-universe.badge:manage-and-spend-robux` |
+| Analytics extras | `universe.analytics:write`, `universe.analytics.dashboard:read` / `:write`, `universe.analytics.alert:read` / `:write` |
+| Engagement | `universe.event:read` / `:write`, `universe.notification-string:read` / `:write`, `universe.thumbnail:read` / `:write`, `user.user-notification:write` |
+| Servers and live tools | `universe.place.instance:read` / `:write`, `universe.place.luau-execution-session:read` / `:write` |
+| Secrets | `universe.secret:read` / `:write` |
+| Assets | `asset:read`, `asset:write`, `asset-permissions:write` |
+| Other | `ad.campaign:read` / `:write`, `extended-services:read` / `:write` |
+
+Optional: `legacy-universe:manage`, `legacy-game-pass:manage`, `legacy-developer-product:manage`, `legacy-badge:manage`,
+`legacy-group:manage`, `legacy-team-collaboration:manage`, `legacy-universe.following:read` / `:write`, for the screens
+that ask for them.
 
 The key's universes, scopes and owner come from `POST https://apis.roblox.com/api-keys/v1/introspect` (`{ apiKey }`).
 

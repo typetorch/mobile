@@ -45,6 +45,8 @@ import {
 } from "@/api/roblox-public";
 import { useAccounts } from "@/store/accounts";
 
+import { compareProjects, usePins } from "./pins";
+
 export interface Project {
 	universeId: number;
 	name: string;
@@ -382,19 +384,22 @@ async function harvestGroup(groupId: number, warnings: Warnings): Promise<GroupH
 }
 
 function sortProjects(projects: Project[]) {
-	projects.sort((a, b) => Number(a.archived) - Number(b.archived) || b.playing - a.playing || b.visits - a.visits || a.name.localeCompare(b.name));
+	// The default order (latest updated); the home screen re-sorts by the order picked there.
+	projects.sort(compareProjects("updated"));
 }
 
 export function useProjects() {
 	const { ready, keyInfo, hasKey, keyLoading, prefs, cloud, backends } = useAccounts();
 	const userId = prefs.userId ?? keyInfo?.authorizedUserId ?? null;
 	const keyIds = keyUniverseIds(keyInfo);
+	// Pinned experiences are always listed, also ones no other source names (a group under the rank filter).
+	const pinIds = [...usePins()].sort((a, b) => a - b);
 	const keyGroups = keyGroupIds(keyInfo);
 	// Universes of connected TypeTorch backends: listed even when private, unlisted or in a group under the rank filter.
 	const backendIds = [...new Set(backends.map((b) => b.universeId).filter((id): id is number => typeof id === "number" && id > 0))].sort((a, b) => a - b);
 	const scopeSig = keyInfo ? ["legacy-group:manage", "legacy-universe:manage", "ad.campaign:read", "group:read"].map((s) => (hasScope(keyInfo, s) ? 1 : 0)).join("") : "-";
 	return useQuery<ProjectsResult>({
-		queryKey: ["projects", userId, prefs.groupMinRank, keyIds.join(","), keyGroups.join(","), prefs.extraUniverseIds.join(","), backendIds.join(","), hasKey, keyInfo?.authorizedUserId ?? null, scopeSig],
+		queryKey: ["projects", userId, prefs.groupMinRank, keyIds.join(","), keyGroups.join(","), prefs.extraUniverseIds.join(","), backendIds.join(","), pinIds.join(","), hasKey, keyInfo?.authorizedUserId ?? null, scopeSig],
 		enabled: ready && !(hasKey && keyLoading),
 		staleTime: 60_000,
 		queryFn: async () => {
@@ -409,6 +414,7 @@ export function useProjects() {
 			addSource("API key", keyIds);
 			addSource("Added by hand", prefs.extraUniverseIds);
 			addSource("TypeTorch backends", backendIds);
+			addSource("Pinned", pinIds);
 
 			let groups = new Map<number, GroupInfo>();
 			if (userId) {
