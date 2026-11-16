@@ -47,7 +47,7 @@ import {
 import { absoluteFlag, REGRESSION_PCT, regression, thresholdText, type Flag, type Regression } from "@/api/tt/perf-thresholds";
 import type { Filters } from "@/api/tt/types";
 import { LineChart, type ChartMark, type ChartSeries as LineSeries } from "@/charts/LineChart";
-import { Button, Card, Chips, Dot, EmptyState, ErrorState, List, Segmented, SkeletonList, Stat, StatGrid, Txt } from "@/components/ui";
+import { Button, Card, Chips, EmptyState, ErrorState, List, Segmented, SkeletonList, Stat, StatGrid, Txt } from "@/components/ui";
 import { ChangeChip, Note, Panel, QueryState } from "@/features/typetorch/bits";
 import { DataTable, type DataColumn } from "@/features/typetorch/table";
 import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
@@ -90,6 +90,8 @@ function Performance({ backendId }: { backendId: string }) {
 	const step = Number(stepParam) || 0;
 	const setStep = (m: number) => setStepParam(m ? String(m) : "auto");
 	const [markId, setMarkId] = usePageParam("mark");
+	// The web's `marks` (on / off): off hides the marks on this page's charts, so a link can carry it.
+	const [marksParam, setMarksParam] = usePageParam("marks", "on");
 	const [vs, setVs] = usePageParam("vs");
 	const compareOn = vs === "prev";
 	const setCompareOn = (on: boolean) => setVs(on ? "prev" : "");
@@ -118,7 +120,12 @@ function Performance({ backendId }: { backendId: string }) {
 	const branch = typeof apiFilters.branch === "string" ? apiFilters.branch : undefined;
 	const deploys = useDeployMarks(backendId, range, branch);
 	const allMarks = deploys.all;
-	const marks = deploys.marks;
+	const marksShown = deploys.shown && marksParam !== "off";
+	const marks = marksShown ? allMarks : [];
+	const setMarksShown = (on: boolean) => {
+		deploys.setShown(on);
+		setMarksParam(on ? "on" : "off");
+	};
 	const selected = allMarks.find((m) => m.id === markId);
 	const seqOf = useMemo(() => new Map(allMarks.filter((m) => m.artifact && m.seq !== null && m.kind !== "backup").map((m) => [m.artifact as string, m.seq as number])), [allMarks]);
 	const before = useMemo(() => previousPeriod(state), [state]);
@@ -147,7 +154,7 @@ function Performance({ backendId }: { backendId: string }) {
 					</Txt>
 				</View>
 			</View>
-			<MarkLegend marks={allMarks} error={deploys.error} shown={deploys.shown} onToggle={() => deploys.setShown(!deploys.shown)} selected={markId} onPick={(m) => setMarkId(m.id === markId ? "" : m.id)} />
+			<MarkLegend marks={allMarks} error={deploys.error} shown={marksShown} onToggle={() => setMarksShown(!marksShown)} selected={markId} onPick={(m) => setMarkId(m.id === markId ? "" : m.id)} />
 			{selected ? (
 				<Card style={{ gap: 6, borderLeftWidth: 4, borderLeftColor: markColor(p, selected.kind) }}>
 					<Txt style={{ fontWeight: "600" }}>{markTitle(selected)}</Txt>
@@ -430,53 +437,77 @@ function ServerHistory({ backendId, job, since, marks }: { backendId: string; jo
 	);
 }
 
+/** The live servers' columns (the web's liveServerColumns): latest heartbeat numbers, flagged; History opens the charts. */
+function liveServerColumns(p: Palette, job: string, setJob: (job: string) => void): DataColumn<PerfServer>[] {
+	const metric = (id: string, header: string, key: "tps" | "physFps" | "mem", get: (s: PerfServer) => number | null | undefined, flagged = true, title?: string): DataColumn<PerfServer> => ({
+		id,
+		header,
+		...(title ? { title } : {}),
+		type: "number",
+		width: 80,
+		accessor: (s) => get(s) ?? null,
+		format: (v) => fmtMetric(key, typeof v === "number" ? v : null),
+		cell: (s) => {
+			const f = flagged ? absoluteFlag("server", key, null, get(s)) : null;
+			return (
+				<Txt variant="small" color={flagColor(p, f) ?? p.foreground} style={f ? { fontWeight: "700" } : undefined}>
+					{fmtMetric(key, get(s))}
+				</Txt>
+			);
+		},
+	});
+	return [
+		{ id: "job", header: "Server", type: "text", width: 80, mono: true, accessor: (s) => s.job, format: (_v, s) => shortId(s.job, 6) },
+		{ id: "branch", header: "Branch", type: "enum", width: 80, accessor: (s) => s.branch ?? null },
+		{ id: "build", header: "Build", type: "enum", width: 110, mono: true, accessor: (s) => s.artifact ?? null, format: (_v, s) => `${s.artifact ?? "–"}${s.appliedSeq ? ` #${s.appliedSeq}` : ""}` },
+		{ id: "players", header: "Players", type: "number", width: 66, accessor: (s) => s.players, cell: (s) => fmtInt(s.players) },
+		metric("tps", "TPS", "tps", (s) => s.tps),
+		metric("tpsMin", "TPS min", "tps", (s) => s.tpsMin, false, "The slowest step in the last heartbeat window"),
+		metric("physFps", "Physics FPS", "physFps", (s) => s.physFps),
+		metric("memMb", "Memory", "mem", (s) => s.memMb),
+		metric("luaMb", "Lua heap", "mem", (s) => s.luaMb, false),
+		{
+			id: "history",
+			header: "History",
+			width: 80,
+			accessor: () => null,
+			sortable: false,
+			filter: false,
+			searchable: false,
+			hideable: false,
+			exportValue: () => null,
+			cell: (s) => <Button title={s.job === job ? "Hide" : "History"} small variant={s.job === job ? "brand" : "secondary"} onPress={() => setJob(s.job === job ? "" : s.job)} />,
+		},
+	];
+}
+
 function LiveServers({ backendId, branch, since, marks }: { backendId: string; branch: string | undefined; since: number } & MarkProps) {
 	const p = useTheme();
 	const [job, setJob] = usePageParam("job");
 	const q = useTTQuery(backendId, ["fleet", "perf-servers", branch ?? ""], (api, s) => api.perfServers(branch, s), { refetchInterval: 30_000, retry: false });
-	const val = (s: PerfServer, key: string, metric: "tps" | "physFps" | "mem", v: number | null | undefined) => {
-		const f = metric === "tps" && key === "tpsMin" ? null : absoluteFlag("server", metric, null, v);
-		return { text: fmtMetric(metric, v), color: flagColor(p, f) };
-	};
+	const columns = useMemo(() => liveServerColumns(p, job, setJob), [p, job, setJob]);
 	return (
 		<Panel title="Live servers" note="Each server's latest TPS and memory from its heartbeat; tap one for its history.">
 			<QueryState q={q} isEmpty={(d) => d.servers.length === 0} empty="No live servers right now." rows={3}>
 				{(d) => (
 					<View style={{ gap: space.sm }}>
 						{!d.servers.some((s) => typeof s.tps === "number" || typeof s.memMb === "number") ? <Note>These heartbeats carry no TPS or memory yet (kernel 0.4.2 sends them).</Note> : null}
-						<List>
-							{d.servers.map((s) => {
-								const tps = val(s, "tps", "tps", s.tps);
-								const phys = val(s, "physFps", "physFps", s.physFps);
-								const mem = val(s, "memMb", "mem", s.memMb);
-								const bad = tps.color ?? phys.color ?? mem.color;
-								return (
-									<View key={s.job}>
-										<Pressable onPress={() => setJob(job === s.job ? "" : s.job)} style={{ paddingVertical: 8, paddingHorizontal: space.md, gap: 3, backgroundColor: job === s.job ? p.muted : undefined }}>
-											<View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-												<Dot tone={bad ? (bad === p.destructive ? "critical" : "warning") : "good"} />
-												<Txt variant="mono" style={{ flex: 1 }}>
-													{shortId(s.job, 6)}
-												</Txt>
-												<Txt variant="small">
-													{fmtInt(s.players)} players · {s.branch ?? "–"} · {s.artifact ?? "–"}
-													{s.appliedSeq ? ` #${s.appliedSeq}` : ""}
-												</Txt>
-											</View>
-											<Txt variant="small">
-												TPS <Txt variant="small" color={tps.color ?? p.foreground}>{tps.text}</Txt> (min {fmtMetric("tps", s.tpsMin)}) · physics <Txt variant="small" color={phys.color ?? p.foreground}>{phys.text}</Txt> · memory{" "}
-												<Txt variant="small" color={mem.color ?? p.foreground}>{mem.text}</Txt> · Lua {fmtMetric("mem", s.luaMb)}
-											</Txt>
-										</Pressable>
-										{job === s.job ? (
-											<View style={{ padding: space.sm }}>
-												<ServerHistory backendId={backendId} job={s.job} since={since} marks={marks} />
-											</View>
-										) : null}
-									</View>
-								);
-							})}
-						</List>
+						<DataTable
+							id="perf-live-servers"
+							label="Live servers"
+							columns={columns}
+							data={d.servers}
+							rowId={(s) => s.job}
+							isRowSelected={(s) => s.job === job}
+							onRowPress={(s) => setJob(s.job === job ? "" : s.job)}
+							density="compact"
+						/>
+						{job ? (
+							<View style={{ gap: 6 }}>
+								<Txt variant="label">History of {shortId(job, 6)}</Txt>
+								<ServerHistory backendId={backendId} job={job} since={since} marks={marks} />
+							</View>
+						) : null}
 					</View>
 				)}
 			</QueryState>

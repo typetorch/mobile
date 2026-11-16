@@ -7,7 +7,7 @@
 import { graphlib, layout } from "@dagrejs/dagre";
 import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, useWindowDimensions, View, type LayoutChangeEvent } from "react-native";
-import { GestureDetector, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from "react-native-gesture-handler";
+import { GestureDetector, GestureHandlerRootView, usePanGesture, usePinchGesture, useSimultaneousGestures, useTapGesture } from "react-native-gesture-handler";
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { G, Path, Rect, Text as SvgText } from "react-native-svg";
@@ -490,7 +490,8 @@ export function GraphView({ graph, maxEdges = 60, height = 460 }: { graph: Graph
 			{picked ? <NodeDetails node={picked} graph={graph} onClose={() => setSelected(null)} onPick={setSelected} /> : null}
 			<Txt variant="small">{help}</Txt>
 			<Modal visible={full} animationType="slide" onRequestClose={() => setFull(false)} statusBarTranslucent>
-				<View style={{ flex: 1, backgroundColor: p.background, paddingTop: insets.top, paddingBottom: insets.bottom }}>
+				{/* An Android Modal is its own native root, outside the app's GestureHandlerRootView: gestures need one here too. */}
+				<GestureHandlerRootView style={{ flex: 1, backgroundColor: p.background, paddingTop: insets.top, paddingBottom: insets.bottom }}>
 					<View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: space.lg, paddingVertical: space.sm }}>
 						<Txt variant="h3" style={{ flex: 1 }}>
 							{graph.path ? "Session graph" : "Graph"}
@@ -508,7 +509,7 @@ export function GraphView({ graph, maxEdges = 60, height = 460 }: { graph: Graph
 							</Animated.ScrollView>
 						</View>
 					) : null}
-				</View>
+				</GestureHandlerRootView>
 			</Modal>
 		</View>
 	);
