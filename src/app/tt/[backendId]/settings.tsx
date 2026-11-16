@@ -1,6 +1,10 @@
 /**
- * Settings for one backend: this device's session, the app sessions (list / revoke), the experience it is linked
- * to, the server's health, and (admins) the runtime settings, read only (change them on the web explorer).
+ * Settings for one backend. For everyone: this device's session, the app sessions (list / revoke), the experience it
+ * is linked to, the server's health. For owners (the web's Settings page, owner-only there): the runtime settings per
+ * group with Save / Undo / Reset to env / Reset all to env, the write-only webhook and Send test alert, the backend
+ * alert rules with their last run, Sign in with typetorch.dev (trusted browsers, revoke), Backups and disk (Back up
+ * now, Download backup through the share sheet), Migration (start, pause / resume / cancel, resolve) and Recent
+ * changes (features/typetorch/settings/).
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { router } from "expo-router";
@@ -8,25 +12,17 @@ import { useState } from "react";
 import { View } from "react-native";
 
 import { listSessions, refreshToken, revokeSession } from "@/api/backend-auth";
-import type { RuntimeSetting } from "@/api/tt/types";
 import { Badge, Button, Card, confirm, ErrorState, Field, KV, List, Row, Section, Segmented, Skeleton, Txt } from "@/components/ui";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { TTScreen } from "@/features/typetorch/screen";
-import { compactJson, daysLeft, fmtAgo, fmtDate, fmtInt } from "@/lib/format";
+import { BackupCard, CentralLoginSection, MigrationCard } from "@/features/typetorch/settings/cards";
+import { SETTINGS_KEY, SettingsAudit, SettingsForm } from "@/features/typetorch/settings/form";
+import { daysLeft, fmtAgo, fmtDate, fmtInt } from "@/lib/format";
 import { useAccounts, type BackendAccount } from "@/store/accounts";
 import { useTheme } from "@/theme";
 
 export default function BackendSettingsScreen() {
 	return <TTScreen title="Settings">{({ account }) => <BackendSettings account={account} />}</TTScreen>;
-}
-
-function settingValue(s: RuntimeSetting): string {
-	if (s.kind === "secret") return s.set ? "set" : "not set";
-	const v = s.value;
-	if (v === null || v === undefined || v === "") return "–";
-	if (typeof v === "boolean") return v ? "on" : "off";
-	if (typeof v === "number") return `${v}${s.unit ? ` ${s.unit}` : ""}`;
-	return compactJson(v, 60);
 }
 
 function BackendSettings({ account }: { account: BackendAccount }) {
@@ -40,7 +36,7 @@ function BackendSettings({ account }: { account: BackendAccount }) {
 
 	const health = useTTQuery(account.id, ["health"], (api, s) => api.health(s), { staleTime: 30_000 });
 	const sessions = useTTQuery(account.id, ["mobile-sessions", all], () => listSessions(account.url, token, account.tokenId, all));
-	const settings = useTTQuery(account.id, ["admin-settings"], (api, s) => api.settings(s), { enabled: admin, retry: false });
+	const settings = useTTQuery(account.id, SETTINGS_KEY, (api, s) => api.settings(s), { enabled: admin, retry: false, staleTime: 0 });
 
 	const revoke = useMutation({
 		mutationFn: (id: string) => revokeSession(account.url, token, id),
@@ -147,22 +143,25 @@ function BackendSettings({ account }: { account: BackendAccount }) {
 			</Section>
 
 			{admin ? (
-				<Section title="Runtime settings (read only)">
-					{settings.error ? (
-						<ErrorState error={settings.error} />
-					) : !settings.data ? (
+				settings.error ? (
+					<Section title="Runtime settings">
+						<ErrorState error={settings.error} onRetry={() => settings.refetch()} />
+					</Section>
+				) : !settings.data ? (
+					<Section title="Runtime settings">
 						<Skeleton height={120} />
-					) : (
-						<>
-							<List>
-								{settings.data.settings.map((s) => (
-									<Row key={s.key} title={s.label} subtitle={`${s.source}${s.help ? ` · ${s.help}` : ""}`} right={<Txt variant="small" style={{ maxWidth: 140, textAlign: "right" }} numberOfLines={2}>{settingValue(s)}</Txt>} numberOfLines={1} />
-								))}
-							</List>
-							<Txt variant="small">Change settings in the web explorer (Settings).</Txt>
-						</>
-					)}
-				</Section>
+					</Section>
+				) : (
+					<>
+						<Section title="Runtime settings">
+							<SettingsForm backendId={account.id} data={settings.data} />
+						</Section>
+						{settings.data.centralLogin ? <CentralLoginSection backendId={account.id} info={settings.data.centralLogin} /> : null}
+						<BackupCard backendId={account.id} />
+						<MigrationCard backendId={account.id} />
+						<SettingsAudit entries={settings.data.audit} envOnly={settings.data.envOnly} />
+					</>
+				)
 			) : null}
 		</>
 	);

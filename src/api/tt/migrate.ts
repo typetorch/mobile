@@ -2,7 +2,7 @@
  * The move from another server (GET /v1/admin/migrate) and ingest pressure: the plain helpers the history-importing
  * banner and the Overview's busy note use (copied from backend/web/src/lib/migrate.ts).
  */
-import type { IngestPressure, MigrateDay, MigrateState, MigrateStatus } from "./types";
+import type { IngestPressure, MigrateAction, MigrateDay, MigrateState, MigrateStatus } from "./types";
 
 /** States in which a move is under way (the banner shows). */
 const ACTIVE: ReadonlySet<MigrateState> = new Set(["running", "paused", "waiting"]);
@@ -44,4 +44,30 @@ export function historyBannerText(status: MigrateStatus | null | undefined): str
 export function recentlyBusy(ingest: IngestPressure | null | undefined, now: number, withinMs = 60_000): boolean {
 	const at = ingest?.lastBusyAt;
 	return typeof at === "number" && at <= now + 1_000 && now - at <= withinMs;
+}
+
+/** Days not checked yet (pending or importing). */
+export function daysLeft(days: readonly Pick<MigrateDay, "state">[]): number {
+	return days.filter((d) => !dayDone(d)).length;
+}
+
+/** How often the Settings card asks: every 5 s while the move runs or waits, else every minute. */
+export function migratePollMs(state: MigrateState | undefined): number {
+	return state === "running" || state === "waiting" ? 5_000 : 60_000;
+}
+
+/** The buttons a state offers (the backend answers 409 when one doesn't apply after all). */
+export function migrateActions(state: MigrateState): MigrateAction[] {
+	switch (state) {
+		case "running":
+		case "waiting":
+			return ["pause", "cancel"];
+		case "paused":
+		case "failed":
+			return ["resume", "cancel"];
+		case "needs_decision":
+			return ["cancel"];
+		default:
+			return [];
+	}
 }
