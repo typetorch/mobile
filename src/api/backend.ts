@@ -127,6 +127,9 @@ export function cleanFilters(filters: Filters): Filters {
 	return out as Filters;
 }
 
+/** The map geometry download's deadline (a few MB of TTMP on a slow link). */
+export const MAP_GEOMETRY_TIMEOUT_MS = 120_000;
+
 export function createApi(options: ApiOptions) {
 	const base = options.base.replace(/\/+$/, "");
 	const doFetch = options.fetch ?? ((input: string, init?: RequestInit) => fetch(input, init));
@@ -368,10 +371,13 @@ export function createApi(options: ApiOptions) {
 		setMapOverride: (name: string, body: { path?: string; offset?: Vec3 }) =>
 			request<{ override: MapOverride | null }>(`/v1/maps/${encodeURIComponent(name)}/override`, { method: "PUT", body: JSON.stringify(body) }),
 		removeMapOverride: (name: string) => request<{ override: null }>(`/v1/maps/${encodeURIComponent(name)}/override`, { method: "DELETE" }),
-		/** One map's geometry (binary TTMP, v=2: with the texture section), decoded. */
+		/**
+		 * One map's geometry (binary TTMP, v=2: with the texture section), decoded. A big export is several MB, which on
+		 * mobile data can take longer than the usual 30 s: it gets MAP_GEOMETRY_TIMEOUT_MS (the web has no deadline).
+		 */
 		async mapGeometry(name: string, signal?: AbortSignal): Promise<MapGeometry> {
 			const path = `/v1/maps/${encodeURIComponent(name)}/geometry`;
-			const answer = await binary(`${path}?v=2`, signal);
+			const answer = await binary(`${path}?v=2`, signal, Math.max(options.timeoutMs ?? 0, MAP_GEOMETRY_TIMEOUT_MS));
 			if (answer.status !== 200) throw new ApiError(answer.status, answer.error ?? `HTTP ${answer.status}`, path);
 			return decodeGeometry(new Uint8Array(answer.bytes));
 		},

@@ -1,7 +1,8 @@
 /**
  * Fleet: the live servers, the versions they run, and the recently gone ones. Live updates come over the fleet SSE
  * stream (GET /v1/fleet/stream, like the web; features/typetorch/live-feeds.ts) with a log of its events; while the
- * stream is down the screen polls every 5 s.
+ * stream is down the screen polls every 5 s, while it is live every 60 s (a safety net; the web's is 30 s). The stream
+ * carries every branch (no `?branch`): the branch chips filter on the phone.
  */
 import { router } from "expo-router";
 import { useMemo, useState } from "react";

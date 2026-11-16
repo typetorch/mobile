@@ -6,9 +6,14 @@
  * with EventSource (Fleet: GET /v1/fleet/stream, Errors: GET /v1/live?topics=error), here over XHR streaming with the
  * Bearer token, reopened with a backoff, with a poll while it is down.
  *
+ * Every hook here also stops while its screen is not focused (useIsFocused): expo-router's Stack keeps the screens under
+ * a pushed one mounted, where the web unmounts a page on a route change. A watch then lapses like the web's, and the
+ * polls, the ticker (10 redraws a second of the map) and the SSE streams stop until the screen is back in front.
+ *
  * Frames hold player names and positions: they live in this component state only (never the query cache, storage or a
  * link) and go with the screen.
  */
+import { useIsFocused } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { AppState } from "react-native";
 
@@ -43,8 +48,9 @@ export interface StreamsState {
 /** Polls one server's streams while `enabled` (a live server, an owner's session). */
 export function useServerStreams(api: Pick<Api, "serverStreams"> | null, job: string, enabled: boolean, every = STREAMS_POLL_MS): StreamsState {
 	const [state, setState] = useState<StreamsState>({ frames: [], arrivedAt: 0, loaded: false });
+	const on = useIsFocused() && enabled;
 	useEffect(() => {
-		if (!enabled || !api) return;
+		if (!on || !api) return;
 		const controller = new AbortController();
 		let since: number | undefined;
 		let timer: ReturnType<typeof setTimeout> | undefined;
@@ -74,7 +80,7 @@ export function useServerStreams(api: Pick<Api, "serverStreams"> | null, job: st
 			controller.abort();
 			if (timer) clearTimeout(timer);
 		};
-	}, [api, job, enabled, every]);
+	}, [api, job, on, every]);
 	return state;
 }
 
@@ -84,8 +90,9 @@ export function useServerStreams(api: Pick<Api, "serverStreams"> | null, job: st
  */
 export function useServerWatch(api: Pick<Api, "watchServer"> | null, job: string, enabled: boolean): { error?: string; watching: boolean } {
 	const [state, setState] = useState<{ error?: string; watching: boolean }>({ watching: false });
+	const on = useIsFocused() && enabled;
 	useEffect(() => {
-		if (!enabled || !api) return;
+		if (!on || !api) return;
 		const controller = new AbortController();
 		const watch = () => {
 			if (hidden()) return;
@@ -106,18 +113,19 @@ export function useServerWatch(api: Pick<Api, "watchServer"> | null, job: string
 			clearInterval(timer);
 			sub.remove();
 		};
-	}, [api, job, enabled]);
+	}, [api, job, on]);
 	return state;
 }
 
 /** Date.now(), refreshed every `ms` while `on` (the dots' interpolation). */
 export function useTicker(on: boolean, ms = TICK_MS): number {
 	const [now, setNow] = useState(() => Date.now());
+	const running = useIsFocused() && on;
 	useEffect(() => {
-		if (!on) return;
+		if (!running) return;
 		const timer = setInterval(() => setNow(Date.now()), ms);
 		return () => clearInterval(timer);
-	}, [on, ms]);
+	}, [running, ms]);
 	return now;
 }
 
@@ -138,8 +146,9 @@ export interface LiveMapState {
 /** Holds the fleet-wide live map watch and polls every server's latest positions while `enabled`. */
 export function useLiveMap(api: Pick<Api, "watchLiveMap" | "liveMap"> | null, enabled: boolean, every = LIVE_MAP_POLL_MS): LiveMapState {
 	const [state, setState] = useState<LiveMapState>({ servers: [], loaded: false });
+	const on = useIsFocused() && enabled;
 	useEffect(() => {
-		if (!enabled || !api) return;
+		if (!on || !api) return;
 		const controller = new AbortController();
 		const watch = () => {
 			if (hidden()) return;
@@ -188,7 +197,7 @@ export function useLiveMap(api: Pick<Api, "watchLiveMap" | "liveMap"> | null, en
 			if (timer) clearTimeout(timer);
 			sub.remove();
 		};
-	}, [api, enabled, every]);
+	}, [api, on, every]);
 	return state;
 }
 
@@ -214,7 +223,7 @@ export type StreamStatus = "connecting" | "live" | "retrying";
 export const SSE_RETRY_MS = [1_000, 3_000, 10_000, 30_000] as const;
 
 /**
- * Holds an SSE stream (`api.eventStream`) while `enabled` and the app is in front: each message goes to `onMessage`; a
+ * Holds an SSE stream (`api.eventStream`) while `enabled`, the screen is focused and the app is in front: each message goes to `onMessage`; a
  * dropped or refused stream is reopened after SSE_RETRY_MS, and `onPoll` runs every `pollMs` while it is not live (the
  * fallback: the screen refetches what the stream would have told it). A 401 / 403 / 404 stops reopening (the poll goes on).
  */
@@ -229,8 +238,13 @@ export function useEventStream(
 	const handlers = useRef({ onMessage, onPoll: options.onPoll });
 	handlers.current = { onMessage, onPoll: options.onPoll };
 	const pollMs = options.pollMs ?? 5_000;
+	const on = useIsFocused() && enabled;
+	/** The stream was held before: back in focus, catch up once (onPoll) on what came while it was closed. */
+	const held = useRef(false);
 	useEffect(() => {
-		if (!enabled || !api) return;
+		if (!on || !api) return;
+		if (held.current) handlers.current.onPoll?.();
+		held.current = true;
 		let stopped = false;
 		let live = false;
 		let tries = 0;
@@ -290,6 +304,6 @@ export function useEventStream(
 			sub.remove();
 			connection?.close();
 		};
-	}, [api, path, enabled, pollMs]);
+	}, [api, path, on, pollMs]);
 	return state;
 }

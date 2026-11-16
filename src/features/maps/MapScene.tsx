@@ -9,8 +9,17 @@
  * Gestures: one finger turns (3D) or pans (2D), two fingers pan, a pinch zooms; a tap (not a drag) reports the point
  * under it through `onPick` (2D: the point; 3D: the nearest dot within reach, else the heat cell under it). `focus`
  * keeps a world point in the middle (following a player). The web's mouse hover has no phone twin: a tap does it.
+ *
+ * Size: expo-gl fixes gl.drawingBufferWidth / Height when the context is made and never changes them, so the GLView is
+ * only mounted once the view is laid out and is remounted (keyed on its rounded size) whenever that size changes (the
+ * Maps screen's Bigger / Smaller, a rotation): the old renderer is disposed and a new one gets a buffer of the new size,
+ * then the same geometry, layers and view state (the camera starts fitted again).
+ *
+ * Focus: expo-router's Stack keeps a screen mounted under a pushed one. While it is not focused the scene is not
+ * updated (no three.js rebuilds or frames for a hidden map); the latest props are drawn when it is back in front.
  */
 import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
+import { useIsFocused } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder, Pressable, StyleSheet, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
 
@@ -87,7 +96,11 @@ export function MapScene({
 	const renderer = useRef<MapRenderer | null>(null);
 	const size = useRef({ width: 1, height: 1 });
 	const [failed, setFailed] = useState<string | null>(null);
-	const [ready, setReady] = useState(false);
+	/** Bumped for each new renderer (a new GL context): the effects below hand it the current props. 0: none yet. */
+	const [ready, setReady] = useState(0);
+	/** The laid-out size in whole dp, null before the first layout; the GLView's key. */
+	const [laid, setLaid] = useState<{ width: number; height: number } | null>(null);
+	const focused = useIsFocused();
 	const [cursor, setCursor] = useState<{ x: number; z: number } | null>(null);
 	const latest = useRef({ onPick, mode });
 	latest.current = { onPick, mode };
@@ -104,7 +117,7 @@ export function MapScene({
 			});
 			r.setViewSize(size.current.width, size.current.height);
 			renderer.current = r;
-			setReady(true);
+			setReady((n) => n + 1);
 		} catch (error) {
 			setFailed(`The map needs OpenGL ES 3, which didn't start here (${(error as Error).message}).`);
 		}
@@ -119,17 +132,17 @@ export function MapScene({
 	);
 
 	useEffect(() => {
-		if (!ready) return;
+		if (!ready || !focused) return;
 		try {
 			renderer.current?.update(geometry, bounds, layers, { mode, offset, band, decorative, markers, textures });
 		} catch (error) {
 			setFailed(`The map could not be drawn (${(error as Error).message}).`);
 		}
-	}, [ready, geometry, bounds, layers, mode, offset, band, decorative, markers, textures]);
+	}, [ready, focused, geometry, bounds, layers, mode, offset, band, decorative, markers, textures]);
 
 	useEffect(() => {
-		if (ready && focus) renderer.current?.focus(focus.x, focus.y, focus.z);
-	}, [ready, focus?.x, focus?.y, focus?.z]);
+		if (ready && focused && focus) renderer.current?.focus(focus.x, focus.y, focus.z);
+	}, [ready, focused, focus?.x, focus?.y, focus?.z]);
 
 	const responder = useMemo(() => {
 		let g: Gesture | null = null;
@@ -211,11 +224,22 @@ export function MapScene({
 				onLayout={(e) => {
 					const { width, height } = e.nativeEvent.layout;
 					size.current = { width, height };
-					renderer.current?.setViewSize(width, height);
+					const next = { width: Math.round(width), height: Math.round(height) };
+					if (next.width < 1 || next.height < 1) return;
+					if (laid && laid.width === next.width && laid.height === next.height) {
+						renderer.current?.setViewSize(width, height);
+						return;
+					}
+					// A new size: the drawing buffer can't follow (expo-gl), so the GLView below remounts with a new context.
+					renderer.current?.dispose();
+					renderer.current = null;
+					setLaid(next);
 				}}
 				{...responder.panHandlers}
 			>
-				{failed ? null : <GLView style={StyleSheet.absoluteFill} onContextCreate={onContextCreate} pointerEvents="none" />}
+				{failed || !laid ? null : (
+					<GLView key={`${laid.width}x${laid.height}`} style={StyleSheet.absoluteFill} onContextCreate={onContextCreate} pointerEvents="none" />
+				)}
 			</View>
 			{failed ? (
 				<View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", padding: 24 }]}>

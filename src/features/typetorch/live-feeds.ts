@@ -1,12 +1,16 @@
 /**
  * The web explorer's live feeds (EventSource there, XHR streaming here: useEventStream in features/maps/live-streams.ts):
  *
- *   - Fleet (web pages/Fleet.tsx useFleetStream): GET /v1/fleet/stream?branch; `server`, `alert`, `alert_ack`, `report`,
- *     `deploy` events refetch what changed and go into a short log.
+ *   - Fleet (web pages/Fleet.tsx useFleetStream): GET /v1/fleet/stream; `server`, `alert`, `alert_ack`, `report`,
+ *     `deploy` events refetch what changed and go into a short log. The app's query keys, not the web's: `server` →
+ *     the Fleet lists (["fleet", "servers" | "gone"]); `alert` / `alert_ack` → every ["alerts", …] query (the overview's
+ *     recent alerts); `report` / `deploy` → the deploy lists and pages (["deploys", …], ["deploy", seq]). The Fleet
+ *     screen opens it without `?branch`: its branch chips filter on the phone, so the stream carries every branch.
  *   - Errors (web pages/Errors.tsx useErrorStream): GET /v1/live?topics=error; an `error` event refetches the error lists
  *     (debounced).
  *
- * While a stream is down the screens poll instead (Fleet every 5 s, Errors every 30 s).
+ * While a stream is down the screens poll instead (Fleet every 5 s, Errors every 30 s); while it is live Fleet still
+ * refetches its servers every 60 s (a safety net, the web's is 30 s). A stream only runs while its screen is focused.
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,6 +28,18 @@ export interface LiveEvent {
 }
 
 const FLEET_TYPES = new Set(["server", "alert", "alert_ack", "report", "deploy"]);
+
+/** The app's queries (after ["tt", backendId]) each fleet event makes stale. */
+export const FLEET_REFETCH: Record<string, readonly (readonly string[])[]> = {
+	server: [
+		["fleet", "servers"],
+		["fleet", "gone"],
+	],
+	alert: [["alerts"]],
+	alert_ack: [["alerts"]],
+	report: [["deploys"], ["deploy"]],
+	deploy: [["deploys"], ["deploy"]],
+};
 
 /** One line for a fleet event (web describe). */
 export function describeFleetEvent(type: string, data: Record<string, unknown>): string {
@@ -50,7 +66,7 @@ export function useFleetStream(backendId: string, branch: string): { status: Str
 	const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	const flush = useCallback(() => {
 		timer.current = undefined;
-		for (const key of pending.current) void client.invalidateQueries({ queryKey: ["tt", backendId, "fleet", key] });
+		for (const key of pending.current) void client.invalidateQueries({ queryKey: ["tt", backendId, ...(JSON.parse(key) as string[])] });
 		pending.current.clear();
 	}, [client, backendId]);
 	useEffect(() => () => clearTimeout(timer.current), []);
@@ -64,9 +80,7 @@ export function useFleetStream(backendId: string, branch: string): { status: Str
 				// keep the type
 			}
 			setLog((current) => [{ at: Date.now(), type: m.event, text: describeFleetEvent(m.event, data) }, ...current].slice(0, 50));
-			if (m.event === "server") pending.current.add("servers").add("gone");
-			if (m.event === "alert" || m.event === "alert_ack") pending.current.add("alerts");
-			if (m.event === "report" || m.event === "deploy") pending.current.add("report").add("reports");
+			for (const key of FLEET_REFETCH[m.event] ?? []) pending.current.add(JSON.stringify(key));
 			if (!timer.current) timer.current = setTimeout(flush, 1000);
 		},
 		[flush],

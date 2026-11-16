@@ -17,8 +17,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { ScrollView, View, useWindowDimensions } from "react-native";
 
-import type { Api } from "@/api/backend";
-import type { Filters } from "@/api/tt/types";
+import { cleanFilters, type Api } from "@/api/backend";
 import { Badge, Button, Card, EmptyState, ErrorState, Field, Section, Segmented, Skeleton, Txt, confirm } from "@/components/ui";
 import { BandControls, ToggleChip } from "@/features/maps/BandControls";
 import { useMapGeometry, useMapsList, useMapView } from "@/features/maps/hooks";
@@ -348,9 +347,16 @@ interface RecordedMaps {
 }
 
 /** The recording-layers query for one map name, through `raw` (its full result type belongs to the Recordings screens); its own cache key. */
-function useRecordedMaps(backendId: string, name: string | undefined, filters: Filters, enabled: boolean) {
+/**
+ * The recordings' maps (web useAnalytics("recording-layers", { map, layers: [] })): waits while the filter bar's saved
+ * filters still load (`pending`), like every filtered query, and sends them cleaned, so a cold start doesn't first ask
+ * for the default range and show its alignment or offset for a moment.
+ */
+function useRecordedMaps(backendId: string, name: string | undefined, enabled: boolean) {
+	const { apiFilters, pending } = useTTFilters(backendId);
+	const filters = useMemo(() => cleanFilters(apiFilters), [apiFilters]);
 	return useTTQuery(backendId, ["maps-alignment", name, filters], (api, signal) => api.raw("recording-layers", { filters, options: { map: name, layers: [] } }, signal).then((r) => r.result as RecordedMaps), {
-		enabled,
+		enabled: enabled && !pending,
 		staleTime: 60_000,
 	});
 }
@@ -360,20 +366,20 @@ function useRecordedMaps(backendId: string, name: string | undefined, filters: F
  * positions on that map (the recording-layers query's silhouette, the filter bar's range) through the same check.
  */
 function useAlignment(backendId: string, map: MapInfo, view: Pick<MapsView, "names">): { alignment: MapInfo["alignment"]; source: "events" | "recordings"; loading: boolean; unconfirmed: boolean } {
-	const { apiFilters } = useTTFilters(backendId);
+	const { pending } = useTTFilters(backendId);
 	const server = map.alignment;
 	const needed = map.kind === "map" && server.state === "unknown";
 	const guess = view.names.find((n) => nameKey(n.name) === nameKey(map.name))?.name ?? map.name;
-	const first = useRecordedMaps(backendId, guess, apiFilters, needed);
+	const first = useRecordedMaps(backendId, guess, needed);
 	const recordedName = first.data?.maps.find((m) => nameKey(m.map) === nameKey(map.name))?.map;
-	const second = useRecordedMaps(backendId, recordedName, apiFilters, needed && recordedName !== undefined && recordedName !== guess);
+	const second = useRecordedMaps(backendId, recordedName, needed && recordedName !== undefined && recordedName !== guess);
 	const data = recordedName !== undefined && recordedName !== guess ? second.data : first.data;
 	// The game names its places by analytics zone, yet no recorded sample stood in this map's zone: the samples were placed on it only
 	// because the server ran it (a lobby or tutorial area). They say nothing about where the map is: no suggestion from them.
 	const stat = data?.maps.find((m) => nameKey(m.map) === nameKey(map.name));
 	const unconfirmed = (data?.zoned ?? 0) > 0 && stat !== undefined && stat.confirmed === 0;
 	const computed = useMemo(() => (data?.frame && !unconfirmed ? alignmentOf(map.bounds, recordingSamples(data.frame, data.background), map.offset) : null), [data, map.bounds, map.offset, unconfirmed]);
-	if (!needed || !computed || computed.state === "unknown") return { alignment: server, source: "events", loading: needed && (first.isLoading || second.isLoading), unconfirmed };
+	if (!needed || !computed || computed.state === "unknown") return { alignment: server, source: "events", loading: needed && (pending || first.isLoading || second.isLoading), unconfirmed };
 	return { alignment: computed, source: "recordings", loading: false, unconfirmed: false };
 }
 
