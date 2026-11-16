@@ -44,11 +44,11 @@ async function describe(url: string, token: MobileToken): Promise<Pending> {
 
 export default function ConnectBackend() {
 	const p = useTheme();
-	const { reauth } = useLocalSearchParams<{ reauth?: string }>();
+	const { reauth, url: linkUrl } = useLocalSearchParams<{ reauth?: string; url?: string }>();
 	const { backends, addBackend, replaceToken, updateBackend } = useAccounts();
 	const existing = backends.find((b) => b.id === reauth) ?? null;
 	const projects = useProjects();
-	const [url, setUrl] = useState(existing?.url ?? "");
+	const [url, setUrl] = useState(existing?.url ?? (typeof linkUrl === "string" ? linkUrl : ""));
 	const [adminToken, setAdminToken] = useState("");
 	const [showToken, setShowToken] = useState(false);
 	const [busy, setBusy] = useState<"browser" | "token" | "save" | null>(null);

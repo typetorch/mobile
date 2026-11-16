@@ -1,32 +1,39 @@
 /**
  * The web explorer's filter bar (backend/web/src/lib/filters.ts + components/FilterBar.tsx) for the phone: date range,
- * branch, artifact, device, new / returning, experiment variant. The web keeps it in the URL; the app keeps one state per
- * backend in memory, so it follows you from page to page like the web's links do (and resets when the app restarts).
- * Days are UTC, like the server's.
+ * branch, artifact, device, new / returning, experiment variant, audience. The web keeps it in the URL; the app keeps
+ * one state per backend that follows you from page to page like the web's links do, saved on the phone (AsyncStorage)
+ * so it survives a restart, and written into "Copy link to this view" links with the web's keys (`range`, `from`, `to`,
+ * `branch`, `art`, `dev`, `players`, `exp`, `variant`, `country`, `lang`, `age`, `prem`, `source`). A link opened on
+ * the phone (typetorch://…?range=7d&branch=dev) sets the bar to its values. Days are UTC, like the server's.
  */
 import { keepPreviousData } from "@tanstack/react-query";
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Pressable, View } from "react-native";
 
-import { DEVICES, type Device, type Filters, type QueryName, type QueryResults } from "@/api/tt/types";
+import { ACCOUNT_AGES, DEVICES, type AccountAge, type Device, type Filters, type QueryName, type QueryResults } from "@/api/tt/types";
 import { Button, Chips, Field, Icon, Segmented, Txt } from "@/components/ui";
 import { radius, space, useTheme } from "@/theme";
 
 import { useTTQuery } from "./hooks";
+import { readStored, writeStored } from "./persist";
 
-export const RANGE_PRESETS = ["1h", "6h", "1d", "7d", "30d", "90d"] as const;
+export const RANGE_PRESETS = ["1h", "6h", "1d", "3d", "7d", "30d", "90d", "deploy"] as const;
 export type RangePreset = (typeof RANGE_PRESETS)[number] | "custom";
 export const DEFAULT_RANGE: RangePreset = "30d";
 export const RANGE_LABELS: Record<RangePreset, string> = {
 	"1h": "1 h",
 	"6h": "6 h",
 	"1d": "Today",
+	"3d": "3 d",
 	"7d": "7 d",
 	"30d": "30 d",
 	"90d": "90 d",
+	deploy: "Since deploy",
 	custom: "Custom",
 };
 export const HOUR_PRESETS: Partial<Record<RangePreset, number>> = { "1h": 1, "6h": 6 };
+/** The branch "Since last prod deploy" reads its release from (the deploy history). */
+export const PROD_BRANCH = "prod";
 
 export interface FilterState {
 	range: RangePreset;
@@ -40,7 +47,25 @@ export interface FilterState {
 	players?: "new" | "returning";
 	exp?: string;
 	variant?: string;
+	/** Audience (player-level, matched on their join rows): ISO country code, upper case. */
+	country?: string;
+	/** Language code, lower case ("en"). */
+	lang?: string;
+	/** Roblox account-age bucket. */
+	age?: AccountAge;
+	/** Premium at the join. */
+	prem?: "true" | "false";
+	/** Join source (direct, teleport, referral, ...). */
+	source?: string;
+	/** range = deploy: when the last prod release started (unix ms), looked up by useTTFilters (never saved or linked). */
+	sinceMs?: number;
 }
+
+/** The keys the filter bar owns in a link; pages keep their own (pid, funnel, ...) alongside. */
+export const FILTER_KEYS = ["range", "from", "to", "branch", "art", "dev", "players", "exp", "variant", "country", "lang", "age", "prem", "source"] as const;
+/** The audience filters (player-level: a player matches when one of their join rows in the range has the value). */
+export const AUDIENCE_KEYS = ["country", "lang", "age", "prem", "source"] as const;
+export type AudienceKey = (typeof AUDIENCE_KEYS)[number];
 
 const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
@@ -49,6 +74,62 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function isoDate(ms: number): string {
 	return new Date(ms).toISOString().slice(0, 10);
+}
+
+/** The filter state a link's (or the saved) parameters describe; anything the backend wouldn't take is dropped. */
+export function readFilters(get: (key: string) => string | null | undefined): FilterState {
+	const read = (key: string) => {
+		const v = get(key)?.trim();
+		return v ? v : undefined;
+	};
+	const rawRange = read("range");
+	const range: RangePreset = rawRange === "custom" || (RANGE_PRESETS as readonly string[]).includes(rawRange ?? "") ? (rawRange as RangePreset) : DEFAULT_RANGE;
+	const state: FilterState = { range };
+	const from = read("from");
+	const to = read("to");
+	if (range === "custom") {
+		if (from && DATE.test(from)) state.from = from;
+		if (to && DATE.test(to)) state.to = to;
+	}
+	for (const key of ["branch", "art", "exp", "variant"] as const) {
+		const v = read(key);
+		if (v) state[key] = v;
+	}
+	const dev = read("dev");
+	if (dev && (DEVICES as string[]).includes(dev)) state.dev = dev as Device;
+	const players = read("players");
+	if (players === "new" || players === "returning") state.players = players;
+	const country = read("country");
+	if (country && /^[A-Za-z]{2}$/.test(country)) state.country = country.toUpperCase();
+	const lang = read("lang");
+	if (lang && /^[A-Za-z]{2,3}$/.test(lang)) state.lang = lang.toLowerCase();
+	const age = read("age");
+	if (age && (ACCOUNT_AGES as readonly string[]).includes(age)) state.age = age as AccountAge;
+	const prem = read("prem");
+	if (prem === "true" || prem === "false") state.prem = prem;
+	const source = read("source");
+	if (source && /^[a-z][a-z0-9_]{0,31}$/.test(source)) state.source = source;
+	return state;
+}
+
+/** The state as link parameters (the web's writeFilters): defaults left out. */
+export function filtersToParams(state: FilterState): Record<string, string> {
+	const out: Record<string, string> = {};
+	if (state.range !== DEFAULT_RANGE) out.range = state.range;
+	if (state.range === "custom") {
+		if (state.from) out.from = state.from;
+		if (state.to) out.to = state.to;
+	}
+	for (const key of ["branch", "art", "dev", "players", "exp", "variant", ...AUDIENCE_KEYS] as const) {
+		const v = state[key];
+		if (v) out[key] = v;
+	}
+	return out;
+}
+
+/** Does a link carry any filter key? (Then it sets the bar.) */
+export function hasFilterParams(params: Record<string, unknown>): boolean {
+	return FILTER_KEYS.some((k) => typeof params[k] === "string" && params[k] !== "");
 }
 
 /** The server's filters (same as the web's toApiFilters): presets end now, hour presets as an ISO instant on a whole minute. */
@@ -60,6 +141,8 @@ export function toApiFilters(state: FilterState, now = Date.now()): Filters {
 		if (state.to && DATE.test(state.to)) filters.to = state.to;
 	} else if (hours) {
 		filters.from = new Date(Math.floor(now / MINUTE_MS) * MINUTE_MS - hours * HOUR_MS).toISOString();
+	} else if (state.range === "deploy") {
+		filters.from = state.sinceMs !== undefined && state.sinceMs < now ? new Date(Math.floor(state.sinceMs / MINUTE_MS) * MINUTE_MS).toISOString() : isoDate(now);
 	} else {
 		const days = Number.parseInt(state.range, 10);
 		filters.from = isoDate(now - (days - 1) * DAY_MS);
@@ -69,6 +152,11 @@ export function toApiFilters(state: FilterState, now = Date.now()): Filters {
 	if (state.dev) filters.dev = state.dev;
 	if (state.players) filters.players = state.players;
 	if (state.exp && state.variant) filters.variant = { experiment: state.exp, variant: state.variant };
+	if (state.country) filters.country = state.country;
+	if (state.lang) filters.lang = state.lang;
+	if (state.age) filters.age = state.age;
+	if (state.prem) filters.prem = state.prem === "true";
+	if (state.source) filters.source = state.source;
 	return filters;
 }
 
@@ -84,6 +172,8 @@ export function describeRange(state: FilterState): string {
 			return "the last 6 hours";
 		case "1d":
 			return "today (UTC)";
+		case "deploy":
+			return state.sinceMs !== undefined ? `since the last prod deploy (${new Date(state.sinceMs).toISOString().slice(0, 16).replace("T", " ")} UTC)` : "since the last prod deploy";
 		case "custom":
 			return `${state.from ?? "start"} to ${state.to ?? "now"} (UTC)`;
 		default:
@@ -92,37 +182,104 @@ export function describeRange(state: FilterState): string {
 }
 
 export function activeFilterCount(state: FilterState): number {
-	return (["branch", "art", "dev", "players"] as const).filter((k) => state[k]).length + (state.exp && state.variant ? 1 : 0);
+	return (["branch", "art", "dev", "players", ...AUDIENCE_KEYS] as const).filter((k) => state[k]).length + (state.exp && state.variant ? 1 : 0);
 }
 
-// One state per backend, in memory -------------------------------------------------------------------------------------
+/** How many audience filters are set. */
+export function audienceFilterCount(state: FilterState): number {
+	return AUDIENCE_KEYS.filter((k) => state[k]).length;
+}
 
+// One state per backend, kept on the phone ------------------------------------------------------------------------------
+
+const STORAGE_PREFIX = "tt.filters.v1.";
 const states = new Map<string, FilterState>();
+const loaded = new Set<string>();
+const loading = new Map<string, Promise<void>>();
 const listeners = new Set<() => void>();
 const DEFAULT_STATE: FilterState = { range: DEFAULT_RANGE };
+
+function emit() {
+	for (const l of listeners) l();
+}
 
 function getState(backendId: string): FilterState {
 	return states.get(backendId) ?? DEFAULT_STATE;
 }
 
-function setState(backendId: string, next: FilterState) {
-	states.set(backendId, next);
-	for (const l of listeners) l();
+/** Loads the saved bar of a backend once (a link applied before the load wins over it). */
+function ensureLoaded(backendId: string): Promise<void> {
+	if (loaded.has(backendId)) return Promise.resolve();
+	const running = loading.get(backendId);
+	if (running) return running;
+	const p = readStored(STORAGE_PREFIX + backendId).then((text) => {
+		if (!loaded.has(backendId) && text) {
+			try {
+				const saved = JSON.parse(text) as Record<string, string>;
+				states.set(backendId, readFilters((k) => (typeof saved[k] === "string" ? saved[k] : undefined)));
+			} catch {
+				// a bad save: the defaults
+			}
+		}
+		loaded.add(backendId);
+		loading.delete(backendId);
+		emit();
+	});
+	loading.set(backendId, p);
+	return p;
+}
+
+/** Replaces a backend's bar (and saves it). */
+export function setTTFilters(backendId: string, next: FilterState) {
+	const { sinceMs: _since, ...keep } = next;
+	states.set(backendId, keep);
+	loaded.add(backendId);
+	const params = filtersToParams(keep);
+	writeStored(STORAGE_PREFIX + backendId, Object.keys(params).length ? JSON.stringify(params) : null);
+	emit();
+}
+
+/** The current bar of a backend without subscribing (links). */
+export function currentTTFilters(backendId: string): FilterState {
+	return getState(backendId);
 }
 
 function subscribe(l: () => void) {
 	listeners.add(l);
-	return () => listeners.delete(l);
+	return () => {
+		listeners.delete(l);
+	};
 }
 
-/** The filter bar's state for a backend, its server filters, a setter and a reset (keeps the range). */
+/** When the last prod release started (unix ms), null when there is none (or no access); for range = deploy. */
+export function useLastProdDeploy(backendId: string, enabled = true) {
+	return useTTQuery(backendId, ["last-prod-deploy"], (api, signal) => api.fleetDeploys({ branch: PROD_BRANCH, limit: 1 }, signal).then((page) => page.deploys[0]?.at ?? null), {
+		enabled,
+		staleTime: 60_000,
+		retry: false,
+	});
+}
+
+/**
+ * The filter bar's state for a backend, its server filters, a setter and a reset (keeps the range). `pending` while the
+ * saved bar loads or "since deploy" looks its release up: queries wait instead of loading the wrong range first.
+ */
 export function useTTFilters(backendId: string) {
-	const state = useSyncExternalStore(subscribe, () => getState(backendId));
+	const stored = useSyncExternalStore(subscribe, () => getState(backendId));
+	const isLoaded = useSyncExternalStore(subscribe, () => loaded.has(backendId));
+	useEffect(() => {
+		void ensureLoaded(backendId);
+	}, [backendId]);
+	const sinceDeploy = stored.range === "deploy";
+	const lastDeploy = useLastProdDeploy(backendId, sinceDeploy);
+	const sinceMs = sinceDeploy ? (lastDeploy.data ?? undefined) : undefined;
+	const state = useMemo(() => (sinceMs !== undefined ? { ...stored, sinceMs } : stored), [stored, sinceMs]);
 	// Recomputed when the state changes: presets end "now".
 	const apiFilters = useMemo(() => toApiFilters(state), [state]);
-	const set = useCallback((patch: Partial<FilterState>) => setState(backendId, { ...getState(backendId), ...patch }), [backendId]);
-	const reset = useCallback(() => setState(backendId, { range: getState(backendId).range }), [backendId]);
-	return { state, apiFilters, set, reset };
+	const set = useCallback((patch: Partial<FilterState>) => setTTFilters(backendId, { ...getState(backendId), ...patch }), [backendId]);
+	const reset = useCallback(() => setTTFilters(backendId, { range: getState(backendId).range }), [backendId]);
+	const pending = !isLoaded || (sinceDeploy && lastDeploy.isPending && lastDeploy.fetchStatus !== "idle");
+	return { state, apiFilters, set, reset, pending };
 }
 
 export interface AnalyticsOptions {
@@ -136,10 +293,10 @@ export interface AnalyticsOptions {
 
 /** A named query with the filter bar's filters (or `opts.filters`), cached by name + filters + options (the web's useAnalytics). */
 export function useTTAnalytics<N extends QueryName>(backendId: string, name: N, options: object = {}, opts: AnalyticsOptions = {}) {
-	const { apiFilters } = useTTFilters(backendId);
+	const { apiFilters, pending } = useTTFilters(backendId);
 	const filters = opts.filters ?? apiFilters;
 	return useTTQuery<QueryResults[N]>(backendId, ["query", name, filters, options], (api, signal) => api.query(name, filters, options, signal), {
-		enabled: opts.enabled ?? true,
+		enabled: (opts.enabled ?? true) && (!!opts.filters || !pending),
 		staleTime: opts.staleTime ?? 30_000,
 		...(opts.keepPrevious ? { placeholderData: keepPreviousData } : {}),
 	});
@@ -149,6 +306,7 @@ export function useTTAnalytics<N extends QueryName>(backendId: string, name: N, 
 
 const ANY = "";
 const SEP = "|";
+const AUDIENCE_LABELS: Record<AudienceKey, string> = { country: "Country", lang: "Language", age: "Account age", prem: "Premium", source: "Join source" };
 
 /** Range chips on top (`ranges={[]}`: a page with its own period hides them); a "Filters" button opens branch, artifact, device, new / returning and variant. */
 export function FilterBar({ backendId, ranges }: { backendId: string; ranges?: RangePreset[] }) {
@@ -194,6 +352,7 @@ export function FilterBar({ backendId, ranges }: { backendId: string; ranges?: R
 					</Txt>
 				</Pressable>
 			</View>
+			{state.range === "deploy" && !(ranges && ranges.length === 0) ? <Txt variant="small">{describeRange(state)[0]?.toUpperCase()}{describeRange(state).slice(1)}</Txt> : null}
 			{state.range === "custom" && !(ranges && ranges.length === 0) ? (
 				<View style={{ flexDirection: "row", gap: space.sm }}>
 					<View style={{ flex: 1 }}>
@@ -236,6 +395,21 @@ export function FilterBar({ backendId, ranges }: { backendId: string; ranges?: R
 							set({ exp: v.slice(0, at), variant: v.slice(at + 1) });
 						}}
 					/>
+					{audienceFilterCount(state) ? (
+						<>
+							<Txt variant="label">Audience</Txt>
+							<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+								{AUDIENCE_KEYS.filter((k) => state[k]).map((k) => (
+									<Pressable key={k} onPress={() => set({ [k]: undefined })} hitSlop={4} style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 3, paddingHorizontal: 8, borderRadius: 999, borderWidth: 1, borderColor: p.border, backgroundColor: p.muted }}>
+										<Txt variant="small" color={p.foreground}>
+											{AUDIENCE_LABELS[k]}: {state[k]}
+										</Txt>
+										<Icon name="close" size={12} color={p.mutedForeground} />
+									</Pressable>
+								))}
+							</View>
+						</>
+					) : null}
 					{values.error ? <Txt variant="small">Couldn't load the branches and artifacts: {values.error.message}</Txt> : null}
 					<View style={{ flexDirection: "row", gap: space.sm }}>
 						{count ? <Button title="Clear" small icon="refresh" onPress={reset} /> : null}
