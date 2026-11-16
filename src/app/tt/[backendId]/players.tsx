@@ -1,21 +1,25 @@
 /**
- * Players: the 100 first players in the order you pick (query `players`), searched by part of a pid or a UserId; extra
- * funnel progress per player (query `funnel-progress`); the identity backfill. A tap opens the player's page.
+ * Players: the 100 first players in the order you pick (query `players`), searched by part of a pid or a UserId (the
+ * web's `find`, in the route); extra funnel progress per player (query `funnel-progress`); the identity backfill; churn
+ * risk (features/typetorch/churn.tsx, `risk`). A tap opens the player's page. A web link's `pid` (the player picked
+ * on the web's Players page) opens that player's page; a link's `find` that is a pid or a known UserId does too.
  */
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { useEffect, useMemo, useState } from "react";
+import { router } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, View } from "react-native";
 
 import type { Api } from "@/api/backend";
 import type { PlayerSummary } from "@/api/tt/types";
 import { Badge, Button, Chips, List, SearchBar, Segmented, Txt } from "@/components/ui";
 import { FunnelBar, Note, openPlayer, Panel, PidLink, QueryState } from "@/features/typetorch/bits";
+import { ChurnRisk } from "@/features/typetorch/churn";
 import { FilterBar, useTTAnalytics } from "@/features/typetorch/filters";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { TTScreen } from "@/features/typetorch/screen";
 import { DataTable, type DataColumn, type SortSpec } from "@/features/typetorch/table";
-import { usePageParam } from "@/features/typetorch/view-link";
+import { usePageParam, usePageParams } from "@/features/typetorch/view-link";
 import { fmtAgo, fmtInt, fmtMinutes, plural, shortId } from "@/lib/format";
 import { useBackend } from "@/store/accounts";
 import { space, useTheme } from "@/theme";
@@ -71,8 +75,12 @@ export default function PlayersScreen() {
 
 function Players({ backendId, api }: { backendId: string; api: Api }) {
 	const p = useTheme();
-	const [text, setText] = useState("");
-	const [search, setSearch] = useState("");
+	// The web's `find`: the search text, in the route so it travels in a link.
+	const [find, setFind] = usePageParam("find");
+	const [pidParam] = usePageParam("pid");
+	const [, setPage] = usePageParams();
+	const [text, setText] = useState(find);
+	const [search, setSearch] = useState(find.trim());
 	const [missing, setMissing] = useState("");
 	const [sort, setSort] = useState<SortSpec | undefined>(undefined);
 	// The web's URL parameter `funnels` (the progress columns, comma separated).
@@ -80,10 +88,41 @@ function Players({ backendId, api }: { backendId: string; api: Api }) {
 	const funnels = useMemo(() => funnelsParam.split(",").filter(Boolean).slice(0, 8), [funnelsParam]);
 	const setFunnels = (next: string[]) => setFunnelsParam(next.join(","));
 	const [pickFunnels, setPickFunnels] = useState(false);
+	const written = useRef(find);
 	useEffect(() => {
-		const timer = setTimeout(() => setSearch(text.trim()), 400);
+		const timer = setTimeout(() => {
+			setSearch(text.trim());
+			if (text.trim() !== written.current) {
+				written.current = text.trim();
+				setFind(text.trim());
+			}
+		}, 400);
 		return () => clearTimeout(timer);
-	}, [text]);
+	}, [text, setFind]);
+	// The route changed `find` on its own (a link): the box follows; our own writes don't move it.
+	useEffect(() => {
+		if (find === written.current) return;
+		written.current = find;
+		setText(find);
+		setSearch(find.trim());
+	}, [find]);
+	// Arriving with a link: `pid` opens that player; `find` that is a pid or a known UserId does too (the web's top-bar
+	// "Find player"). Once, on arrival, so typing in the box never jumps away.
+	const arrival = useRef<{ pid: string; find: string } | null>({ pid: pidParam, find });
+	useEffect(() => {
+		if (!arrival.current) return;
+		const { pid, find: found } = arrival.current;
+		arrival.current = null;
+		if (pid && PID.test(pid)) {
+			setPage({ pid: null, sid: null });
+			router.push(`/tt/${backendId}/player/${encodeURIComponent(pid)}`);
+			return;
+		}
+		if (found)
+			void pidFor(api, found).then((x) => {
+				if (x) openPlayer(backendId, x);
+			});
+	}, [api, backendId, setPage]);
 	const valid = search === "" || PID.test(search);
 	const q = useTTAnalytics(backendId, "players", { limit: 100, ...(search ? { search } : {}), ...(sort ? { orderBy: sort.id, desc: sort.desc } : {}) }, { enabled: valid, keepPrevious: true });
 	const pids = useMemo(() => (q.data?.players ?? []).map((x) => x.pid), [q.data]);
@@ -147,6 +186,7 @@ function Players({ backendId, api }: { backendId: string; api: Api }) {
 				)}
 			</QueryState>
 			<IdentityStatus backendId={backendId} />
+			<ChurnRisk backendId={backendId} />
 		</>
 	);
 }
