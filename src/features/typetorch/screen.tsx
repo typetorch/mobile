@@ -43,10 +43,14 @@ function useForeignBackendLink(backendId: string, known: boolean) {
 	return { url, waiting: !!match };
 }
 
-/** A link's filter keys go into the filter bar once, then leave the route (the bar owns them from there). */
+/**
+ * A link's filter keys go into the filter bar once, then leave the route (the bar owns them from there). A view link
+ * (it always carries `backend=`) is the whole filter state, like a web URL: a key it leaves out is that key's default,
+ * so a link made with the default bar resets the recipient's saved bar instead of keeping it.
+ */
 function useLinkFilters(backendId: string, known: boolean) {
 	const params = useLocalSearchParams<Record<string, string | string[]>>();
-	const has = known && hasFilterParams(params);
+	const has = known && (hasFilterParams(params) || (typeof params[BACKEND_PARAM] === "string" && params[BACKEND_PARAM] !== ""));
 	useEffect(() => {
 		if (!has) return;
 		setTTFilters(
@@ -66,34 +70,53 @@ function useLinkFilters(backendId: string, known: boolean) {
 function LinkButton({ backendId, backendUrl, registry }: { backendId: string; backendUrl: string; registry: ReturnType<typeof createViewLinkRegistry> }) {
 	const p = useTheme();
 	const [open, setOpen] = useState(false);
-	const [copied, setCopied] = useState(false);
+	const [copied, setCopied] = useState<"" | "link" | "app">("");
 	const view = useViewLink(backendId, backendUrl, registry);
+	const copy = async (which: "link" | "app") => {
+		await view.copy(which === "app");
+		setCopied(which);
+		setTimeout(() => {
+			setCopied("");
+			setOpen(false);
+		}, 900);
+	};
 	return (
 		<>
 			<Pressable onPress={() => setOpen(true)} hitSlop={10} accessibilityLabel="Link to this view" style={{ paddingHorizontal: 4 }}>
 				<Icon name="link-outline" size={20} color={p.foreground} />
 			</Pressable>
-			<Sheet open={open} onClose={() => setOpen(false)} title="Link to this view" subtitle="The page, its filters, its picks and every table's sort and filters">
-				<SheetItem
-					icon={copied ? "checkmark" : "copy-outline"}
-					label={copied ? "Copied" : "Copy link to this view"}
-					onPress={async () => {
-						await view.copy();
-						setCopied(true);
-						setTimeout(() => {
-							setCopied(false);
-							setOpen(false);
-						}, 900);
-					}}
-				/>
+			<Sheet
+				open={open}
+				onClose={() => setOpen(false)}
+				title="Link to this view"
+				subtitle={
+					view.expoGo
+						? "The page, its filters, its picks and every table's sort and filters. In Expo Go the link is exp:// and opens only in Expo Go on a phone that reaches this same dev server; the typetorch:// form opens in the installed app."
+						: "The page, its filters, its picks and every table's sort and filters"
+				}
+			>
+				<SheetItem icon={copied === "link" ? "checkmark" : "copy-outline"} label={copied === "link" ? "Copied" : view.expoGo ? "Copy link (exp://, this dev server)" : "Copy link to this view"} onPress={() => void copy("link")} />
 				<SheetItem
 					icon="share-outline"
-					label="Share link"
+					label={view.expoGo ? "Share link (exp://)" : "Share link"}
 					onPress={() => {
 						setOpen(false);
 						void view.share();
 					}}
 				/>
+				{view.expoGo ? (
+					<>
+						<SheetItem icon={copied === "app" ? "checkmark" : "phone-portrait-outline"} label={copied === "app" ? "Copied" : "Copy typetorch:// link (installed app)"} onPress={() => void copy("app")} />
+						<SheetItem
+							icon="paper-plane-outline"
+							label="Share typetorch:// link (installed app)"
+							onPress={() => {
+								setOpen(false);
+								void view.share(true);
+							}}
+						/>
+					</>
+				) : null}
 				<SheetItem icon="globe-outline" label="Copy the backend URL" detail={backendUrl.replace(/^https?:\/\//, "")} onPress={() => void Clipboard.setStringAsync(backendUrl).then(() => setOpen(false))} />
 			</Sheet>
 		</>

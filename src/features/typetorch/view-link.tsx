@@ -1,9 +1,13 @@
 /**
  * What the web keeps in the URL, for the phone: a page's own parameters (a picked funnel, a sheet that is open, the
  * Performance grouping, ...) live in the screen's route params (expo-router), so they survive going back and forth and
- * travel in a link. "Copy link to this view" writes a typetorch:// link (Linking.createURL: exp:// inside Expo Go) with
- * the page, its parameters, the filter bar (web keys) and every table's view on the screen (`<table>.sort=-players`,
- * `<table>.f.<column>=…`), plus `backend=<url>` so another phone with the same backend connected opens it too.
+ * travel in a link. "Copy link to this view" writes a link (Linking.createURL) with the page, its parameters, the filter
+ * bar (web keys) and every table's view on the screen (`<table>.sort=-players`, `<table>.f.<column>=…`), plus
+ * `backend=<url>` so another phone with the same backend connected opens it too.
+ *
+ * In an installed build (APK, dev build) the link is typetorch://tt/…. In Expo Go, Linking.createURL ignores the app's
+ * scheme and gives exp://<dev server host>:<port>/--/tt/…: that opens only in Expo Go on a phone that reaches the same
+ * Metro dev server. So Expo Go also offers the typetorch:// form, built by hand, for a phone with the installed app.
  */
 import * as Clipboard from "expo-clipboard";
 import * as Linking from "expo-linking";
@@ -11,7 +15,7 @@ import { router, useLocalSearchParams, usePathname } from "expo-router";
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 import { Share } from "react-native";
 
-import { FILTER_KEYS, currentTTFilters, filtersToParams } from "./filters";
+import { DEFAULT_RANGE, FILTER_KEYS, currentTTFilters, filtersToParams } from "./filters";
 
 type RawParams = Record<string, string | string[] | undefined>;
 
@@ -106,6 +110,22 @@ export function useViewLinkRegistry(): ViewLinkRegistry | null {
 /** The parameter a link uses to find the backend on another phone (its URL; ids are per phone). */
 export const BACKEND_PARAM = "backend";
 
+/** The app's own scheme (app.json `scheme`); only an installed build answers it, never Expo Go. */
+export const APP_SCHEME = "typetorch";
+
+/** A link made in Expo Go (exp:// / exps://): it depends on the dev server that made it. */
+export function isExpoGoLink(url: string): boolean {
+	return /^exps?:\/\//i.test(url);
+}
+
+/** The installed app's form of a link: typetorch://<path>?<query> (Linking.createURL can't make it inside Expo Go). */
+export function toAppLink(url: string): string {
+	if (!isExpoGoLink(url)) return url;
+	const at = url.indexOf("/--/");
+	const rest = at >= 0 ? url.slice(at + 4) : url.replace(/^exps?:\/\/[^/?]*\/?/i, "");
+	return `${APP_SCHEME}://${rest}`;
+}
+
 /** Builds the link to what is on screen now. */
 export function buildViewLink(opts: { pathname: string; params: RawParams; backendId: string; backendUrl: string; tables: Record<string, string> }): string {
 	const query: Record<string, string> = {};
@@ -117,7 +137,8 @@ export function buildViewLink(opts: { pathname: string; params: RawParams; backe
 		if (opts.pathname.split("/").includes(encodeURIComponent(s)) || opts.pathname.split("/").includes(s)) continue;
 		query[k] = s;
 	}
-	Object.assign(query, filtersToParams(currentTTFilters(opts.backendId)), opts.tables);
+	// The range always goes in (even the default), so the link says the whole filter state on its own.
+	Object.assign(query, { range: DEFAULT_RANGE }, filtersToParams(currentTTFilters(opts.backendId)), opts.tables);
 	query[BACKEND_PARAM] = opts.backendUrl;
 	return Linking.createURL(opts.pathname.replace(/^\//, ""), { queryParams: query });
 }
@@ -127,12 +148,16 @@ export function useViewLink(backendId: string, backendUrl: string, registry: Vie
 	const pathname = usePathname();
 	const params = useLocalSearchParams<RawParams>();
 	const link = useCallback(() => buildViewLink({ pathname, params, backendId, backendUrl, tables: registry?.params() ?? {} }), [pathname, params, backendId, backendUrl, registry]);
-	const copy = useCallback(async () => {
-		await Clipboard.setStringAsync(link());
-	}, [link]);
-	const share = useCallback(async () => {
+	const copy = useCallback(async (app = false) => {
 		const url = link();
+		await Clipboard.setStringAsync(app ? toAppLink(url) : url);
+	}, [link]);
+	const share = useCallback(async (app = false) => {
+		const made = link();
+		const url = app ? toAppLink(made) : made;
 		await Share.share({ message: url, url }).catch(() => undefined);
 	}, [link]);
-	return { link, copy, share };
+	/** True inside Expo Go: the plain link is exp:// and needs the same dev server; `copy(true)` / `share(true)` give typetorch://. */
+	const expoGo = useMemo(() => isExpoGoLink(Linking.createURL("")), []);
+	return { link, copy, share, expoGo };
 }
