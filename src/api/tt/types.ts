@@ -348,6 +348,287 @@ export interface ConfusionResult {
 	};
 }
 
+// The Recordings page (first-session recordings: map layers, replay, quit autopsy, time to first action) ----------------
+
+/** A map's top-down grid: x to the right, z down; `cell` studs per cell. */
+export interface RecFrame {
+	minX: number;
+	minZ: number;
+	maxX: number;
+	maxZ: number;
+	cell: number;
+	cols: number;
+	rows: number;
+}
+
+/** [column, row, count, average Y of the samples?] (recording layers carry the height; the 3D map uses it) */
+export type RecCell = [number, number, number, number?];
+
+export interface RecSampling {
+	recorded: number;
+	used: number;
+	sampled: boolean;
+	failed: number;
+	capped: boolean;
+	eventsCapped: boolean;
+}
+
+export interface RecMapLayer {
+	id: string;
+	label: string;
+	source: "recording" | "events";
+	count: number;
+	sessions: number;
+	values: { value: string; count: number }[];
+	cells: RecCell[];
+	/** Studs per cell when it isn't the frame's (positioned events with a finer `cell` option); same origin. */
+	cell?: number;
+	cellsCut: number;
+	examples: string[];
+}
+
+export interface RecordingLayersResult {
+	mapKey: string;
+	/** `confirmed`: samples whose analytics zone named the map. */
+	maps: { map: string; samples: number; confirmed?: number; sessions: number; events: number }[];
+	/** Samples with any analytics zone (absent from older backends). */
+	zoned?: number;
+	map: string | null;
+	frame: RecFrame | null;
+	background: RecCell[];
+	layers: RecMapLayer[];
+	catalog: { kind: string; name: string; count: number }[];
+	sampling: RecSampling;
+	notes: string[];
+}
+
+export interface RecSessionSummary {
+	sid: string;
+	pid: string;
+	art: string;
+	dev: string;
+	why: string | null;
+	start: number;
+	seconds: number;
+	samples: number;
+	inputs: number;
+	maps: string[];
+	signals: { idle: number; camera_spin: number; repeated_clicks: number };
+	/** plans/36: the session has extended streams (tt-ext-1 rows). */
+	extended?: boolean;
+}
+
+export interface RecordingSessionsResult {
+	total: number;
+	sessions: RecSessionSummary[];
+	sampling: RecSampling;
+}
+
+export interface RecInput {
+	t: number;
+	type: string;
+	target?: string;
+	code?: number;
+	processed?: boolean;
+	/** Clicks and taps: the pointer's position across the viewport, 0..1 from the top left. */
+	x?: number;
+	y?: number;
+}
+
+// plans/36 extended recording (tt-ext-1) in the replay; times are ms after the replay's `start`, like the rest of it.
+
+export type ExtRigKind = "none" | "R6" | "R15" | "other";
+
+/** A model's look from its Look record: body colours (#rrggbb) and its clothing as set (e.g. `rbxassetid://123`). */
+export interface ExtLook {
+	/** Head, torso, left arm, right arm, left leg, right leg. */
+	colors?: [string, string, string, string, string, string];
+	shirt?: string;
+	pants?: string;
+	tshirt?: string;
+	face?: string;
+}
+
+export interface ExtEntity {
+	/** The replay's entity id: 0 = the recorded player (positions from `samples`), others 1.. (one per spawn). */
+	e: number;
+	kind: string;
+	humanoid: boolean;
+	/** Another player's character. */
+	player: boolean;
+	/** The model's extents (studs). */
+	size: [number, number, number];
+	from: number;
+	/** null: until the end. */
+	to: number | null;
+	look?: ExtLook;
+	/** [t, x, y, z, yaw (radians, 0 = facing -Z)], the spawn first. */
+	moves: [number, number, number, number, number][];
+}
+
+export interface ExtAnim {
+	e: number;
+	track: number;
+	/** The Animation's AnimationId as set, e.g. `rbxassetid://180426354`. */
+	id: string;
+	from: number;
+	to: number | null;
+	looped: boolean;
+	/** The track's TimePosition when it started (s). */
+	time: number;
+	/** [t, speed, weight]: the play itself first, then every AnimAdjust. */
+	adjust: [number, number, number][];
+}
+
+export interface ExtUiFields {
+	/** AbsolutePosition / AbsoluteSize (px of the recorded viewport). */
+	rect?: [number, number, number, number];
+	/** AbsoluteRotation (degrees). */
+	rotation?: number;
+	/** Draw order among the visible nodes (a ScreenGui: its DisplayOrder). */
+	order?: number;
+	background?: { color: string; transparency: number };
+	text?: string;
+	textStyle?: {
+		color: string;
+		transparency: number;
+		size: number;
+		family: string;
+		weight: number;
+		/** 0 left / top, 1 centre, 2 right / bottom. */
+		xAlign: number;
+		yAlign: number;
+		scaled: boolean;
+		wrapped: boolean;
+		rich: boolean;
+		strokeTransparency: number;
+		strokeColor: string;
+	};
+	image?: string;
+	imageStyle?: { color: string; transparency: number; scaleType: number };
+	imageRect?: { offset: [number, number]; size: [number, number]; slice: [number, number, number, number] };
+	stroke?: { color: string; transparency: number; thickness: number };
+	/** UICorner radius (px). */
+	corner?: number;
+	/** Reparented (changes only): the parent node's `i`, null for none. */
+	parent?: number | null;
+	clip?: boolean;
+	gradient?: { keys: [number, string][]; rotation: number };
+}
+
+/** UI classes (tt-ext-1): 0 ScreenGui, 1 Frame, 2 TextLabel, 3 TextButton, 4 TextBox, 5 ImageLabel, 6 ImageButton, 7 ScrollingFrame, 8 ViewportFrame, 9 CanvasGroup, 10 VideoFrame. */
+export interface ExtUiNode {
+	/** This node's index in `ui`. */
+	i: number;
+	cls: number;
+	from: number;
+	to: number | null;
+	/** The parent node's `i` (null: a ScreenGui). */
+	parent: number | null;
+	/** Its fields when it appeared... */
+	f: ExtUiFields;
+	/** ...and their changes, in time order. */
+	ch?: [number, ExtUiFields][];
+}
+
+export interface ExtendedReplay {
+	/** tt-ext-1 rows read, chunks lost (decoding resumed at the next keyframe), records of unknown tags skipped. */
+	chunks: number;
+	gaps: number;
+	skipped: number;
+	/** A size cap was hit: the rest was left out. */
+	truncated?: boolean;
+	/** The first decode error (that segment's rest was skipped). */
+	failed?: string;
+	/** [t, viewport w, h, top inset (px), fov (degrees), fps] */
+	view: [number, number, number, number, number, number][];
+	/** AFK spans [from, to]; to null: until the end. */
+	afk: [number, number | null][];
+	/** Each entity's rig over time: kind and the Motor6D names Pose indexes. */
+	rigs: { t: number; e: number; rig: ExtRigKind; joints: string[] }[];
+	/** [t, entity, joint index (into its rig's joints), qx, qy, qz, qw]: Motor6D.Transform rotations. */
+	poses: [number, number, number, number, number, number, number][];
+	entities: ExtEntity[];
+	anims: ExtAnim[];
+	ui: ExtUiNode[];
+}
+
+export interface RecordingReplayResult {
+	found: boolean;
+	sid: string;
+	pid?: string;
+	job?: string;
+	art?: string;
+	dev?: string;
+	why?: string | null;
+	start?: number;
+	duration?: number;
+	gaps?: number;
+	chunks?: number;
+	/** [t ms, x, y, z, yaw (0 = facing -Z), lookY, character yaw, camera x, y, z] (the last four from plans/36 on) */
+	samples?: [number, number | null, number | null, number | null, number | null, number | null, (number | null)?, (number | null)?, (number | null)?, (number | null)?][];
+	/** Client fps over time (the session's `tech` / `client` rows): [t, fps]. */
+	fps?: [number, number][];
+	/** plans/36: the session's extended streams (tt-ext-1), null without them. */
+	extended?: ExtendedReplay | null;
+	inputs?: RecInput[];
+	events?: { t: number; kind: string; name: string; state?: string | null; props?: Record<string, unknown> }[];
+	signals?: { t: number; kind: "idle" | "camera_spin" | "repeated_clicks"; amount: number; target?: string; zone?: string }[];
+	maps?: { t: number; map: string }[];
+	map?: string;
+	frame?: RecFrame | null;
+	failed?: string;
+}
+
+export interface QuitAutopsyRow {
+	reason: "screen" | "died" | "idle" | "dead_clicks" | "stuck" | "tutorial" | "place" | "none";
+	value?: string;
+	left: number;
+	leftShare: number;
+	stayed: number;
+	stayedShare: number;
+	lift: number | null;
+	examples: string[];
+}
+
+export interface QuitAutopsyResult {
+	windowSeconds: number;
+	left: number;
+	stayed: number;
+	byWhy: { why: string; sessions: number }[];
+	rows: QuitAutopsyRow[];
+	sampling: RecSampling;
+}
+
+export type FirstActionKey = "move" | "screen" | "button" | "prompt" | "round";
+
+export interface FirstActionStat {
+	action: FirstActionKey;
+	sessions: number;
+	reached: number;
+	share: number;
+	median: number | null;
+	p25: number | null;
+	p75: number | null;
+	histogram: { label: string; count: number }[];
+	/** Sessions to replay: the slowest to reach it, and some that never did (older backends leave it out). */
+	examples?: { slowest: string[]; never: string[] };
+}
+
+export interface FirstActionSplit {
+	value: string;
+	sessions: number;
+	stats: { action: FirstActionKey; reached: number; share: number; median: number | null }[];
+}
+
+export interface FirstActionResult {
+	sessions: number;
+	stats: FirstActionStat[];
+	byDevice: FirstActionSplit[];
+	byBuild: FirstActionSplit[];
+	sampling: RecSampling;
+}
+
 export interface TopEventsResult {
 	events: { kind: string; name: string; count: number; players: number }[];
 }
@@ -737,6 +1018,11 @@ export interface QueryResults {
 	experiment: ExperimentResult;
 	"experiment-players": ExperimentPlayers;
 	confusion: ConfusionResult;
+	"recording-layers": RecordingLayersResult;
+	"recording-sessions": RecordingSessionsResult;
+	"recording-replay": RecordingReplayResult;
+	"quit-autopsy": QuitAutopsyResult;
+	"first-action": FirstActionResult;
 	"top-events": TopEventsResult;
 	servers: unknown;
 	deployReport: unknown;

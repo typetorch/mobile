@@ -159,6 +159,7 @@ declare module "three" {
 		makeScale(x: number, y: number, z: number): this;
 		makeTranslation(x: number, y: number, z: number): this;
 		makeRotationFromQuaternion(q: Quaternion): this;
+		makeRotationFromEuler(euler: Euler): this;
 		setPosition(x: number, y: number, z: number): this;
 		multiply(m: Matrix4): this;
 		premultiply(m: Matrix4): this;
@@ -251,6 +252,7 @@ declare module "three" {
 		layers: Layers;
 		add(...objects: Object3D[]): this;
 		remove(...objects: Object3D[]): this;
+		removeFromParent(): this;
 		clear(): this;
 		lookAt(x: number | Vector3, y?: number, z?: number): void;
 		updateMatrix(): void;

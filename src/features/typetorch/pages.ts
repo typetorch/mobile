@@ -31,6 +31,7 @@ export const TT_PAGES: TTPage[] = [
 	{ key: "first-session", title: "First session", icon: "footsteps-outline", description: "New players' first minutes", status: "ready" },
 	{ key: "events", title: "Events", icon: "list-outline", description: "Raw events", status: "ready" },
 	{ key: "maps", title: "Maps", icon: "map-outline", description: "Exported maps in 2D / 3D, where events happen", status: "ready" },
+	{ key: "recordings", title: "Recordings", icon: "videocam-outline", description: "First-session map layers, replays, quit autopsy, first actions", status: "ready" },
 	{ key: "server-history", title: "Server history", icon: "time-outline", description: "Closed and lost servers", status: "ready" },
 	{ key: "live", title: "Live map", icon: "locate-outline", description: "Every live server's players on the map", status: "ready", adminOnly: true },
 	{ key: "performance", title: "Performance", icon: "pulse-outline", description: "FPS, memory, ping, TPS", status: "ready" },

@@ -1,5 +1,10 @@
-/** First session: signs that new players got lost in their first session, per zone and button (query `confusion`). */
-import { View } from "react-native";
+/**
+ * First session: signs that new players got lost in their first session, per zone and button (query `confusion`). Each
+ * recording signal opens the Recordings screen's replay list for it (web ReplayLink: tab=replay, signal, zone / target;
+ * the filter bar is the backend's, so it is kept), and the header links to the Recordings screen.
+ */
+import { router } from "expo-router";
+import { Pressable, View } from "react-native";
 
 import type { ConfusionResult } from "@/api/tt/types";
 import { List, Stat, StatGrid, Txt } from "@/components/ui";
@@ -7,7 +12,28 @@ import { Note, Panel, QueryState, ShareRow } from "@/features/typetorch/bits";
 import { FilterBar, useTTAnalytics } from "@/features/typetorch/filters";
 import { TTScreen } from "@/features/typetorch/screen";
 import { fmtInt, fmtNum, fmtPct } from "@/lib/format";
-import { space } from "@/theme";
+import { space, useTheme } from "@/theme";
+
+type Signal = "idle" | "camera_spin" | "repeated_clicks";
+
+/** The Recordings screen's session list for one signal, to replay the sessions behind it. */
+function openReplays(backendId: string, signal: Signal, zone?: string, target?: string) {
+	const params: Record<string, string> = { tab: "replay", signal };
+	if (zone && zone !== "(unknown)") params.zone = zone;
+	if (target && target !== "(unknown)") params.target = target;
+	router.push({ pathname: "/tt/[backendId]/recordings", params: { backendId, ...params } });
+}
+
+function LinkText({ label, onPress }: { label: string; onPress: () => void }) {
+	const p = useTheme();
+	return (
+		<Pressable onPress={onPress} hitSlop={8} accessibilityRole="link">
+			<Txt variant="small" color={p.brand} style={{ textDecorationLine: "underline" }}>
+				{label}
+			</Txt>
+		</Pressable>
+	);
+}
 
 export default function FirstSessionScreen() {
 	return <TTScreen title="First session">{({ backendId }) => <FirstSession backendId={backendId} />}</TTScreen>;
@@ -19,8 +45,9 @@ function FirstSession({ backendId }: { backendId: string }) {
 		<>
 			<FilterBar backendId={backendId} />
 			<Note>Signs that new players got lost in their first session, per zone and button.</Note>
+			<LinkText label="Maps, replays and quit autopsy" onPress={() => router.push({ pathname: "/tt/[backendId]/recordings", params: { backendId } })} />
 			<QueryState q={q} isEmpty={(d) => d.firstSessions === 0} empty="No first sessions in this range.">
-				{(data) => <Body data={data} />}
+				{(data) => <Body backendId={backendId} data={data} />}
 			</QueryState>
 		</>
 	);
@@ -38,7 +65,7 @@ function Shares<T>({ rows, label, value, share, sub, empty }: { rows: readonly T
 	);
 }
 
-function Counts<T>({ rows, label, value, empty }: { rows: readonly T[]; label: (r: T) => string; value: (r: T) => string; empty: string }) {
+function Counts<T>({ rows, label, value, empty, onReplay }: { rows: readonly T[]; label: (r: T) => string; value: (r: T) => string; empty: string; onReplay?: (r: T) => void }) {
 	if (!rows.length) return <Txt variant="muted">{empty}</Txt>;
 	return (
 		<List>
@@ -48,13 +75,14 @@ function Counts<T>({ rows, label, value, empty }: { rows: readonly T[]; label: (
 						{label(r)}
 					</Txt>
 					<Txt variant="small">{value(r)}</Txt>
+					{onReplay ? <LinkText label="Replays" onPress={() => onReplay(r)} /> : null}
 				</View>
 			))}
 		</List>
 	);
 }
 
-function Body({ data }: { data: ConfusionResult }) {
+function Body({ backendId, data }: { backendId: string; data: ConfusionResult }) {
 	const rec = data.recordings;
 	return (
 		<>
@@ -82,11 +110,11 @@ function Body({ data }: { data: ConfusionResult }) {
 				{rec.available ? (
 					<View style={{ gap: space.md }}>
 						<Txt variant="label">Idle in zone</Txt>
-						<Counts rows={rec.idle ?? []} label={(r) => r.zone} value={(r) => `${fmtInt(r.count)}× · avg ${fmtNum(r.avgSeconds, 1)} s`} empty="No idle spots." />
+						<Counts rows={rec.idle ?? []} label={(r) => r.zone} value={(r) => `${fmtInt(r.count)}× · avg ${fmtNum(r.avgSeconds, 1)} s`} empty="No idle spots." onReplay={(r) => openReplays(backendId, "idle", r.zone)} />
 						<Txt variant="label">Camera spins in zone</Txt>
-						<Counts rows={rec.cameraSpin ?? []} label={(r) => r.zone} value={(r) => `${fmtInt(r.count)}×`} empty="No camera spins." />
+						<Counts rows={rec.cameraSpin ?? []} label={(r) => r.zone} value={(r) => `${fmtInt(r.count)}×`} empty="No camera spins." onReplay={(r) => openReplays(backendId, "camera_spin", r.zone)} />
 						<Txt variant="label">Button pressed again and again</Txt>
-						<Counts rows={rec.repeatedClicks ?? []} label={(r) => r.button} value={(r) => `${fmtInt(r.count)}× · avg ${fmtNum(r.avgPresses, 1)} presses`} empty="No repeated clicks." />
+						<Counts rows={rec.repeatedClicks ?? []} label={(r) => r.button} value={(r) => `${fmtInt(r.count)}× · avg ${fmtNum(r.avgPresses, 1)} presses`} empty="No repeated clicks." onReplay={(r) => openReplays(backendId, "repeated_clicks", undefined, r.button)} />
 					</View>
 				) : (
 					<Txt variant="muted">No recordings: {rec.reason ?? "none in this range"}.</Txt>

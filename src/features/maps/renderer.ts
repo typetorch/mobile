@@ -27,7 +27,8 @@
  *     (MATERIAL_LOOK_GLSL). Images come from GET /v1/images/<id> as cached files (images.ts), uploaded as
  *     `{ localUri }` textures (expo-gl reads the file); until one arrives its parts keep their plain colour.
  *   - Actors (the recordings' Player view): caller-owned objects in their own group; `setView` renders from a fixed
- *     camera instead of the orbit / map controls, and `pickActor` finds the actor under a point.
+ *     camera instead of the orbit / map controls, `pickActor` finds the actor under a point, and `texture` hands out a
+ *     Roblox image (clothing) from the same image cache.
  * Shapes follow Roblox's: a cylinder's axis is the part's X; a wedge's slope faces -Z (its tall face is +Z); the corner
  * wedge's peak is over its (+X, -Z) corner (not checked against Studio).
  *
@@ -281,6 +282,8 @@ export class MapRenderer {
 	private ownedGeometries: THREE.BufferGeometry[] = [];
 	/** Caller-owned objects (avatars, entity boxes): added and removed by the caller, never disposed here. */
 	readonly actors = new THREE.Group();
+	/** Callers waiting for an image as a texture (texture()): called once it loads. */
+	private readonly textureWaiters = new Map<string, Set<(texture: THREE.Texture) => void>>();
 	private readonly viewCamera = new THREE.PerspectiveCamera(70, 1, 0.1, 20_000);
 	private view: ViewCamera | null = null;
 	private readonly perspective = new THREE.PerspectiveCamera(50, 1, 0.5, 20_000);
@@ -353,6 +356,26 @@ export class MapRenderer {
 			}
 		}
 		this.render();
+	}
+
+	/**
+	 * A Roblox image as a texture, from the same cache and loader as the map's decals (PNG / JPEG files; the recordings'
+	 * avatar clothing): `onReady` at once when it is loaded, else when it arrives (never for a missing image). The texture
+	 * stays the renderer's (disposed with it). Returns a cancel.
+	 */
+	texture(id: string, onReady: (texture: THREE.Texture) => void): () => void {
+		const known = this.images.get(id);
+		if (known) {
+			onReady(known);
+			return () => undefined;
+		}
+		let waiting = this.textureWaiters.get(id);
+		if (!waiting) this.textureWaiters.set(id, (waiting = new Set()));
+		waiting.add(onReady);
+		this.loader.want([id]);
+		return () => {
+			waiting?.delete(onReady);
+		};
 	}
 
 	/** The actor under a point of the view (the object in `actors` whose subtree was hit), or null. */
@@ -549,6 +572,9 @@ export class MapRenderer {
 		texture.anisotropy = Math.min(4, this.renderer.capabilities.getMaxAnisotropy());
 		texture.needsUpdate = true;
 		this.images.set(id, texture);
+		const waiters = this.textureWaiters.get(id);
+		this.textureWaiters.delete(id);
+		for (const fn of waiters ?? []) fn(texture);
 		for (const v of this.variantMaterials.values()) {
 			if (v.image !== id) continue;
 			v.material.map = texture;
@@ -857,6 +883,7 @@ export class MapRenderer {
 		this.geometry = null;
 		this.layers = [];
 		this.loader.dispose();
+		this.textureWaiters.clear();
 		this.actors.clear();
 		this.buildParts();
 		this.buildSurfaces();

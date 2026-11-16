@@ -20,7 +20,7 @@
  */
 import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
 import { useIsFocused } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { PanResponder, Pressable, StyleSheet, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
 
 import { Txt } from "@/components/ui";
@@ -53,6 +53,19 @@ export interface MapSceneProps {
 	/** The view's name for screen readers. */
 	label?: string;
 	style?: StyleProp<ViewStyle>;
+	/**
+	 * The renderer, each time one is made (a new GL context), and null when it goes: a caller that draws its own objects
+	 * (the recordings' Player view: avatars in `actors`, a fixed camera through `setView`) keeps it.
+	 */
+	onRenderer?: (renderer: MapRenderer | null) => void;
+	/** Any tap (not a drag), at its point of the view (dp), before `onPick` (the Player view picks actors with it). */
+	onTap?: (at: TouchPoint) => void;
+	/** The hint in the corner (default: the gestures); null hides it. */
+	hint?: string | null;
+	/** The Fit button (default on). */
+	fitButton?: boolean;
+	/** Drawn over the map, under the hint and Fit (the Player view's recorded UI, taps, caption). */
+	children?: ReactNode;
 }
 
 const NO_OFFSET: Vec3 = [0, 0, 0];
@@ -90,6 +103,11 @@ export function MapScene({
 	focus = null,
 	label,
 	style,
+	onRenderer,
+	onTap,
+	hint: hintProp,
+	fitButton = true,
+	children,
 }: MapSceneProps) {
 	const p = useTheme();
 	const { api } = useBackend(backendId);
@@ -102,8 +120,8 @@ export function MapScene({
 	const [laid, setLaid] = useState<{ width: number; height: number } | null>(null);
 	const focused = useIsFocused();
 	const [cursor, setCursor] = useState<{ x: number; z: number } | null>(null);
-	const latest = useRef({ onPick, mode });
-	latest.current = { onPick, mode };
+	const latest = useRef({ onPick, mode, onRenderer, onTap });
+	latest.current = { onPick, mode, onRenderer, onTap };
 	const apiRef = useRef(api);
 	apiRef.current = api;
 
@@ -118,6 +136,7 @@ export function MapScene({
 			r.setViewSize(size.current.width, size.current.height);
 			renderer.current = r;
 			setReady((n) => n + 1);
+			latest.current.onRenderer?.(r);
 		} catch (error) {
 			setFailed(`The map needs OpenGL ES 3, which didn't start here (${(error as Error).message}).`);
 		}
@@ -125,6 +144,7 @@ export function MapScene({
 
 	useEffect(
 		() => () => {
+			latest.current.onRenderer?.(null);
 			renderer.current?.dispose();
 			renderer.current = null;
 		},
@@ -194,6 +214,7 @@ export function MapScene({
 				const r = renderer.current;
 				if (!r) return;
 				if (latest.current.mode === "2d") setCursor(r.worldAt(at.x, at.y));
+				latest.current.onTap?.(at);
 				const pick = latest.current.onPick;
 				if (!pick) return;
 				const point = r.pickAt(at.x, at.y);
@@ -206,7 +227,9 @@ export function MapScene({
 	}, []);
 
 	const hint =
-		mode === "2d"
+		hintProp !== undefined
+			? hintProp
+			: mode === "2d"
 			? cursor
 				? `x ${Math.round(cursor.x)}, z ${Math.round(cursor.z)} · drag to pan, pinch to zoom`
 				: "drag to pan, pinch to zoom · north up"
@@ -231,6 +254,7 @@ export function MapScene({
 						return;
 					}
 					// A new size: the drawing buffer can't follow (expo-gl), so the GLView below remounts with a new context.
+					if (renderer.current) latest.current.onRenderer?.(null);
 					renderer.current?.dispose();
 					renderer.current = null;
 					setLaid(next);
@@ -241,6 +265,7 @@ export function MapScene({
 					<GLView key={`${laid.width}x${laid.height}`} style={StyleSheet.absoluteFill} onContextCreate={onContextCreate} pointerEvents="none" />
 				)}
 			</View>
+			{children}
 			{failed ? (
 				<View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center", padding: 24 }]}>
 					<Txt variant="small" style={{ textAlign: "center" }}>
@@ -248,24 +273,28 @@ export function MapScene({
 					</Txt>
 				</View>
 			) : null}
-			<View pointerEvents="none" style={{ position: "absolute", left: 6, bottom: 6, right: 56, flexDirection: "row" }}>
-				<View style={{ backgroundColor: p.scheme === "dark" ? "rgba(10,10,10,0.75)" : "rgba(255,255,255,0.8)", borderRadius: radius.sm, paddingHorizontal: 6, paddingVertical: 3 }}>
-					<Txt variant="small" style={{ fontSize: 10 }}>
-						{hint}
-					</Txt>
+			{hint === null ? null : (
+				<View pointerEvents="none" style={{ position: "absolute", left: 6, bottom: 6, right: 56, flexDirection: "row" }}>
+					<View style={{ backgroundColor: p.scheme === "dark" ? "rgba(10,10,10,0.75)" : "rgba(255,255,255,0.8)", borderRadius: radius.sm, paddingHorizontal: 6, paddingVertical: 3 }}>
+						<Txt variant="small" style={{ fontSize: 10 }}>
+							{hint}
+						</Txt>
+					</View>
 				</View>
-			</View>
-			<Pressable
-				onPress={() => renderer.current?.fit()}
-				hitSlop={6}
-				style={{ position: "absolute", top: 6, right: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: p.border, backgroundColor: p.scheme === "dark" ? "rgba(10,10,10,0.8)" : "rgba(255,255,255,0.85)" }}
-				accessibilityRole="button"
-				accessibilityLabel="Fit the whole map"
-			>
-				<Txt variant="small" color={p.foreground}>
-					Fit
-				</Txt>
-			</Pressable>
+			)}
+			{fitButton ? (
+				<Pressable
+					onPress={() => renderer.current?.fit()}
+					hitSlop={6}
+					style={{ position: "absolute", top: 6, right: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.sm, borderWidth: StyleSheet.hairlineWidth, borderColor: p.border, backgroundColor: p.scheme === "dark" ? "rgba(10,10,10,0.8)" : "rgba(255,255,255,0.85)" }}
+					accessibilityRole="button"
+					accessibilityLabel="Fit the whole map"
+				>
+					<Txt variant="small" color={p.foreground}>
+						Fit
+					</Txt>
+				</Pressable>
+			) : null}
 		</View>
 	);
 }

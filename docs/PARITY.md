@@ -21,7 +21,7 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 
 | Item | Web file | Route(s) | Role | App |
 | --- | --- | --- | --- | --- |
-| Sidebar from one config, 5 groups (Overview; Players & gameplay; Observe & troubleshoot; Data; Admin), collapsible, phone drawer | `lib/nav.ts`, `components/SidebarNav.tsx`, `lib/nav-state.ts` | – | owner items hidden for `web` role | partial: `features/typetorch/pages.ts` is a flat list of 20 pages; missing Demographics, Notifications, Feedback, Recordings, Live events, Session time (Maps and Live map added by maps-live); no groups |
+| Sidebar from one config, 5 groups (Overview; Players & gameplay; Observe & troubleshoot; Data; Admin), collapsible, phone drawer | `lib/nav.ts`, `components/SidebarNav.tsx`, `lib/nav-state.ts` | – | owner items hidden for `web` role | partial: `features/typetorch/pages.ts` is a flat list of 20 pages; missing Demographics, Notifications, Feedback, Live events, Session time (Maps and Live map added by maps-live, Recordings by recordings); no groups |
 | Header: page title, server status dot (GET `/healthz` every 30 s, 502/503/504 wording), theme menu, user menu / sign out | `components/AppShell.tsx` (`ServerStatus`, `ThemeToggle`, `UserMenu`) | `/healthz`, POST `/v1/auth/logout` | all | partial: health only on `tt/settings.tsx`; theme is app-wide (`(tabs)/settings.tsx`); no status dot in the TT header |
 | Place card (icon, name, live players, link to roblox.com) and tab title "<page> \| <place>" | `components/PlaceCard.tsx` | GET `/v1/place` | all | partial: name used in `app/backend/connect.tsx`; no card / live count in `features/typetorch/components.tsx` `BackendHeader` |
 | Top-bar "Find player" (pid, part of pid or UserId → Players) | `components/Identity.tsx` `FindPlayer` | GET `/v1/identity?uid=` | all | partial: only the Players page search (`tt/players.tsx`) |
@@ -114,7 +114,7 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 
 | Item | Route(s) | Role | App |
 | --- | --- | --- | --- |
-| Confusion signals: early leaves by zone, back and forth, screen loops, repeated clicks, idle spots, camera spin from recordings; each signal links to Recordings (replay list filtered) | `/v1/query/confusion` | all | partial (`tt/first-session.tsx`): no links into Recordings (page missing) |
+| Confusion signals: early leaves by zone, back and forth, screen loops, repeated clicks, idle spots, camera spin from recordings; each signal links to Recordings (replay list filtered) | `/v1/query/confusion` | all | present (`tt/first-session.tsx`): idle / camera spin / repeated clicks rows have "Replays" (Recordings, `tab=replay&signal=…&zone=…` / `target=…`; the filter bar is per backend, so kept); header link "Maps, replays and quit autopsy". Signals are lists, not DataTables |
 
 ### Recordings (`/recordings`), Maps (`/maps`) — see §5 maps-live / recordings.
 
@@ -302,15 +302,15 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 
 | Item | Route(s) | Role | App |
 | --- | --- | --- | --- |
-| Map layers tab: map pick, layers (path density, idle spots, deaths, screens, buttons, quits, positioned events), filter by values / zone / screen, cell click → sessions there | `/v1/query/recording-layers` | all | missing |
-| Real map (exported geometry, 2D / 3D, points / heatmap, cell size, band, follow player) or SVG silhouette fallback | GET `/v1/maps`, `/v1/maps/<name>/geometry` | all | missing |
-| Replay tab: session list (from a cell, a quit, First session signals; `Session or player id` search) | `/v1/query/recording-sessions` | all | missing |
-| Replay player: path, moving dot, camera cone, timeline of inputs / events / confusion signals, scrubber, play / pause, speed, back to start, AFK spans, captions strip, FPS strip | `/v1/query/recording-replay` | all | missing |
-| Player view (plans/36): 3D from the recorded camera (FOV), R6 / R15 avatars with body colours + clothing, entities, poses from clips blended with recorded joints, free camera, tap rings, caption, AFK, legend, entity / UI properties | `recording-replay` (tt-ext-1), GET `/v1/anims/<id>`, GET `/v1/images/<id>` | all | missing |
-| UI overlay: recorded GuiObjects at their absolute rects, clipping, gradients, image tint, fonts, rich text, select a node | `recording-replay` (tt-ext-1 `ui`) | all | missing |
-| Quit autopsy tab: last seconds before quitting classified vs stayers; tutorial step, screen open, where they stood, how it ended | `/v1/query/quit-autopsy` | all | missing |
-| First actions tab: seconds from spawn to first move / screen / button / prompt / round, by device and build | `/v1/query/first-action` | all | missing |
-| Sampling note; tab / map / layers / view / session in the URL | – | all | missing |
+| Map layers tab: map pick, layers (path density, idle spots, deaths, screens, buttons, quits, positioned events), filter by values / zone / screen, cell click → sessions there | `/v1/query/recording-layers` | all | present (`tt/recordings.tsx` LayersTab): layer chips with colour dots and counts, value chips (16) + show all, split-by-prop input for event layers, zone / screen inputs, map chips, legend, "Sessions in this cell" (compact list, `recording-sessions` with `box` / `layer`); a tap is the click. Map fixed on top, controls scroll under it |
+| Real map (exported geometry, 2D / 3D, points / heatmap, cell size, band, follow player) or SVG silhouette fallback | GET `/v1/maps`, `/v1/maps/<name>/geometry` | all | present (`features/recordings/RealMap.tsx` on the maps' MapScene / renderer; `MapView.tsx` react-native-svg, cells of one shade batched into one path): 2D / 3D, Points / Heatmap, 0.5 / 1 / 2 stud cells (default 2), band (All / floors / range; Follow player, the replay default), picked cell outlined, 3D tap = nearest dot or heat cell; geometry error falls back to the SVG. Per-cell hover titles have no phone twin (legend + tap) |
+| Replay tab: session list (from a cell, a quit, First session signals; `Session or player id` search) | `/v1/query/recording-sessions` | all | present: How it ended (All / Quit / Played on), id search, signal badge with clear, rows (id, Extended, ended, length, started, device, maps, signals, Replay) |
+| Replay player: path, moving dot, camera cone, timeline of inputs / events / confusion signals, scrubber, play / pause, speed, back to start, AFK spans, captions strip, FPS strip | `/v1/query/recording-replay` | all | present (`features/recordings/ReplayPlayer.tsx`): view + transport fixed on top (play / pause, back to start, previous / next mark, clock, drag scrubber, timeline with hatched AFK spans and marks, a tap jumps to the nearest mark within 14 dp), speed 0.5–8x, badges, map / zone / screen, captions strip and FPS strip (tap to jump), Just happened (tap to jump), key presses. Marks are 3 dp lines (the web's 4 px buttons are too small for a finger) |
+| Player view (plans/36): 3D from the recorded camera (FOV), R6 / R15 avatars with body colours + clothing, entities, poses from clips blended with recorded joints, free camera, tap rings, caption, AFK, legend, entity / UI properties | `recording-replay` (tt-ext-1), GET `/v1/anims/<id>`, GET `/v1/images/<id>` | all | present (`PlayerView.tsx`, `PlayerScene.tsx` on MapScene + `MapRenderer` actors / `setView` / `pickActor` / new `texture`, `avatar.ts` ported 1:1, `ext-replay.ts` ported 1:1, `assets.ts` = anim-clips + asset-images): viewport at the recorded aspect (≤ 50% of the screen height), Recorded / Free camera, UI toggle, tap rings, caption, AFK, legend, on-screen list with tracks, entity / UI properties. Hover name = shown where a person was tapped. Clothing goes through the map image cache (PNG / JPEG only: expo-gl's stb_image has no WebP, so a WebP-only clothing image stays body colours); the default face is a drawn DataTexture (no canvas). tt-ext-1 is decoded by the backend (JSON), so no binary decoding on the phone. Not yet run on a device (typechecked; avatar / ui-state / ext-replay smoke-run in Node) |
+| UI overlay: recorded GuiObjects at their absolute rects, clipping, gradients, image tint, fonts, rich text, select a node | `recording-replay` (tt-ext-1 `ui`) | all | present (`UiOverlay.tsx`, `ui-state.ts` ported 1:1): rects scaled to the viewport, inset, rotation, clipping (a holder view at the ancestors' clip rect, overflow hidden), UIGradient (RN `experimental_backgroundImage` linear-gradient), corner, UIStroke (boxShadow spread), image tint (tintColor copy with `mixBlendMode: multiply`), ImageRect, 9-slice / Tile / Fit / Crop from cut-out pieces, rich text as nested Text, tap a node to select (tap again clears: no Escape). Images via RN Image from cached files (PNG / JPEG / WebP / GIF). Fonts: phone fonts only (monospace / serif / system), not the web's font stacks |
+| Quit autopsy tab: last seconds before quitting classified vs stayers; tutorial step, screen open, where they stood, how it ended | `/v1/query/quit-autopsy` | all | present: 5 / 10 / 20 / 30 s (`win`), stats, reasons with share bar (red at lift ≥ 1.5), of the others, lift / only quitters, example replays; screen / tutorial / map-part sections. Rows are two-line list rows, not a table |
+| First actions tab: seconds from spawn to first move / screen / button / prompt / round, by device and build | `/v1/query/first-action` | all | present: per action median, reached, middle half, histogram bars, slowest / never replays; by build / by device as sideways-scrolling tables |
+| Sampling note; tab / map / layers / view / session in the URL | – | all | present: sampling / notes lines; `tab`, `map`, `layers`, `mode`, `draw`, `cell`, `band`, `sid`, `cam`, `why`, `q`, `signal`, `zone`, `target`, `win` in the route params (2D / 3D and Points / Heatmap fall back to the backend's shared map view when absent); value / split / zone / screen filters are screen state, as on the web |
 
 ## 6. Shared interaction pieces
 
@@ -324,7 +324,7 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 | Explain panel (`explain=<metric>`, headline, per dimension rate / mix diverging chart, tables, one-level drill) | `components/ExplainPanel.tsx`, `lib/explain.ts` | missing |
 | Drawn node graph (React Flow + dagre, pan / zoom, facet, moments) + Copy Mermaid | `components/GraphView.tsx`, `components/LazyGraph.tsx`, `lib/graph.ts` | present: dagre + react-native-svg, gesture-handler pan / pinch + reanimated, zoom / fit / direction / full screen buttons, tap a state for its details and moves; list view as a toggle; Copy Mermaid |
 | Charts: DayBars (per day / step, previous dashed, bar click), PerfChart, Sparkline, recharts | `components/DayBars.tsx`, `PerfChart.tsx`, `Sparkline.tsx` | present: LineChart (scrub, tappable marks), BarChart (tap a bar, previous period dashed with `previous`, tappable marks), Sparkline, ShareBars |
-| 3D / 2D map renderer (three.js instanced meshes, orbit + fly keys, ortho 2D, clipping band, see-through looks, textures) | `components/maps/{map-renderer.ts,MapScene.tsx,BandControls.tsx}` | present: `features/maps/{renderer.ts,MapScene.tsx,BandControls.tsx}` on expo-gl + three (one finger turns / pans, two fingers pan, pinch zooms toward the fingers, tap picks, Fit, `focus`; actors / `setView` / `pickActor` kept for the recordings' Player view); WASD fly keys have no phone twin. Types for three in `src/types/three.d.ts`. A new view size remounts the GLView (expo-gl never resizes the drawing buffer); no updates while the screen is not focused. Not yet run on a device (typechecked only) |
+| 3D / 2D map renderer (three.js instanced meshes, orbit + fly keys, ortho 2D, clipping band, see-through looks, textures) | `components/maps/{map-renderer.ts,MapScene.tsx,BandControls.tsx}` | present: `features/maps/{renderer.ts,MapScene.tsx,BandControls.tsx}` on expo-gl + three (one finger turns / pans, two fingers pan, pinch zooms toward the fingers, tap picks, Fit, `focus`; actors / `setView` / `pickActor` / `texture` used by the recordings' Player view through MapScene's `onRenderer` / `onTap`); WASD fly keys have no phone twin. Types for three in `src/types/three.d.ts`. A new view size remounts the GLView (expo-gl never resizes the drawing buffer); no updates while the screen is not focused. Not yet run on a device (typechecked only) |
 | Shareable / persisted state (every `useParam`) | `lib/hooks.ts` | present: page params in the route (`usePageParam` / `usePageParams`), filters + table views on the phone, "Copy link to this view" / Share (typetorch:// via Linking.createURL, `backend=<url>` so another phone with the backend opens it) |
 | Benchmarks (50th / 90th) kept per browser | `lib/benchmarks.ts` | present per backend on the phone (secure store) + export / import (copy JSON, save a file, paste JSON; the web's `tt-explorer-benchmarks` format) |
 
@@ -344,13 +344,12 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 Missing methods: `cancelLiveEvent`, `createLiveEvent`, `liveEvents`, `liveEventLift`, `errorDropRules`, `previewDropRule`,
 `experimentChange`, `fleetColumns`, `migrateStatus`, `migrateAction`,
 `migrateResolve`, `migrateStart`, `notifyConfig`, `notifyRecent`, `notifyStatus`, `notifyTest`, `notifyUser`,
-`notifyUsers` (+ CSV), `robloxDemographics`, `downloadBackup`; plus `/v1/anims/<id>`. (Added by maps-live: `liveMap`,
+`notifyUsers` (+ CSV), `robloxDemographics`, `downloadBackup`. (Added by recordings: `anim` = GET `/v1/anims/<id>`. Added by maps-live: `liveMap`,
 `watchLiveMap`, `serverStreams`, `eventStream` (SSE), `maps`, `exportMaps`, `setMapOverride`, `removeMapOverride`,
 `mapGeometry`, `image`.) Defined but unused: `remoteCommand`, `remoteResult`, `watchServer`, `debugAudit`, `saveSettings`,
 `testAlert`, `alertRules`, `backups`, `backupNow`, `devices`, `revokeDevice`, `storage`, `fleetReport`,
 `robloxServerLogs`, `errorPlayers`, `liveUrl`, `streamUrl`. Missing types (`api/tt/types.ts`): Churn*, Ltv*, Explain*,
-Demographic*/RobloxDemographic*, SessionTime*, Feedback*, Notify*, Migrate*, Rec*/Recording*/QuitAutopsy*/FirstAction*,
-Ext* (tt-ext-1), GameColumn* (GameCommand / GameStream / StreamFrame / StreamPoint / ServerStreams / LiveMapServer /
+Demographic*/RobloxDemographic*, SessionTime*, Feedback*, Notify*, Migrate*, GameColumn* (GameCommand / GameStream / StreamFrame / StreamPoint / ServerStreams / LiveMapServer /
 LivePlayer / MapPositionsResult added by maps-live),
 ErrorDropRule*/DropPreview, ExperimentChangeRequest/PreparedExperimentChange/AssignmentCheck, IngestPressure,
 QueueStats, `AccountAge` and the audience `Filters` keys.
@@ -386,19 +385,22 @@ Done on `feat/phone-parity` (typechecked; not yet run on a device: expo-gl textu
 - [x] Types: LiveMapServer, LivePlayer, ServerStreams, StreamFrame, StreamPoint, GameStream; API: `liveMap`, `watchLiveMap`, `serverStreams`, maps client
 
 ### recordings
-- Recordings page `tt/recordings.tsx` (web `pages/Recordings.tsx`), 4 tabs, state in params
-- Map layers tab: layers, value / zone / screen filters, cell → sessions — `/v1/query/recording-layers`
-- SVG silhouette fallback map (web `pages/recordings/MapView.tsx`, `map.ts`)
-- Real map on exported geometry 2D / 3D (web `pages/recordings/RealMap.tsx`) — GET `/v1/maps`, `/v1/maps/<name>/geometry`
-- Replay session list + search — `/v1/query/recording-sessions`
-- Replay player (web `pages/recordings/ReplayPlayer.tsx`): path, dot, camera cone, timeline, scrubber, play / pause, speed, AFK, captions, FPS strip — `/v1/query/recording-replay`
-- ext-replay decoder (port `pages/recordings/ext-replay.ts`: camera, entities, poses slerp, anim clip sampling / blend)
-- Player view (web `pages/recordings/PlayerView.tsx`, `components/maps/PlayerScene.tsx`, `components/maps/avatar.ts`): 3D from recorded camera, R6 / R15 avatars, clothing, free camera, tap rings, legend, properties — GET `/v1/anims/<id>`, GET `/v1/images/<id>` (`lib/anim-clips.ts`, `lib/asset-images.ts`)
-- UI overlay (web `pages/recordings/UiOverlay.tsx`, `ui-state.ts`): GuiObject rects, clipping, gradient, tint, fonts, rich text, node select
-- Quit autopsy tab — `/v1/query/quit-autopsy`
-- First actions tab — `/v1/query/first-action`
-- First session signals → Recordings links (web `pages/FirstSession.tsx`; app `tt/first-session.tsx`)
-- Types: Rec*, RecordingLayersResult, RecordingSessionsResult, RecordingReplayResult, ExtendedReplay, Ext*, QuitAutopsy*, FirstAction*
+
+Done on `feat/phone-parity` (typechecked; the pure ports (`ext-replay.ts`, `ui-state.ts`, `avatar.ts`) smoke-run in Node; not yet run on a device: the Player view's GL scene with avatars, clothing textures through `MapRenderer.texture`, and the UI overlay's `experimental_backgroundImage` / `mixBlendMode` / `boxShadow` are the parts to check first).
+
+- [x] Recordings page `tt/recordings.tsx` (web `pages/Recordings.tsx`), 4 tabs, state in params (menu entry in `features/typetorch/pages.ts`)
+- [x] Map layers tab: layers, value / zone / screen filters, cell → sessions — `/v1/query/recording-layers`
+- [x] SVG silhouette fallback map (`features/recordings/MapView.tsx`, `map.ts`)
+- [x] Real map on exported geometry 2D / 3D (`features/recordings/RealMap.tsx`, reusing `features/maps` MapScene / renderer / BandControls) — GET `/v1/maps`, `/v1/maps/<name>/geometry`
+- [x] Replay session list + search — `/v1/query/recording-sessions`
+- [x] Replay player (`features/recordings/ReplayPlayer.tsx`): path, dot, camera cone, timeline, scrubber, play / pause, speed, previous / next mark, AFK, captions, FPS strip — `/v1/query/recording-replay`
+- [x] ext-replay port (`features/recordings/ext-replay.ts`: camera, entities, poses slerp, anim clip sampling / blend); tt-ext-1 bytes are decoded by the backend, the phone reads JSON
+- [x] Player view (`PlayerView.tsx`, `PlayerScene.tsx`, `avatar.ts`): 3D from recorded camera, R6 / R15 avatars, clothing, free camera, tap rings, legend, properties — GET `/v1/anims/<id>`, GET `/v1/images/<id>` (`features/recordings/assets.ts`); MapScene got `onRenderer` / `onTap` / `hint` / `fitButton` / children, MapRenderer got `texture`
+- [x] UI overlay (`UiOverlay.tsx`, `ui-state.ts`): GuiObject rects, clipping, gradient, tint, fonts (phone fonts), rich text, node select
+- [x] Quit autopsy tab — `/v1/query/quit-autopsy`
+- [x] First actions tab — `/v1/query/first-action`
+- [x] First session signals → Recordings links (`tt/first-session.tsx`)
+- [x] Types: Rec*, RecordingLayersResult, RecordingSessionsResult, RecordingReplayResult, ExtendedReplay, Ext*, QuitAutopsy*, FirstAction*; API `anim`
 
 ### analytics
 - Demographics page `tt/demographics.tsx` (web `pages/Demographics.tsx`) — GET `/v1/roblox/demographics`, `/v1/query/demographics`

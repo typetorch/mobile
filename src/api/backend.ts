@@ -383,6 +383,18 @@ export function createApi(options: ApiOptions) {
 		},
 		/** A Roblox image from the backend's store: 200 the bytes, 202 still resolving, else none (never throws on a status). */
 		image: (id: string, signal?: AbortSignal) => binary(`/v1/images/${encodeURIComponent(id)}`, signal),
+		/**
+		 * Plans/36: an animation clip read by the export task (`{ id, length, looped, keyframes, priority? }`), null on a 404
+		 * (not exported yet, or no such endpoint); other errors throw.
+		 */
+		async anim(id: string, signal?: AbortSignal): Promise<unknown | null> {
+			try {
+				return await get<unknown>(`/v1/anims/${encodeURIComponent(id)}`, signal);
+			} catch (error) {
+				if (error instanceof ApiError && error.status === 404) return null;
+				throw error;
+			}
+		},
 	};
 }
 
