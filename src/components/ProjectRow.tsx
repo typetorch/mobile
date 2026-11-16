@@ -1,4 +1,5 @@
 import { Image } from "expo-image";
+import type { ReactNode } from "react";
 import { Pressable, View } from "react-native";
 
 import type { Project } from "@/features/project/projects";
@@ -22,29 +23,23 @@ export function ProjectRow({
 	project,
 	hasBackend,
 	onPress,
-	pinned,
-	onTogglePin,
+	onLongPress,
+	right,
 }: {
 	project: Project;
 	hasBackend: boolean;
 	onPress: () => void;
-	pinned?: boolean;
-	onTogglePin?: () => void;
+	onLongPress?: () => void;
+	/** An action at the end of the row (a pin star, an add button); without one the row shows a chevron. */
+	right?: ReactNode;
 }) {
-	const p = useTheme();
 	const rating = project.upVotes !== null && project.downVotes !== null && project.upVotes + project.downVotes > 0 ? Math.round((project.upVotes / (project.upVotes + project.downVotes)) * 100) : null;
 	return (
 		<Row
 			onPress={onPress}
-			onLongPress={onTogglePin}
-			chevron={!onTogglePin}
-			right={
-				onTogglePin ? (
-					<Pressable onPress={onTogglePin} hitSlop={10} accessibilityRole="button" accessibilityLabel={pinned ? `Unpin ${project.name}` : `Pin ${project.name}`}>
-						<Icon name={pinned ? "star" : "star-outline"} size={20} color={pinned ? p.warning : p.mutedForeground} />
-					</Pressable>
-				) : undefined
-			}
+			onLongPress={onLongPress}
+			chevron={!right}
+			right={right}
 			left={<GameIcon uri={project.icon} />}
 			title={
 				<View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -89,5 +84,15 @@ function ProjectStats({ project, rating }: { project: Project; rating: number | 
 			{rating !== null ? <Txt variant="small">{rating}% likes</Txt> : null}
 			{project.viaKey ? <Icon name="key-outline" size={12} color={p.mutedForeground} /> : null}
 		</View>
+	);
+}
+
+/** The pin star for a row's `right`. */
+export function PinStar({ pinned, name, onPress }: { pinned: boolean; name: string; onPress: () => void }) {
+	const p = useTheme();
+	return (
+		<Pressable onPress={onPress} hitSlop={10} accessibilityRole="button" accessibilityLabel={pinned ? `Unpin ${name}` : `Pin ${name}`}>
+			<Icon name={pinned ? "star" : "star-outline"} size={20} color={pinned ? p.warning : p.mutedForeground} />
+		</Pressable>
 	);
 }

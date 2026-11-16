@@ -11,6 +11,7 @@ import { createApi } from "@/api/backend";
 import { deviceLabel, isDevRedirect, isUnencrypted, loginOptions, normalizeBackendUrl, signInWithAdminToken, signInWithBrowser, UNENCRYPTED_HINT, type MobileToken } from "@/api/backend-auth";
 import { ProjectRow } from "@/components/ProjectRow";
 import { Button, Card, confirm, Field, Icon, List, Screen, Section, Txt } from "@/components/ui";
+import { addProject } from "@/features/project/pins";
 import { useProjects } from "@/features/project/projects";
 import { useAccounts } from "@/store/accounts";
 import { useTheme } from "@/theme";
@@ -88,6 +89,8 @@ export default function ConnectBackend() {
 	}, [url]);
 
 	async function finish(next: Pending) {
+		// A connected backend's game goes on the Projects list.
+		if (next.universeId) addProject(next.universeId);
 		if (existing) {
 			// One write: a separate updateBackend after this would build on the list from before the token changed.
 			await replaceToken(existing.id, next.token, !existing.universeId && next.universeId ? { universeId: next.universeId } : {});

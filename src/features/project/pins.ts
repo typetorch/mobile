@@ -1,6 +1,7 @@
 /**
- * Projects list preferences kept on the phone (AsyncStorage): pinned experiences (shown first, in their own section)
- * and the list order (latest updated by default).
+ * Projects list kept on the phone (AsyncStorage): the experiences the person added (the home list shows only these,
+ * so it loads only their details), the pinned ones among them (shown first) and the list order (latest updated by
+ * default).
  */
 import { useSyncExternalStore } from "react";
 
@@ -38,6 +39,46 @@ const sort = storedValue<ProjectSort>(
 	(v) => (v === "updated" ? null : v),
 );
 
+const parseIds = (text: string): number[] | undefined => {
+	try {
+		const v = JSON.parse(text) as unknown;
+		return Array.isArray(v) ? v.filter((x): x is number => typeof x === "number" && Number.isSafeInteger(x) && x > 0) : undefined;
+	} catch {
+		return undefined;
+	}
+};
+
+/** null until the first save (then seeded once from older pins and hand-added ids). */
+const added = storedValue<number[] | null>("projects.added.v1", null, parseIds, (v) => (v === null ? null : JSON.stringify(v)));
+
+/** The added universe ids (newest first); null while not loaded or never saved. */
+export function useAddedIds(): { ids: number[]; loaded: boolean; unset: boolean } {
+	const value = useSyncExternalStore(added.subscribe, added.get, added.get);
+	const loaded = useSyncExternalStore(added.subscribe, added.loaded, added.loaded);
+	return { ids: value ?? [], loaded, unset: value === null };
+}
+
+/** First run of this version: older pins and hand-added ids become the list. */
+export function seedAdded(ids: number[]): void {
+	if (added.get() !== null) return;
+	added.set([...new Set(ids.filter((n) => Number.isSafeInteger(n) && n > 0))]);
+}
+
+export function isAdded(universeId: number): boolean {
+	return (added.get() ?? []).includes(universeId);
+}
+
+export function addProject(universeId: number): void {
+	const now = added.get() ?? [];
+	if (!now.includes(universeId)) added.set([universeId, ...now]);
+}
+
+/** Takes it off the list (and unpins it). */
+export function removeProject(universeId: number): void {
+	added.set((added.get() ?? []).filter((id) => id !== universeId));
+	if (pins.get().includes(universeId)) pins.set(pins.get().filter((id) => id !== universeId));
+}
+
 /** Pinned universe ids, most recently pinned first. */
 export function usePins(): number[] {
 	return useSyncExternalStore(pins.subscribe, pins.get, pins.get);
@@ -47,8 +88,10 @@ export function isPinned(list: readonly number[], universeId: number): boolean {
 	return list.includes(universeId);
 }
 
+/** Pins (pinning an experience also adds it to the list) or unpins. */
 export function togglePin(universeId: number): boolean {
 	const now = pins.get();
+	if (!now.includes(universeId)) addProject(universeId);
 	const pinned = now.includes(universeId);
 	pins.set(pinned ? now.filter((id) => id !== universeId) : [universeId, ...now]);
 	return !pinned;

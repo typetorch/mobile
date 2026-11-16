@@ -15,7 +15,7 @@
  * the key owner can manage, or whose role can manage group universes, are listed whatever the rank. The other groups
  * appear in `otherGroups` and load their experiences on demand (useGroupProjects).
  */
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
 
 import { mapLimit } from "@/api/http";
 import { hasScope, keyGroupIds, keyUniverseIds, type CloudUniverse, type KeyInfo, type OpenCloud } from "@/api/opencloud";
@@ -45,7 +45,7 @@ import {
 } from "@/api/roblox-public";
 import { useAccounts } from "@/store/accounts";
 
-import { compareProjects, usePins } from "./pins";
+import { compareProjects, useAddedIds } from "./pins";
 
 export interface Project {
 	universeId: number;
@@ -392,8 +392,8 @@ export function useProjects() {
 	const { ready, keyInfo, hasKey, keyLoading, prefs, cloud, backends } = useAccounts();
 	const userId = prefs.userId ?? keyInfo?.authorizedUserId ?? null;
 	const keyIds = keyUniverseIds(keyInfo);
-	// Pinned experiences are always listed, also ones no other source names (a group under the rank filter).
-	const pinIds = [...usePins()].sort((a, b) => a - b);
+	// The person's own list is always in the discovery list too (shown as added).
+	const pinIds = [...useAddedIds().ids].sort((a, b) => a - b);
 	const keyGroups = keyGroupIds(keyInfo);
 	// Universes of connected TypeTorch backends: listed even when private, unlisted or in a group under the rank filter.
 	const backendIds = [...new Set(backends.map((b) => b.universeId).filter((id): id is number => typeof id === "number" && id > 0))].sort((a, b) => a - b);
@@ -414,7 +414,7 @@ export function useProjects() {
 			addSource("API key", keyIds);
 			addSource("Added by hand", prefs.extraUniverseIds);
 			addSource("TypeTorch backends", backendIds);
-			addSource("Pinned", pinIds);
+			addSource("Your projects", pinIds);
 
 			let groups = new Map<number, GroupInfo>();
 			if (userId) {
@@ -550,6 +550,28 @@ export function useProject(universeId: number) {
 			const [p] = await resolveProjects([universeId], { cloud: hasKey ? cloud : null, keyInfo, keyIds, userId, known: new Map(), groupNames: new Map(), warnings });
 			if (!p) throw new Error(warnings.done()[0] ?? `Roblox doesn't know universe ${universeId}`);
 			return p;
+		},
+	});
+}
+
+/**
+ * Only the experiences on the person's list (the home screen): one resolve of those ids, nothing else fetched. The
+ * previous answer stays on screen while an added or removed id refetches.
+ */
+export function useAddedProjects(ids: readonly number[]) {
+	const { ready, keyInfo, hasKey, keyLoading, cloud, prefs } = useAccounts();
+	const userId = prefs.userId ?? keyInfo?.authorizedUserId ?? null;
+	const sorted = [...new Set(ids)].sort((a, b) => a - b);
+	return useQuery({
+		queryKey: ["added-projects", sorted.join(","), hasKey, keyInfo?.authorizedUserId ?? null],
+		enabled: ready && !(hasKey && keyLoading),
+		staleTime: 60_000,
+		placeholderData: keepPreviousData,
+		queryFn: async () => {
+			if (!sorted.length) return { projects: [] as Project[], warnings: [] as string[] };
+			const warnings = new Warnings();
+			const projects = await resolveProjects(sorted, { cloud: hasKey ? cloud : null, keyInfo, keyIds: new Set(keyUniverseIds(keyInfo)), userId, known: new Map(), groupNames: new Map(), warnings });
+			return { projects, warnings: warnings.done() };
 		},
 	});
 }

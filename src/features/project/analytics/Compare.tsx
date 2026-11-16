@@ -10,7 +10,8 @@ import { Alert, Pressable, View } from "react-native";
 import { ANALYTICS_READ_SCOPE, hasScope, missingScopesOf } from "@/api/opencloud";
 import { Badge, Button, Card, Skeleton, Txt } from "@/components/ui";
 import { cloudErrorText } from "@/features/project/CloudError";
-import { useProjects } from "@/features/project/projects";
+import { useAddedIds } from "@/features/project/pins";
+import { useAddedProjects } from "@/features/project/projects";
 import { useAccounts } from "@/store/accounts";
 import { useTheme } from "@/theme";
 
@@ -50,11 +51,12 @@ function Cell({ universeId, metric, format, startTime, endTime, label }: { unive
 export function Compare({ universeId, range }: { universeId: number; range: RangeSpec }) {
 	const p = useTheme();
 	const { keyInfo } = useAccounts();
-	const projects = useProjects();
+	// The person's own list (fast), not the whole discovery list.
+	const projects = useAddedProjects(useAddedIds().ids);
 	const [picked, setPicked] = useState<number[]>([universeId]);
 	const [shown, setShown] = useState<number[] | null>(null);
 	const tr = timeRange(range, {}, "None");
-	const all = projects.data?.all ?? [];
+	const all = projects.data?.projects ?? [];
 	const names = new Map(all.map((x) => [x.universeId, x.name]));
 	const allowed = (id: number) => hasScope(keyInfo, ANALYTICS_READ_SCOPE, id);
 	const toggle = (id: number) => setPicked((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : cur.length >= MAX ? cur : [...cur, id]));
