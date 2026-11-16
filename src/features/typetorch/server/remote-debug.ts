@@ -1,0 +1,255 @@
+/**
+ * Remote debug from the phone (port of the web explorer's lib/remote-debug.ts, plans/25). A Roblox server can't be
+ * called into, so it pulls: the server screen tells the backend it watches the job (every 20 s while the screen is in
+ * front and the app active; the watch lapses 60 s after the last one), the server's next heartbeat reply says so, and
+ * the server long-polls the backend for commands.
+ *
+ * A fetch = queue one read-only command, then read its state until the answer is in (at most 15 s). Answers live in
+ * the screen's memory only (component state, never the query cache, storage or a link): they can hold player names,
+ * logs and state. The backend keeps them 3 minutes, also in memory only.
+ */
+import { useIsFocused } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
+
+import { ApiError, type Api } from "@/api/backend";
+import type { RemoteCommand, RemoteOp, WatchReply } from "@/api/tt/types";
+
+/** How long a tap waits for the server's answer. */
+export const COMMAND_TIMEOUT_MS = 15_000;
+/** How often the screen repeats "I'm watching" (the backend keeps a watch 60 s). */
+export const WATCH_EVERY_MS = 20_000;
+/** How often a waiting command's state is read. */
+export const RESULT_POLL_MS = 600;
+/** The buttons stay on this long after the server was last seen polling (a slow op or a held poll is not a disconnect). */
+export const CONNECTED_GRACE_MS = 30_000;
+
+export type RemoteErrorCode = "timeout" | "failed" | "expired" | "dropped" | "request";
+
+export class RemoteError extends Error {
+	override name = "RemoteError";
+	constructor(
+		message: string,
+		readonly code: RemoteErrorCode,
+	) {
+		super(message);
+	}
+}
+
+/** The kernel's and the backend's short reasons, as sentences. Unknown reasons are shown as they came. */
+export function explainRemoteError(raw: string | undefined): string {
+	const text = (raw ?? "").trim();
+	if (!text) return "The server could not answer.";
+	const [code] = text.split(":", 1);
+	switch (code) {
+		case "owners_only":
+			return "Only the game's owners may read this server (your Roblox account is not an owner by the kernel's rule).";
+		case "rate_limited":
+			return "The server is answering too many commands this minute: wait a few seconds and try again.";
+		case "op_not_allowed":
+			return "This server's kernel doesn't allow that read (an older kernel?).";
+		case "not_supported":
+			return text.includes("hook")
+				? "This build can't answer that: it needs framework 0.5.0+ with devtools on (the kernel's own reads still work)."
+				: `Not supported here: ${text.slice((code ?? "").length + 1).trim()}`;
+		case "not_in_server":
+			return "That player isn't in this server any more.";
+		case "no_reply":
+			return "The player's client didn't answer in time (it may be loading or leaving).";
+		case "expired":
+			return "The command expired before the server ran it.";
+		default:
+			return text;
+	}
+}
+
+export interface RemoteAnswer<T> {
+	result: T;
+	/** How long the op took on the server. */
+	ms?: number;
+	/** Secrets the kernel replaced with <redacted>. */
+	redacted?: number;
+	/** When the answer arrived (backend clock, unix ms). */
+	at: number;
+}
+
+export const isAbort = (error: unknown) => error instanceof Error && (error.name === "AbortError" || (error instanceof ApiError && error.status === 0 && /aborted/i.test(error.message)));
+
+function sleepFor(ms: number, signal?: AbortSignal): Promise<void> {
+	return new Promise((resolve, reject) => {
+		const abortError = () => Object.assign(new Error("aborted"), { name: "AbortError" });
+		if (signal?.aborted) return reject(abortError());
+		const timer = setTimeout(() => {
+			signal?.removeEventListener("abort", stop);
+			resolve();
+		}, ms);
+		const stop = () => {
+			clearTimeout(timer);
+			reject(abortError());
+		};
+		signal?.addEventListener("abort", stop, { once: true });
+	});
+}
+
+function asRemote(error: unknown): unknown {
+	if (isAbort(error)) return error;
+	if (error instanceof ApiError) {
+		if (error.status === 409) return new RemoteError("This server isn't watched: it closed, or the screen lost its watch. Pull to refresh.", "request");
+		return new RemoteError(error.message, "request");
+	}
+	return error;
+}
+
+type RemoteApi = Pick<Api, "remoteCommand" | "remoteResult" | "watchServer">;
+
+/**
+ * Queues one command and waits for its answer. A 409 (the watch lapsed, e.g. after the app was in the background)
+ * re-watches the job and queues once more. Throws RemoteError with a sentence for the screen, or the abort.
+ */
+export async function runRemote<T = unknown>(client: RemoteApi, job: string, op: RemoteOp, args?: Record<string, unknown>, signal?: AbortSignal): Promise<RemoteAnswer<T>> {
+	let queued: RemoteCommand;
+	try {
+		queued = await client.remoteCommand(job, op, args, signal);
+	} catch (error) {
+		if (!(error instanceof ApiError) || error.status !== 409) throw asRemote(error);
+		try {
+			await client.watchServer(job, signal);
+			queued = await client.remoteCommand(job, op, args, signal);
+		} catch (again) {
+			throw asRemote(again);
+		}
+	}
+	const deadline = Date.now() + COMMAND_TIMEOUT_MS;
+	let command = queued;
+	while (command.state === "queued" || command.state === "sent") {
+		if (Date.now() >= deadline) throw new RemoteError(`The server didn't answer in ${Math.round(COMMAND_TIMEOUT_MS / 1000)} s.`, "timeout");
+		await sleepFor(RESULT_POLL_MS, signal);
+		try {
+			command = await client.remoteResult(job, queued.id, signal);
+		} catch (error) {
+			if (error instanceof ApiError && error.status === 404) throw new RemoteError("The answer was dropped before it was read (answers are kept 3 minutes).", "dropped");
+			throw asRemote(error);
+		}
+	}
+	if (command.state === "done")
+		return { result: command.result as T, ...(command.ms !== undefined ? { ms: command.ms } : {}), ...(command.redacted ? { redacted: command.redacted } : {}), at: command.doneAt ?? Date.now() };
+	if (command.state === "expired") {
+		throw new RemoteError(command.sentAt === undefined ? "The server never picked the command up (is it still polling?)." : "The server didn't answer in time.", "expired");
+	}
+	throw new RemoteError(explainRemoteError(command.error), "failed");
+}
+
+/**
+ * One runner per screen: `call` queues an op and resolves with its answer; everything in flight is aborted when the
+ * screen goes away. `onAnswer` hears about every answer (the screen uses it to know the server is connected).
+ */
+export function useRemoteRunner(api: RemoteApi | null, job: string, onAnswer?: () => void) {
+	const controllers = useRef(new Set<AbortController>());
+	const onAnswerRef = useRef(onAnswer);
+	onAnswerRef.current = onAnswer;
+	useEffect(() => {
+		const live = controllers.current;
+		return () => {
+			for (const c of live) c.abort();
+			live.clear();
+		};
+	}, [job]);
+	return useCallback(
+		async <T>(op: RemoteOp, args?: Record<string, unknown>): Promise<RemoteAnswer<T>> => {
+			if (!api) throw new RemoteError("This backend isn't signed in.", "request");
+			const controller = new AbortController();
+			controllers.current.add(controller);
+			try {
+				const answer = await runRemote<T>(api, job, op, args, controller.signal);
+				onAnswerRef.current?.();
+				return answer;
+			} finally {
+				controllers.current.delete(controller);
+			}
+		},
+		[api, job],
+	);
+}
+
+export type Runner = ReturnType<typeof useRemoteRunner>;
+
+export interface RemoteState<T> {
+	status: "idle" | "running" | "done" | "error";
+	data?: T;
+	error?: string;
+	ms?: number;
+	redacted?: number;
+	at?: number;
+}
+
+export type Remote<T> = RemoteState<T> & { run: (args?: Record<string, unknown>) => Promise<T | undefined>; set: (data: T | undefined) => void };
+
+/**
+ * One op's last answer, for a "Fetch" button. The previous answer stays on screen while a new one is fetched; a
+ * failure keeps it too (with the error above it).
+ */
+export function useRemote<T>(call: Runner, op: RemoteOp): Remote<T> {
+	const [state, setState] = useState<RemoteState<T>>({ status: "idle" });
+	const mounted = useRef(true);
+	useEffect(() => {
+		mounted.current = true;
+		return () => {
+			mounted.current = false;
+		};
+	}, []);
+	const run = useCallback(
+		async (args?: Record<string, unknown>): Promise<T | undefined> => {
+			setState((s) => ({ ...s, status: "running", error: undefined }));
+			try {
+				const answer = await call<T>(op, args);
+				if (mounted.current) setState({ status: "done", data: answer.result, ms: answer.ms, redacted: answer.redacted, at: answer.at });
+				return answer.result;
+			} catch (error) {
+				if (isAbort(error)) return undefined;
+				if (mounted.current) setState((s) => ({ ...s, status: "error", error: error instanceof Error ? error.message : String(error) }));
+				return undefined;
+			}
+		},
+		[call, op],
+	);
+	const set = useCallback((data: T | undefined) => setState((s) => ({ ...s, data })), []);
+	return { ...state, run, set };
+}
+
+/**
+ * Keeps the job watched while the screen is open, in front and the app active: once now, then every WATCH_EVERY_MS;
+ * again as soon as the app comes back. `enabled` false (a closed, lost or unknown server, a read-only session) sends
+ * nothing.
+ */
+export function useServerWatch(api: Pick<Api, "watchServer"> | null, job: string, enabled: boolean) {
+	const [reply, setReply] = useState<WatchReply | undefined>();
+	const [error, setError] = useState<string | undefined>();
+	const on = useIsFocused() && enabled && !!api;
+	useEffect(() => {
+		if (!on || !api) return;
+		const controller = new AbortController();
+		const send = () => {
+			if (AppState.currentState !== "active") return;
+			api.watchServer(job, controller.signal).then(
+				(r) => {
+					setReply(r);
+					setError(undefined);
+				},
+				(e: unknown) => {
+					if (!isAbort(e)) setError(e instanceof Error ? e.message : String(e));
+				},
+			);
+		};
+		send();
+		const timer = setInterval(send, WATCH_EVERY_MS);
+		const sub = AppState.addEventListener("change", (s) => {
+			if (s === "active") send();
+		});
+		return () => {
+			controller.abort();
+			clearInterval(timer);
+			sub.remove();
+		};
+	}, [api, job, on]);
+	return { reply, error };
+}

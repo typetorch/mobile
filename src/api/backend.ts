@@ -53,6 +53,20 @@ import type {
 	WatchReply,
 	LiveMapServer,
 	ServerStreams,
+	DropPreview,
+	ErrorDropRules,
+	GameColumn,
+	MigrateAction,
+	MigrateStartInput,
+	NotifyConfigView,
+	NotifyRecentView,
+	NotifyStatus,
+	NotifyTestInput,
+	NotifyTestResult,
+	NotifyUserLookup,
+	NotifyUsersParams,
+	NotifyUsersView,
+	NotifyUserView,
 } from "./tt/types";
 import { decodeGeometry, type ExportStatus, type MapGeometry, type MapOverride, type MapsView, type Vec3 } from "@/features/maps/maps";
 import { openEventStream, type SseConnection, type SseHandlers } from "./tt/sse";
@@ -208,6 +222,37 @@ export function createApi(options: ApiOptions) {
 		}
 	}
 
+	/**
+	 * A request whose answer is a file (CSV, a backup tar): the bytes, the server's file name and its headers. Throws an
+	 * ApiError with the server's message on a status.
+	 */
+	async function download<B>(path: string, init: RequestInit, outer: AbortSignal | undefined, timeoutMs: number, fallbackName: string, read: (response: Response) => Promise<B>): Promise<{ name: string; body: B; headers: Headers }> {
+		const { signal, done } = deadline(timeoutMs, outer);
+		let response: Response;
+		try {
+			response = await doFetch(`${base}${path}`, {
+				...init,
+				signal,
+				headers: { authorization: `Bearer ${options.token}`, ...(init.method && init.method !== "GET" ? { [CSRF_HEADER]: "1" } : {}) },
+			});
+		} catch (error) {
+			done();
+			const reason = signal.aborted ? ((signal.reason as Error | undefined)?.message ?? "aborted") : (error as Error).message;
+			throw new ApiError(0, `cannot reach the backend: ${reason}`, path);
+		}
+		try {
+			if (!response.ok) {
+				const body = (await response.json().catch(() => undefined)) as { error?: string } | undefined;
+				if (response.status === 401) options.onUnauthorized?.();
+				throw new ApiError(response.status, body?.error ?? `HTTP ${response.status}`, path, body);
+			}
+			const name = /filename="([^"]+)"/.exec(response.headers.get("content-disposition") ?? "")?.[1] ?? fallbackName;
+			return { name, body: await read(response), headers: response.headers };
+		} finally {
+			done();
+		}
+	}
+
 	const post = <T>(path: string, body: unknown, signal?: AbortSignal) =>
 		request<T>(path, { method: "POST", body: JSON.stringify(body), ...(signal ? { signal } : {}) });
 	const get = <T>(path: string, signal?: AbortSignal) => request<T>(path, signal ? { signal } : undefined);
@@ -301,6 +346,38 @@ export function createApi(options: ApiOptions) {
 				`/v1/fleet/reports${params.seq || params.artifact ? qs(params) : `?latest${params.branch ? `&branch=${encodeURIComponent(params.branch)}` : ""}`}`,
 				signal,
 			),
+		/** The error drop rules with their drop counts (any signed-in role reads; owners change them through settings). */
+		errorDropRules: (signal?: AbortSignal) => get<ErrorDropRules>("/v1/errors/drop-rules", signal),
+		/** What one rule would drop over the kept error log (nothing is saved). */
+		previewDropRule: (expr: string, signal?: AbortSignal) => post<DropPreview>("/v1/errors/drop-rules/preview", { expr }, signal),
+		/** Plans/29: the notifications' live state (owners / admin only). */
+		notifyStatus: (signal?: AbortSignal) => get<NotifyStatus>("/v1/notify/status", signal),
+		/** The pushed `notifications` config (read-only in the explorer; `typetorch notify push` changes it). */
+		notifyConfig: (signal?: AbortSignal) => get<NotifyConfigView>("/v1/notify/config", signal),
+		/** One test send to a UserId (owners; marked test, outside the stats). */
+		notifyTest: (input: NotifyTestInput, signal?: AbortSignal) => post<NotifyTestResult>("/v1/notify/test", input, signal),
+		/** One player's notifications (owners): consent, sends, intents and their notify rows, by UserId, pid or a cached name. */
+		notifyUser: (lookup: NotifyUserLookup, signal?: AbortSignal) => get<NotifyUserView>(`/v1/notify/user${qs(lookup)}`, signal),
+		notifyRecent: (opts: { limit?: number; kind?: string } = {}, signal?: AbortSignal) =>
+			get<NotifyRecentView>(`/v1/notify/recent${qs({ ...(opts.limit ? { limit: String(opts.limit) } : {}), ...(opts.kind ? { kind: opts.kind } : {}) })}`, signal),
+		/** The opt-in list (owners): one page of a state (subscribed by default) and the counts of every state. */
+		notifyUsers: (params: NotifyUsersParams = {}, signal?: AbortSignal) => get<NotifyUsersView>(`/v1/notify/users${qs({ ...params })}`, signal),
+		/** The opt-in list of a state as CSV text (at most 10 000 rows; `truncated` when there were more). */
+		async notifyUsersCsv(params: Omit<NotifyUsersParams, "limit" | "cursor"> = {}, signal?: AbortSignal): Promise<{ name: string; text: string; truncated: boolean }> {
+			const answer = await download(`/v1/notify/users${qs({ ...params, format: "csv" })}`, { method: "GET" }, signal, 120_000, "notify-users.csv", (r) => r.text());
+			return { name: answer.name, text: answer.body, truncated: answer.headers.get("x-truncated") === "1" };
+		},
+		/** Pause, resume or cancel the running move; answers the new status (409 when the action doesn't apply). */
+		migrateAction: (action: MigrateAction, signal?: AbortSignal) => post<MigrateStatus>("/v1/admin/migrate", { action }, signal),
+		/** A page cut off mid-send to Basin: send it again or leave it out; answers the new status. */
+		migrateResolve: (page: string, choice: "resend" | "skip", signal?: AbortSignal) => post<MigrateStatus>("/v1/admin/migrate", { action: "resolve", page, choice }, signal),
+		/** Starts a move from the old server; the token goes in the body once and is never sent back. */
+		migrateStart: (input: MigrateStartInput, signal?: AbortSignal) => post<MigrateStatus>("/v1/admin/migrate", { action: "start", ...input }, signal),
+		/** A fresh backup as a tar file (the backend leaves the webhook URL and instance.key out). Up to 10 minutes. */
+		downloadBackup: (signal?: AbortSignal) =>
+			download("/v1/admin/backups/download", { method: "POST" }, signal, 600_000, "typetorch-backup.tar", (r) => r.arrayBuffer()).then((a) => ({ name: a.name, bytes: a.body })),
+		/** Plans/34: the columns the game declared for the Fleet table (hidden until picked). */
+		fleetColumns: (signal?: AbortSignal) => get<{ columns: GameColumn[] }>("/v1/fleet/columns", signal).then((r) => r.columns),
 		/** Runtime settings: values, sources, bounds and the audit list (the webhook only as set / not set). */
 		settings: (signal?: AbortSignal) => get<SettingsView>("/v1/admin/settings", signal),
 		/** Saves a partial change: { key: value }, or { key: null } to go back to the environment. Answers the new view. */

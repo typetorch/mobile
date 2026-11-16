@@ -1012,6 +1012,275 @@ export interface EconomyResult {
 	sinks: EconomyFlow[];
 }
 
+// Experience notifications (plans/29) ------------------------------------------------------------------------------------
+
+/** One step set of the notify-funnel query. Rates are 0-1: open = opened / sent, played = played / opened, return = returnedD1 / players. */
+export interface NotifyFunnelCounts {
+	wants: number;
+	planned: number;
+	/** Real sends (not dry runs, not tests). */
+	sent: number;
+	dry: number;
+	tests: number;
+	players: number;
+	opened: number;
+	/** Opened and played at least a minute. */
+	played: number;
+	returnedD1: number;
+	/** Never opened, came back within 24 h. */
+	assisted: number;
+	openRate: number;
+	playedRate: number;
+	returnRate: number;
+}
+
+export interface NotifyFunnelResult {
+	from: string;
+	to: string;
+	kind: string | null;
+	kinds: (NotifyFunnelCounts & { kind: string })[];
+	days: (NotifyFunnelCounts & { date: string; kind: string })[];
+	daily: (NotifyFunnelCounts & { date: string })[];
+	totals: NotifyFunnelCounts;
+}
+
+export interface NotifyOptinCounts {
+	checks: number;
+	canPrompt: number;
+	errors: number;
+	shown: number;
+	closed: number;
+	shownRate: number;
+	avgShownSecs: number | null;
+}
+
+export interface NotifyOptinResult {
+	from: string;
+	to: string;
+	totals: NotifyOptinCounts & { subscribed: number; notSubscribed: number };
+	/**
+	 * Per spot. `shownPlayers`: players whose last prompt in the range was shown here; `subscribed` / `notSubscribed`: of
+	 * those, their latest inferred answer in the range; `subscribedRate` = subscribed / shownPlayers. Absent on older servers.
+	 */
+	byWhere: (NotifyOptinCounts & { where: string; shownPlayers?: number; subscribed?: number; notSubscribed?: number; subscribedRate?: number })[];
+	days: (NotifyOptinCounts & { date: string; subscribed: number; notSubscribed: number })[];
+}
+
+export interface NotifyQueueHour {
+	hour: string;
+	planned: number;
+	sent: number;
+	dry: number;
+	failed: number;
+	rateLimited: number;
+	skipped: number;
+}
+
+export interface NotifyQueueFailure {
+	kind: string;
+	http: number | null;
+	code: string;
+	failures: number;
+	final: number;
+	sends: number;
+	lastAt: string | null;
+}
+
+export interface NotifyQueueResult {
+	from: string;
+	to: string;
+	kind: string | null;
+	totals: { planned: number; sent: number; dry: number; failed: number; final: number; rateLimited: number; skipped: number; last429At: string | null };
+	hours: NotifyQueueHour[];
+	planned: { kind: string; why: string; planned: number }[];
+	skipped: { kind: string; why: string; skipped: number }[];
+	failures: NotifyQueueFailure[];
+}
+
+/** GET /v1/notify/status (owners / admin only). Times are unix ms. */
+export interface NotifyStatus {
+	enabled: boolean;
+	dryRun: boolean;
+	rate: number;
+	clock: "rolling24" | "utc_day";
+	configured: { universe: boolean; apiKey: boolean };
+	keys: { current: boolean; previous: boolean; since: number | null };
+	/** `text`: the template's text (at most 99 characters, with {placeholders}) when known. */
+	kinds: { kind: string; enabled: boolean; template: boolean; pending: number; halted?: "bad_template"; text?: string }[];
+	/** Per-kind stops (a bad template), plus a kind-less `{ why: "auth" }` when Roblox refused the Open Cloud key (every send stopped). */
+	halted: NotifyHalt[];
+	/** Every send stopped: Roblox refused the Open Cloud key (401 / 403). Null while sending is allowed. */
+	haltedAll?: { why: "auth"; at: number } | null;
+	/** Game-supplied templates Roblox said don't exist. */
+	haltedTemplates?: { template: string; at: number }[];
+	/** Hours after which a player's presence counts as stale. */
+	presenceStaleHours?: number;
+	/** Rows waiting in the durable outbox (to the events). */
+	outbox?: number;
+	/** Rows the outbox dropped (full). */
+	rowsDropped?: number;
+	queue: { pending: number; due1h: number; sending: number };
+	bucket: { rate: number; tokens: number; last429At: number | null };
+	sends24h: { sent: number; failed: number; dry: number };
+	mutes: number;
+	/** Whether a notifications config has been pushed. */
+	config: boolean;
+}
+
+export type NotifyHalt = { kind: string; why: "bad_template"; at: number } | { kind?: undefined; why: "auth"; at: number };
+
+/** GET /v1/notify/user?uid=|pid=|name= (owners): one player's notifications. Times are unix ms except `events.rows[].at` (ISO). */
+export interface NotifyUserState {
+	optin: "subscribed" | "not_subscribed" | null;
+	optinAt: number | null;
+	muteUntil: number | null;
+	muted: boolean;
+	online: boolean;
+	presenceAt: number | null;
+	lastSeen: number | null;
+	leftAt: number | null;
+	unopened: number;
+	backoffAt: number | null;
+	cappedUntil: number | null;
+	nextCheck: number | null;
+	busy: string | null;
+}
+
+export interface NotifyUserSend {
+	nid: string;
+	kind: string;
+	status: "planned" | "sending" | "sent" | "dry" | "failed" | "cancelled";
+	test: boolean;
+	plannedAt: number | null;
+	sentAt: number | null;
+	http: number | null;
+	code: string | null;
+	try: number;
+	openedAt: number | null;
+	playedSecs: number | null;
+	category: string | null;
+	/** The per-player view only (GET /v1/notify/user): what the send was planned with and Roblox's answer. */
+	template?: string | null;
+	params?: unknown;
+	data?: string | null;
+	robloxId?: string | null;
+	/** Roblox's refusal text on a failed send (its message + details), sends since 2026-11-08 */
+	error?: string | null;
+	/** The request body the send posts, without the signed launch data */
+	request?: unknown;
+}
+
+export interface NotifyUserIntent {
+	kind: string;
+	key: string;
+	status: "pending" | "sent" | "dropped" | "expired" | "superseded" | "failed";
+	at: number | null;
+	until: number | null;
+	updated: number | null;
+	planned: boolean;
+	params: Record<string, string> | null;
+}
+
+export interface NotifyUserEvent {
+	at: string;
+	t: number;
+	name: "optin_check" | "optin_shown" | "optin_closed" | "optin_inferred" | "open" | "open_bad" | "played";
+	pid: string;
+	where: string | null;
+	secs: number | null;
+	err: string | null;
+	can: "true" | "false" | null;
+	state: string | null;
+	nid: string | null;
+	kind: string | null;
+	why: string | null;
+	age: number | null;
+}
+
+export interface NotifyUserView {
+	userId: number;
+	known: boolean;
+	pids: string[];
+	name: string | null;
+	displayName: string | null;
+	otherMatches?: number[];
+	state: NotifyUserState | null;
+	/** The kinds the player switched off in the game (`prefs`; the planner skips them as `pref_off`); null = never set. */
+	prefs?: { off: string[]; rev: number; updated: number } | null;
+	/** Newest first, at most 200. */
+	sends: NotifyUserSend[];
+	intents: NotifyUserIntent[];
+	/** `opens` (plans/30): join rows that came from a send (props carry its nid), with their raw join data. */
+	events: null | { from: string; to: string; more: boolean; rows: NotifyUserEvent[]; opens?: NotifyUserOpen[] };
+	eventsError?: string;
+}
+
+export type NotifyUserLookup = { uid: string } | { pid: string } | { name: string };
+
+/** GET /v1/notify/recent: the newest sends of everyone, newest first, with the cached name when known. */
+export interface NotifyRecentSend extends NotifyUserSend {
+	userId: number;
+	name: string | null;
+	displayName: string | null;
+	/** The player's opt-in as the backend learned it (null = unknown); absent on older servers. */
+	optin?: "subscribed" | "not_subscribed" | null;
+}
+
+/** GET /v1/notify/users: the opt-in list (learned from Roblox's answer to a send). Times unix ms. */
+export type NotifyOptinState = "subscribed" | "not_subscribed" | "unknown" | "muted";
+export interface NotifyOptinTotals {
+	subscribed: number;
+	notSubscribed: number;
+	unknown: number;
+	muted: number;
+	newThisWeek: number;
+}
+export interface NotifyOptinUser {
+	userId: number;
+	name: string | null;
+	displayName: string | null;
+	optin: "subscribed" | "not_subscribed" | null;
+	optinAt: number | null;
+	lastSeen: number | null;
+	online: boolean;
+	muteUntil: number | null;
+	sends: number;
+	opened: number;
+}
+export interface NotifyUsersView {
+	counts: NotifyOptinTotals;
+	users: NotifyOptinUser[];
+	next: string | null;
+}
+export interface NotifyUsersParams {
+	state?: NotifyOptinState;
+	q?: string;
+	limit?: number;
+	cursor?: string;
+}
+export interface NotifyRecentView {
+	sends: NotifyRecentSend[];
+}
+
+/** GET /v1/notify/config: the pushed `notifications` object, read-only here. */
+export interface NotifyConfigView {
+	config: Record<string, unknown> | null;
+	updatedAt: number | null;
+	by: string | null;
+}
+
+/** POST /v1/notify/test. */
+export interface NotifyTestInput {
+	userId: number;
+	kind: string;
+	params?: Record<string, string>;
+	data?: string;
+}
+
+export interface NotifyTestResult {
+	nid: string;
+	status: string;
+}
 export interface MonetizationDay {
 	date: string;
 	/** Robux players paid. */
@@ -1160,6 +1429,9 @@ export interface QueryResults {
 	"feedback-summary": FeedbackSummaryResult;
 	"feedback-list": FeedbackListResult;
 	"map-positions": MapPositionsResult;
+	"notify-funnel": NotifyFunnelResult;
+	"notify-optin": NotifyOptinResult;
+	"notify-queue": NotifyQueueResult;
 }
 
 export type QueryName = keyof QueryResults;
@@ -1216,6 +1488,17 @@ export interface FleetServer {
 	ipChangedAt?: string | null;
 	/** Where the latest address is (the backend's offline IP database); null or missing while unknown. */
 	location?: ServerLocation | null;
+	/** Plans/34: the game's custom column values from its latest heartbeat (GET /v1/fleet/columns names them); null or missing: none. */
+	cv?: Record<string, GameColumnValue> | null;
+}
+
+export type GameColumnValue = string | number | boolean | null;
+
+/** A column the game declared (GET /v1/fleet/columns): name, label, display type. */
+export interface GameColumn {
+	n: string;
+	l?: string;
+	t?: "string" | "number" | "bool";
 }
 
 /** A server's location, city level at best. */
@@ -1397,7 +1680,7 @@ export interface DebugAuditEntry {
 }
 
 /** The read-only remote debug ops (v1). */
-export type RemoteOp = "status" | "builds" | "budget" | "logs" | "players" | "player.logs" | "errors" | "modules" | "state" | "assets" | "network" | "dex.children" | "dex.props";
+export type RemoteOp = "status" | "builds" | "budget" | "logs" | "players" | "player.logs" | "errors" | "modules" | "state" | "assets" | "network" | "dex.children" | "dex.props" | `game.${string}`;
 
 /** A queued command and, once answered, its result (kept 3 minutes on the backend, in memory only). */
 export interface RemoteCommand {
@@ -1940,7 +2223,29 @@ export interface SavedQueryInput {
 
 /** "dashboard" = saved on the Settings page; "env" = the environment; "default" = neither (the built-in default). */
 export type SettingSource = "env" | "dashboard" | "default";
-export type SettingKind = "secret" | "choice" | "levels" | "ips" | "users" | "switch" | "number" | "alertRules";
+export type SettingKind = "secret" | "choice" | "levels" | "ips" | "users" | "switch" | "number" | "alertRules" | "kindSwitches" | "names" | "dropRules";
+
+/** One error drop rule (backend src/errors/drop-rules.ts). */
+export interface ErrorDropRule {
+	id: string;
+	expr: string;
+	note?: string;
+	on: boolean;
+}
+
+/** GET /v1/errors/drop-rules. */
+export interface ErrorDropRules {
+	rules: (ErrorDropRule & { error?: string })[];
+	counts: Record<string, { items: number; occurrences: number; lastAt: number | null }>;
+	since: string;
+	source: "env" | "dashboard" | "default";
+}
+
+/** POST /v1/errors/drop-rules/preview. */
+export type DropPreview =
+	| { ok: false; error: string }
+	| { ok: true; days: number; kinds: number; matchedKinds: number; matchedOccurrences: number; allOccurrences: number; matches: { fp: string; template: string; realm: string; lastAt: string; occurrences: number }[] };
+
 
 /** One threshold of a backend alert rule (or a general value: repeatMinutes, perHour). */
 export interface AlertParamDef {
@@ -2000,7 +2305,7 @@ interface SettingBase {
 	key: string;
 	/** The environment variable that gives the default. */
 	env: string;
-	group: "alerts" | "backendAlerts" | "access" | "limits" | "retention";
+	group: "alerts" | "backendAlerts" | "access" | "limits" | "retention" | "notify" | "keys";
 	label: string;
 	help: string;
 	kind: SettingKind;
@@ -2477,8 +2782,17 @@ export interface IngestPressure {
 }
 
 export type MigrateState = "idle" | "running" | "paused" | "waiting" | "done" | "failed" | "cancelled" | "needs_decision";
+export type MigrateStepName = "erased" | "identities" | "fleet" | "events" | "recordings" | "live" | "rollups" | "verify";
 /** `sent`: moved to Basin, not counted there (no Basin read settings on this server). */
 export type MigrateDayState = "pending" | "importing" | "match" | "missing" | "differs" | "duplicates" | "sent";
+
+export interface MigrateStep {
+	name: MigrateStepName;
+	state: "pending" | "running" | "done" | "failed";
+	done: number;
+	total: number;
+	note?: string;
+}
 
 export interface MigrateDay {
 	table: "events" | "recordings";
@@ -2490,21 +2804,72 @@ export interface MigrateDay {
 	note: string;
 }
 
-/** GET /v1/admin/migrate, the part the history-importing banner reads (the Settings migration card is the admin group's). */
+/** A move from another server (or to / from a basin): where it is, per step and per day. Times are unix ms. */
 export interface MigrateStatus {
 	state: MigrateState;
 	direction: "from-backend" | "from-basin" | "to-basin" | null;
+	/** An old server, Basin (its bucket and namespace), or this server (a move to Basin). */
 	source: { kind: "backend"; url: string } | { kind: "basin"; bucket: string; namespace: string } | { kind: "local" } | null;
+	/** A move to Basin: the streams the rows go to. */
+	target?: { kind: "basin"; events: string; recordings: string };
 	startedAt: number | null;
 	finishedAt: number | null;
 	rowsPerSecond: number;
 	rowsDone: number;
 	rowsTotal: number;
+	steps: MigrateStep[];
 	days: MigrateDay[];
 	waitingFor: string | null;
+	/** A move to Basin: a page cut off mid-send waits for resolve (resend or skip). */
+	decision: null | MigrateDecision;
 	error: string | null;
 }
 
+export interface MigrateDecision {
+	page: string;
+	table: "events" | "recordings";
+	day: string;
+	rows: number;
+	why: string;
+	question?: string;
+}
+
+export type MigrateAction = "pause" | "resume" | "cancel";
+
+/** POST /v1/admin/migrate { action: "start" }: the old server and its admin token (sent once, never shown again). */
+export interface MigrateStartInput {
+	from: { kind: "backend"; url: string; token: string };
+	rowsPerSecond?: number;
+}
+
+/** The main server's view of the queue bucket (GET /v1/admin/stats `queue`). */
+export interface QueueStats {
+	role: "main" | "ingest";
+	/** Files waiting in the bucket as last listed, and their bytes. */
+	pendingFiles: number;
+	pendingBytes: number;
+	/** Unix ms of the last load that took bucket files, or null. */
+	lastLoadAt?: number | null;
+	lastUploadAt?: number | null;
+	/** Files loaded from the bucket since start. */
+	files: number;
+	errors: number;
+	lastError: string | null;
+	lastErrorAt: number | null;
+	bucket: "ok" | "down" | "unknown";
+	/** The last listing had more than one page of keys (the backlog is at least this). */
+	truncated?: boolean;
+	/** Identity rows taken from the bucket since start. */
+	identities?: number;
+}
+/** Plans/30: a join row that came from a notification tap, and its raw join data (`jd`; null when none was stored). */
+export interface NotifyUserOpen {
+	nid: string;
+	at: string;
+	t: number;
+	sid: string;
+	jd: Record<string, unknown> | null;
+}
 // Explain this change (the `explain` query) ---------------------------------------------------------------------------------
 
 export type ExplainDimension = "device" | "country" | "language" | "accountAge" | "premium" | "source" | "build" | "branch" | "playerType";
