@@ -166,9 +166,12 @@ view stays as a toggle); every table is the shared DataTable (`features/typetorc
 header to sort, long-press to add it to the sort, filter sheets with chips, Columns (show / hide, − / + widths instead of
 dragging), paging, long-press a row to copy a cell or the row, Export saves CSV / JSON through the share sheet or copies
 CSV / TSV / JSON; hover cards are a long-press (players) or a tap (product ids, deploy marks); the filter bar is one state
-per backend saved on the phone, and the link button in every TypeTorch header copies or shares a typetorch:// link with
-the page, its parameters (the web's names), the filters and every table's view (another phone with the same backend
-connected opens it on its own account); Roblox benchmarks are kept per backend on the phone (secure store), with copy /
+per backend saved on the phone, and the link button in every TypeTorch header copies or shares a link with the page, its
+parameters (the web's names), the whole filter bar and every table's view (another phone with the same backend connected
+opens it on its own account; keys the link leaves out go back to their defaults, like a web URL). An installed build makes
+typetorch:// links. In Expo Go the link is exp://<dev server>:<port>/--/tt/…, which opens only in Expo Go on a phone
+that reaches the same Metro dev server; the share sheet says so and also offers the typetorch:// form for a phone with
+the installed app; Roblox benchmarks are kept per backend on the phone (secure store), with copy /
 paste / file export of the web's JSON.
 
 Also not yet in the app: remote debug commands on the server page, changing runtime settings (read only here),
