@@ -26,9 +26,9 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 | Place card (icon, name, live players, link to roblox.com) and tab title "<page> \| <place>" | `components/PlaceCard.tsx` | GET `/v1/place` | all | partial: name used in `app/backend/connect.tsx`; no card / live count in `features/typetorch/components.tsx` `BackendHeader` |
 | Top-bar "Find player" (pid, part of pid or UserId → Players) | `components/Identity.tsx` `FindPlayer` | GET `/v1/identity?uid=` | all | partial: only the Players page search (`tt/players.tsx`) |
 | Command palette (Ctrl/Cmd+K, fuzzy, recent first): every page, every range preset, Clear filters, Copy link to this view, Refresh data, Toggle / system theme, Sign out, "Open player <id>", page commands (`players:copy-pid`) | `components/CommandPalette.tsx`, `lib/commands.ts` | – | pages filtered by role | missing |
-| Filter bar: range presets `1h 6h 1d 3d 7d 30d 90d deploy` + custom UTC dates, branch, artifact, device, new / returning, experiment variant | `components/FilterBar.tsx`, `lib/filters.ts` | POST `/v1/query/values`, `/v1/query/experiment` | all | partial: `features/typetorch/filters.tsx` lacks the `3d` and `deploy` ("since the latest deploy") presets |
+| Filter bar: range presets `1h 6h 1d 3d 7d 30d 90d deploy` + custom UTC dates, branch, artifact, device, new / returning, experiment variant | `components/FilterBar.tsx`, `lib/filters.ts` | POST `/v1/query/values`, `/v1/query/experiment` | all | partial: `3d` and `deploy` (since the last prod release, GET `/v1/fleet/deploys?branch=prod&limit=1`) presets present (interaction); the bar's audience popover is the analytics group's |
 | Filter bar Audience popover: country, language, account age, Premium, join source (player-level; choices from the `demographics` query) | `components/FilterBar.tsx`, `lib/audience.ts` | POST `/v1/query/demographics` | all | missing (and `Filters` in `api/tt/types.ts` lacks `country/lang/age/prem/source`) |
-| Filters in the URL (`range, from, to, branch, art, dev, players, exp, variant, country, lang, age, prem, source`), kept across links (`withFilters`) | `lib/filters.ts`, `lib/hooks.ts` `useFilters/useParam` | – | all | partial: in memory per backend, not persisted, not shareable |
+| Filters in the URL (`range, from, to, branch, art, dev, players, exp, variant, country, lang, age, prem, source`), kept across links (`withFilters`) | `lib/filters.ts`, `lib/hooks.ts` `useFilters/useParam` | – | all | present (interaction): one state per backend saved on the phone (AsyncStorage `tt.filters.v1.<backend>`), written with the web's keys into "Copy link to this view" (header link button, `features/typetorch/view-link.tsx`); a typetorch:// link's keys set the bar (`features/typetorch/screen.tsx`) |
 | History-importing banner above analytics pages while a migration imports | `components/HistoryImportingBanner.tsx` | GET `/v1/admin/migrate` | owner | missing |
 | Untrusted-browser banner (owner via typetorch.dev on an untrusted browser; trust with admin token) | `components/UntrustedBrowserBanner.tsx` | POST `/auth/device` | owner | n/a (phone signs in with its own token) |
 | Login page: Sign in with Roblox, Sign in with typetorch.dev, admin token | `components/LoginPage.tsx`, `components/AuthGate.tsx` | `/v1/auth/roblox/start`, `/auth/typetorch/start`, POST `/v1/auth/login` | – | present in app form (`app/backend/connect.tsx`, ttm_ PKCE / admin token) |
@@ -42,7 +42,7 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 | "vs previous period" (`vs=prev`) change chips | `/v1/query/overview` on the previous period (`lib/compare.ts`) | all | missing |
 | "Why?" per tile → Explain panel (`explain=<metric>`) | POST `/v1/query/explain` | all | missing |
 | 4 bar charts (players, new players, sessions, playtime h), per day or per step for ≤ 1 day, previous period dashed | `/v1/query/overview` | all | partial: one "Players per day/step" bar chart |
-| Deploy marks on every chart + toggle, click → deploy page | GET `/v1/fleet/marks`, GET `/v1/live-events` | all | missing on Overview |
+| Deploy marks on every chart + toggle, click → deploy page | GET `/v1/fleet/marks`, GET `/v1/live-events` | all | present on the Overview players chart (interaction: tap a mark for its card, Deploys toggle; vs previous period dashed); the 4 DayBars are the analytics group's Overview parity |
 | Pinned saved-query tiles (table / bar / line) | GET `/v1/saved-queries`, POST `/v1/sql` | all | missing (pins can be set on `tt/query.tsx` but are not shown) |
 | Storage card: disk use by part, Parquet events / recording chunks, live rows, every 30 s | GET `/v1/storage` | owner | missing |
 | Ingest-busy note (503 in the last minute) every 30 s | GET `/v1/admin/stats?window=1m` | owner | missing |
@@ -54,15 +54,15 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 
 | Item | Route(s) | Role | App |
 | --- | --- | --- | --- |
-| Player list (DataTable `players-list`), sort, search by pid / UserId (`find`) | POST `/v1/query/players`, GET `/v1/identity?uid=` | all | present (`tt/players.tsx`), without DataTable features |
+| Player list (DataTable `players-list`), sort, search by pid / UserId (`find`) | POST `/v1/query/players`, GET `/v1/identity?uid=` | all | present (`tt/players.tsx`): DataTable `players-list` with server sort, funnel columns (`funnels` param) in Columns |
 | Funnel progress columns (`funnels` param) with step popover | `/v1/query/funnel`, `/v1/query/funnel-progress` | all | present |
 | Identity status + backfill | GET `/v1/identity`, POST `/v1/identity/backfill` | all | present |
-| PlayerHover on every pid | GET `/v1/identity/<pid>/profile` | all | missing |
+| PlayerHover on every pid | GET `/v1/identity/<pid>/profile` | all | present: long-press any pid (`features/typetorch/cards.tsx` `PlayerHover`, `PidLink`, `NamedPlayerRow`, `playerColumns`) |
 | Churn risk: active / at risk / lapsing / churned as of today (90 d), bucket list (`risk` param, DataTable `players-churn`), each player's numbers, notification opt-in per player, Export UserIds | POST `/v1/query/churn` | all; opt-in column + export owner | missing |
 | Player detail inline (`pid`, `view`, `show`): profile card | GET `/v1/identity/<pid>/profile` | all | present (`tt/player/[pid].tsx`) |
 | Funnel progress per funnel | `/v1/query/funnel-progress` | all | present |
 | Views Spending, Playtime, Sessions (Chart / Table) | POST `/v1/query/player-stats` | all | present |
-| Timeline view (drawn graph, `sid`, `moments`, `facet`, "View graph" per session, events table) | `/v1/query/timeline`, `/v1/query/player-graph` | all | partial: graph is a list (`features/typetorch/graph.tsx`) |
+| Timeline view (drawn graph, `sid`, `moments`, `facet`, "View graph" per session, events table) | `/v1/query/timeline`, `/v1/query/player-graph` | all | present: drawn graph (`features/typetorch/graph-view.tsx`, list as a toggle), `sid` / `facet` / `moments` / `view` / `show` in the route, session events as EventTable `player-events` |
 | Join data `jd` per session (pretty JSON, `trunc` badge) | from `timeline` rows | all | missing |
 | Errors view (`realm`), each → Errors `?fp=` | GET `/v1/players/<pid>/errors` | all | present |
 | Feedback view | POST `/v1/query/feedback-list` (`pid`) | all | missing |
@@ -73,19 +73,19 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 
 | Item | Route(s) | Role | App |
 | --- | --- | --- | --- |
-| Top events per kind (`kind`), pick one (`event`), newest rows in EventTable, `pid` filter, links keep filters | `/v1/query/top-events`, `/v1/query/events` | all | present (`tt/events.tsx`), no DataTable features / PlayerHover |
+| Top events per kind (`kind`), pick one (`event`), newest rows in EventTable, `pid` filter, links keep filters | `/v1/query/top-events`, `/v1/query/events` | all | present (`tt/events.tsx`): DataTables `events-names` and `events-rows` (EventTable), `kind` / `event` / `pid` in the route, player cards |
 
 ### Funnels (`/funnels`) — `pages/Funnels.tsx`, `components/FunnelSteps.tsx`
 
 | Item | Route(s) | Role | App |
 | --- | --- | --- | --- |
-| Funnel steps (logged or built-in playtime funnels incl. 15/20/25/45-min marks), compare two + swap (`funnel`, `compare`), step → players reached / dropped (`stepFunnel`, `step`, `stepMode`, DataTable `funnel-players`) | `/v1/query/funnel`, `/v1/query/playtime-funnel`, `/v1/query/funnel-players` | all | present (`tt/funnels.tsx`); sheet state not in a link |
+| Funnel steps (logged or built-in playtime funnels incl. 15/20/25/45-min marks), compare two + swap (`funnel`, `compare`), step → players reached / dropped (`stepFunnel`, `step`, `stepMode`, DataTable `funnel-players`) | `/v1/query/funnel`, `/v1/query/playtime-funnel`, `/v1/query/funnel-players` | all | present (`tt/funnels.tsx`): `funnel`, `compare`, `stepFunnel`, `step`, `stepMode` in the route; players as DataTable `funnel-players` |
 
 ### Flow (`/flow`) — `pages/Flow.tsx`, `components/LazyGraph.tsx`, `components/GraphView.tsx`, `components/MermaidButton.tsx`
 
 | Item | Route(s) | Role | App |
 | --- | --- | --- | --- |
-| Drawn graph (React Flow + dagre), facet toggle, moments toggle, sparse note, min moves, exits table, moves table, Copy Mermaid | `/v1/query/flow` | all | partial (`tt/flow.tsx`): list instead of a drawn, pannable graph; no facet / moments toggles |
+| Drawn graph (React Flow + dagre), facet toggle, moments toggle, sparse note, min moves, exits table, moves table, Copy Mermaid | `/v1/query/flow` | all | present (`tt/flow.tsx`): drawn dagre graph with pan / pinch / fit / full screen / direction, tap a state for its events, steps and moves (list as a toggle), `facet` / `moments` / `minCount` in the route, DataTables `flow-exits` / `flow-moves` |
 
 ### Retention (`/retention`) — `pages/Retention.tsx`, `pages/RetentionLtv.tsx`
 
@@ -122,13 +122,13 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 
 | Item | Route(s) | Role | App |
 | --- | --- | --- | --- |
-| Currency picker (`currency`), earned vs spent per day, running balance, per active player, top sources / sinks tables | `/v1/query/economy` | all | present (`tt/economy.tsx`); picker not in a link |
+| Currency picker (`currency`), earned vs spent per day, running balance, per active player, top sources / sinks tables | `/v1/query/economy` | all | present (`tt/economy.tsx`): `currency` in the route; DataTables `economy-sources` / `economy-sinks` |
 
 ### Monetization (`/monetization`) — `pages/Monetization.tsx`, `components/ProductId.tsx`, `lib/products.ts`
 
 | Item | Route(s) | Role | App |
 | --- | --- | --- | --- |
-| Revenue / purchases / payers / ARPDAU per day (bar → day's buyers `buyersDay`), by product (row → buyers `buyers=<kind>:<id>`), payer conversion, ARPPU, repeat rate, time to first purchase, top buyers, latest purchases; ProductId hover card (icon, name, type, price, "Show only this") | `/v1/query/monetization`, `/v1/query/monetization-players`, `/v1/query/monetization-purchases`, GET `/v1/roblox/products` | all | present (`tt/monetization.tsx`, `features/typetorch/bits.tsx` `ProductName`); no product card / "show only this" |
+| Revenue / purchases / payers / ARPDAU per day (bar → day's buyers `buyersDay`), by product (row → buyers `buyers=<kind>:<id>`), payer conversion, ARPPU, repeat rate, time to first purchase, top buyers, latest purchases; ProductId hover card (icon, name, type, price, "Show only this") | `/v1/query/monetization`, `/v1/query/monetization-players`, `/v1/query/monetization-purchases`, GET `/v1/roblox/products` | all | present (`tt/monetization.tsx`): `buyers` / `buyersDay` in the route, DataTables `monetization-products` / `-buyers` / `-day-buyers` / `-product-buyers` / `-purchases`, product id card on tap with Show only this, kind filter, deploy marks |
 
 ### Live events (`/live-events`) — `pages/LiveEvents.tsx`, `lib/live-events.ts`
 
@@ -139,7 +139,7 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 | Cancel | POST `/v1/live-events/<id>/cancel` | owner | missing |
 | Signing card: CLI command (bash / zsh, PowerShell + Download JSON) when servers lack the schedule; servers' schedule | from the responses (`SignCommands`) | owner | missing |
 | Lift report: baseline weeks, days after, per-metric lift vs normal range, pulled-forward check, verdict | GET `/v1/live-events/<id>/lift?weeks&afterDays` | all | missing |
-| Event start / end as chart marks | GET `/v1/live-events` | all | missing |
+| Event start / end as chart marks | GET `/v1/live-events` | all | present (interaction): start / end marks on every chart with deploy marks (`features/typetorch/marks.tsx`, GET `/v1/live-events`); the Live events page is the analytics group's |
 
 ### Experiments (`/experiments`) — `pages/Experiments.tsx`
 
@@ -151,7 +151,7 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 | Experiments list with state and weights | GET `/v1/experiments` | all | present |
 | Players in an experiment / variant (`assigned`, `assignedVariant`) | GET `/v1/experiments/<e>/players` | all | present |
 | Control: Start, Stop, Clear, Change split (weights), Settle on a variant → prepared signed CLI command ("See the change first", "Run in the game's folder") | POST `/v1/experiments/<e>/change` | owner | missing |
-| `scope` / `experiment` params | – | all | partial (in memory) |
+| `scope` / `experiment` params | – | all | present: `scope`, `experiment`, `assigned`, `assignedVariant` in the route; players as DataTable `experiment-players` |
 
 ### Session time (`/session-time`) — `pages/SessionTime.tsx`
 
@@ -195,7 +195,7 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 | Roblox logs (Open Cloud server logs: search, order, page token, place version) | GET `/v1/roblox/servers/<job>/logs` | all | missing |
 | Debug session: watch every 20 s, Connection status (waking / connecting / connected) | POST `/v1/fleet/servers/<job>/watch` | owner | missing |
 | Remote command plumbing (queue, poll result ≤ 15 s) | POST `/v1/fleet/servers/<job>/commands`, GET `.../commands/<id>` | owner | missing (`remoteCommand` defined in `api/backend.ts`, unused) |
-| Status tab: TPS / memory / players last hour with deploy marks + kernel `status` op | GET `.../metrics`, op `status` | metrics all; op owner | partial: metrics charts only, no marks, no `status` op |
+| Status tab: TPS / memory / players last hour with deploy marks + kernel `status` op | GET `.../metrics`, op `status` | metrics all; op owner | partial: metrics charts with deploy marks (tap for the card, toggle); no `status` op |
 | Logs tab: server log ring (`logs`, "Fetch newer"), player client logs (`player.logs`) | ops | owner | missing |
 | Players tab (`players`: dev, ping, account age, client start; "Logs") | op | owner | missing |
 | Game tab: game commands (`game.<name>`, table / kv / JSON answers), Streams latest values (~1 s) | ops, GET `.../streams?since` | owner | missing |
@@ -221,9 +221,9 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 | Item | Route(s) | Role | App |
 | --- | --- | --- | --- |
 | Tiles (errors, kinds, players affected) with compare chips (`vs=prev`) | GET `/v1/errors` (+ previous window) | all | partial (`tt/errors.tsx`): no compare |
-| Window, realm, search `q`, build, branch filters; sort (`sort=`) | GET `/v1/errors?window&realm&q&build&branch&sort` | all | partial: window / realm / q only |
-| Trend chart with step choice and deploy marks | same | all | partial: sparkline per kind; no total trend / marks |
-| Kinds table (`errors-kinds`) | same | all | present as a list |
+| Window, realm, search `q`, build, branch filters; sort (`sort=`) | GET `/v1/errors?window&realm&q&build&branch&sort` | all | partial: window / realm / q (in the route) only |
+| Trend chart with step choice and deploy marks | same | all | partial: sparkline per kind (the Trend column of `errors-kinds`); marks on the kind page's occurrence bars (`tt/error/[fp].tsx`); no total trend |
+| Kinds table (`errors-kinds`) | same | all | present: DataTable `errors-kinds` |
 | Live new errors (SSE topic `error`) | SSE GET `/v1/live?topics=error` | all | present: `useErrorStream` (debounced 1.5 s refetch, status badge live / connecting / retrying; polls every 30 s while down) |
 | Kind side sheet (`fp`): where, stack, by side / build (→ deploy or Performance) / branch, servers | GET `/v1/errors/<fp>` | all | present (`tt/error/[fp].tsx`) |
 | Players who hit it (`errors-players`) | GET `/v1/errors/<fp>/players` | all | missing (`errorPlayers` defined, unused) |
@@ -233,7 +233,7 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 
 | Item | Route(s) | Role | App |
 | --- | --- | --- | --- |
-| Client and server percentiles over time by group (`by`, `pct`, `step`), flags, deploy marks (`mark`, `marks`), vs previous period, live servers with history (`job`), compare builds / before-after (`cmode`, `cmp`, `around`, `hours`) | `/v1/query/perf-client`, `/v1/query/perf-server`, `/v1/query/perf-compare`, `/v1/query/values`, GET `/v1/fleet/marks`, `/v1/fleet/servers`, `.../metrics` | all | present (`tt/performance.tsx`); missing live-event marks, DataTable features, URL state |
+| Client and server percentiles over time by group (`by`, `pct`, `step`), flags, deploy marks (`mark`, `marks`), vs previous period, live servers with history (`job`), compare builds / before-after (`cmode`, `cmp`, `around`, `hours`) | `/v1/query/perf-client`, `/v1/query/perf-server`, `/v1/query/perf-compare`, `/v1/query/values`, GET `/v1/fleet/marks`, `/v1/fleet/servers`, `.../metrics` | all | present (`tt/performance.tsx`): live-event marks, tap a mark for its card, `by` / `pct` / `step` / `mark` / `vs` / `cmode` / `cmp` / `around` / `hours` / `job` in the route, DataTables `perf-<side>-groups`, `perf-compare-<mode>` |
 
 ## 5. Data and Admin pages
 
@@ -241,7 +241,7 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 
 | Item | Route(s) | Role | App |
 | --- | --- | --- | --- |
-| Named query + JSON filters / options (`q`), read-only SQL with limit, saved queries (`saved`; owners save, rename, chart, pin, delete), result as table / chart, CSV / copy | GET `/v1/queries`, POST `/v1/query/<name>`, POST `/v1/sql`, `/v1/saved-queries` GET / POST / PATCH / DELETE | run all; edit owner | present (`tt/query.tsx`, copies TSV / JSON); no CSV file export |
+| Named query + JSON filters / options (`q`), read-only SQL with limit, saved queries (`saved`; owners save, rename, chart, pin, delete), result as table / chart, CSV / copy | GET `/v1/queries`, POST `/v1/query/<name>`, POST `/v1/sql`, `/v1/saved-queries` GET / POST / PATCH / DELETE | run all; edit owner | present (`tt/query.tsx`): DataTable `query-sql` (SQL types, CSV / JSON file through the share sheet, CSV / TSV / JSON copy) |
 
 ### Settings (`/settings`, owner) — `pages/Settings.tsx` + cards
 | Item | Route(s) | App (`tt/settings.tsx`) |
@@ -265,7 +265,7 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 
 | Item | Route(s) | App |
 | --- | --- | --- |
-| Filters actor / action / outcome (URL), facets, pages | GET `/v1/admin/audit` | present (`tt/audit.tsx`), filters not in a link |
+| Filters actor / action / outcome (URL), facets, pages | GET `/v1/admin/audit` | present (`tt/audit.tsx`): `actor` / `action` / `outcome` in the route, DataTable `audit-log`, entry sheet |
 
 ### Notifications (`/notifications`) — `pages/Notifications.tsx`, `pages/notifications/*`
 | Item | Route(s) | Role | App |
@@ -316,17 +316,17 @@ App paths are under `src/`; `tt/` means `src/app/tt/[backendId]/`.
 
 | Item | Web file | App |
 | --- | --- | --- |
-| DataTable (used by ~40 tables): click-sort asc / desc / off, shift multi-sort by raw value; global search; per-column filters (checklist, range, last 24 h, contains) with chips; Columns picker + reset; drag widths; sticky header; "12 of 340 rows"; paging; copy cell / row JSON; CSV export of the filtered view; copy link to the view; view remembered per table id (localStorage) and in the URL (`<id>.sort=-players`) | `components/data-table/{DataTable.tsx,model.ts,use-table-view.ts,clipboard.ts}` | missing: `features/typetorch/bits.tsx` `MiniTable` scrolls sideways, fixed columns, "Show all" |
-| Deploy markers on every time chart: release, rollback, promote, resign, kernel, backup, live-event start / end; grouped per bar; hover card; click → deploy page; one remembered show / hide toggle | `components/DeployMarkers.tsx`, `lib/perf.ts` | partial: `features/typetorch/marks.tsx` + `charts/LineChart.tsx` dashed lines and a list on Performance / Backend stats; no cards, no live events, no toggle, not on Overview / Errors / Server status |
-| Player hover card (headshot, display / user name, UserId, pid; after a short hover) | `components/PlayerHover.tsx` | missing (long-press) |
-| Product id card (icon, name, type, price, Show only this) | `components/ProductId.tsx` | partial (name inline) |
+| DataTable (used by ~40 tables): click-sort asc / desc / off, shift multi-sort by raw value; global search; per-column filters (checklist, range, last 24 h, contains) with chips; Columns picker + reset; drag widths; sticky header; "12 of 340 rows"; paging; copy cell / row JSON; CSV export of the filtered view; copy link to the view; view remembered per table id (localStorage) and in the URL (`<id>.sort=-players`) | `components/data-table/{DataTable.tsx,model.ts,use-table-view.ts,clipboard.ts}` | present (`features/typetorch/table/`: model.ts ported, DataTable.tsx, view.ts, export.ts): tap = sort, long-press = add to the sort, search, filter sheets (checklist, range, since, contains) with chips, Columns (show / hide, wider / narrower, reset), "x of y rows", paging, long-press / ⋯ = copy cell / row JSON, Export sheet (CSV / JSON file via expo-file-system + expo-sharing, CSV / TSV / JSON copy, copy link, reset), views per backend + table id in AsyncStorage and in links (`<id>.sort`, `<id>.f.<col>`); no drag widths (− / + in Columns), no sticky header (pages instead of an inner scroll). Tables switched: every former MiniTable plus players, player purchases / sessions / events / errors, events, funnels, experiments, economy, monetization, flow, audit, deploys, server history, errors kinds; Fleet / server / deploy-detail / bundle lists stay lists (ops pages) |
+| Deploy markers on every time chart: release, rollback, promote, resign, kernel, backup, live-event start / end; grouped per bar; hover card; click → deploy page; one remembered show / hide toggle | `components/DeployMarkers.tsx`, `lib/perf.ts` | present (`features/typetorch/marks.tsx`, `charts/LineChart.tsx`): every kind incl. live-event start / end, flags + labels (≤ 6), grouped per bar, tap a line for its card (title, time, from, place version, results, open deploy / live events), one remembered show / hide switch (AsyncStorage); on Overview, error kind bars, server status, Performance (+ live servers), Backend stats, Monetization |
+| Player hover card (headshot, display / user name, UserId, pid; after a short hover) | `components/PlayerHover.tsx` | present: long-press (headshot, names, UserId, pid, Open player, Copy pid / UserId) |
+| Product id card (icon, name, type, price, Show only this) | `components/ProductId.tsx` | present: tap an id (`features/typetorch/cards.tsx` `ProductId`: icon, name, type, price, Show only this inside a DataTable, Copy id), `ProductKind` filter |
 | Compare toggle `vs=prev` + change chips | `components/CompareToggle.tsx`, `components/ChangeChip.tsx`, `lib/compare.ts` | partial: Performance only (`api/tt/compare.ts`) |
 | Explain panel (`explain=<metric>`, headline, per dimension rate / mix diverging chart, tables, one-level drill) | `components/ExplainPanel.tsx`, `lib/explain.ts` | missing |
-| Drawn node graph (React Flow + dagre, pan / zoom, facet, moments) + Copy Mermaid | `components/GraphView.tsx`, `components/LazyGraph.tsx`, `lib/graph.ts` | partial: list + Copy Mermaid (`features/typetorch/graph.tsx`) |
-| Charts: DayBars (per day / step, previous dashed, bar click), PerfChart, Sparkline, recharts | `components/DayBars.tsx`, `PerfChart.tsx`, `Sparkline.tsx` | partial: `charts/LineChart.tsx` (LineChart scrub, BarChart tap, Sparkline, ShareBars); no previous-period overlay on bars |
+| Drawn node graph (React Flow + dagre, pan / zoom, facet, moments) + Copy Mermaid | `components/GraphView.tsx`, `components/LazyGraph.tsx`, `lib/graph.ts` | present: dagre + react-native-svg, gesture-handler pan / pinch + reanimated, zoom / fit / direction / full screen buttons, tap a state for its details and moves; list view as a toggle; Copy Mermaid |
+| Charts: DayBars (per day / step, previous dashed, bar click), PerfChart, Sparkline, recharts | `components/DayBars.tsx`, `PerfChart.tsx`, `Sparkline.tsx` | present: LineChart (scrub, tappable marks), BarChart (tap a bar, previous period dashed with `previous`, tappable marks), Sparkline, ShareBars |
 | 3D / 2D map renderer (three.js instanced meshes, orbit + fly keys, ortho 2D, clipping band, see-through looks, textures) | `components/maps/{map-renderer.ts,MapScene.tsx,BandControls.tsx}` | present: `features/maps/{renderer.ts,MapScene.tsx,BandControls.tsx}` on expo-gl + three (one finger turns / pans, two fingers pan, pinch zooms toward the fingers, tap picks, Fit, `focus`; actors / `setView` / `pickActor` kept for the recordings' Player view); WASD fly keys have no phone twin. Types for three in `src/types/three.d.ts`. A new view size remounts the GLView (expo-gl never resizes the drawing buffer); no updates while the screen is not focused. Not yet run on a device (typechecked only) |
-| Shareable / persisted state (every `useParam`) | `lib/hooks.ts` | missing (no AsyncStorage, no deep-link params) |
-| Benchmarks (50th / 90th) kept per browser | `lib/benchmarks.ts` | present per backend on the phone (secure store) |
+| Shareable / persisted state (every `useParam`) | `lib/hooks.ts` | present: page params in the route (`usePageParam` / `usePageParams`), filters + table views on the phone, "Copy link to this view" / Share (typetorch:// via Linking.createURL, `backend=<url>` so another phone with the backend opens it) |
+| Benchmarks (50th / 90th) kept per browser | `lib/benchmarks.ts` | present per backend on the phone (secure store) + export / import (copy JSON, save a file, paste JSON; the web's `tt-explorer-benchmarks` format) |
 
 ## 7. Live streams and polls
 
@@ -462,15 +462,16 @@ Done on `feat/phone-parity` (typechecked; not yet run on a device: expo-gl textu
 - Global Find player — GET `/v1/identity?uid=`
 - Page menu: add the 8 missing pages, grouped like `lib/nav.ts`
 
-### interaction
-- Drawn graph for Flow and player Timeline: dagre (`@dagrejs/dagre`) layout + react-native-svg nodes / edges, pan / pinch-zoom, facet and moments toggles, tap a node for its moves (web `components/GraphView.tsx`, `LazyGraph.tsx`, `lib/graph.ts`)
-- DataTable 1:1 (port `components/data-table/model.ts`): sort + multi-sort by raw value, global search, per-column filters (checklist, range, last 24 h, contains) with chips, column picker + reset, row counts, paging, copy cell / row JSON
-- DataTable CSV export via expo-file-system + expo-sharing, copy via expo-clipboard (web `data-table/clipboard.ts`)
-- Persisted table views (AsyncStorage per table id) and filter bar state (AsyncStorage per backend)
-- Shareable views: typetorch:// deep links carrying filter keys, page params and `<table>.sort/filter` params (web `use-table-view.ts`, `lib/filters.ts` `writeFilters`), "Copy link to this view"
-- Deploy marker cards (tap a mark: kind, seq, branch, time; open deploy) and a remembered show / hide toggle; live-event marks; marks on Overview, Errors, Server status, DayBars (web `components/DeployMarkers.tsx`)
-- Previous-period dashed overlay on bar charts (web `components/DayBars.tsx`)
-- Player hover cards as long-press on any pid (web `components/PlayerHover.tsx`) — GET `/v1/identity/<pid>/profile`
-- Product id card on tap + "Show only this" in a table (web `components/ProductId.tsx`)
-- URL-param parity for sheets and pickers (Funnels step sheet, Monetization buyers, Economy currency, Experiments assigned, Audit filters, Performance `by/pct/step/cmode/cmp/around`)
-- Benchmarks: keep phone storage (present); optional export / import of the 50th / 90th values
+### interaction (done; see §6 and the pages above)
+- [x] Drawn graph for Flow and player Timeline: dagre layout + react-native-svg, pan / pinch-zoom, facet and moments, tap a node for its moves (`features/typetorch/graph-view.tsx`)
+- [x] DataTable 1:1 (`features/typetorch/table/`): sort + multi-sort by raw value, search, per-column filters with chips, column picker + reset, row counts, paging, copy cell / row JSON
+- [x] DataTable CSV export via expo-file-system + expo-sharing, copy via expo-clipboard
+- [x] Persisted table views (AsyncStorage per backend + table id) and filter bar state (AsyncStorage per backend)
+- [x] Shareable views: typetorch:// links with filter keys, page params and `<table>.sort/filter` params, "Copy link to this view"
+- [x] Deploy marker cards, remembered toggle, live-event marks, marks on Overview, error kind bars, server status, bar charts
+- [x] Previous-period dashed overlay on bar charts (`charts/LineChart.tsx` BarChart `previous`; used on the Overview players chart)
+- [x] Player cards on long-press (`features/typetorch/cards.tsx`)
+- [x] Product id card on tap + "Show only this" in a table
+- [x] Page params in the route: Funnels, Monetization, Economy, Experiments, Audit, Performance, Errors (+ Flow, Events, Players, player page)
+- [x] Benchmarks: phone storage + export / import
+- Not done here (other groups' pages): the Live events page that a live-event mark's "Live events" button opens (`tt/live-events.tsx`, analytics); Fleet / server / deploy-detail / bundle lists as DataTables (ops pages, still lists)

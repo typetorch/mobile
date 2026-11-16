@@ -53,7 +53,9 @@ npx tsc --noEmit        # type check
 APK: `eas build -p android --profile preview` (internal distribution, `buildType: apk`); store build: `--profile production`.
 
 Only Expo Go modules are used (expo-router, @tanstack/react-query, expo-secure-store, expo-web-browser, expo-crypto,
-expo-linking, expo-clipboard, expo-image, expo-device, react-native-svg, @expo/vector-icons). No config plugin needs a
+expo-linking, expo-clipboard, expo-image, expo-device, react-native-svg, @expo/vector-icons, react-native-gesture-handler,
+react-native-reanimated, expo-file-system, expo-sharing, @react-native-async-storage/async-storage, and the pure-JS
+@dagrejs/dagre). No config plugin needs a
 dev client (`expo-secure-store`'s plugin only sets iOS Face ID text).
 
 **Browser sign-in in Expo Go**: the redirect is `exp://…/--/auth`, which a backend accepts only with
@@ -121,10 +123,13 @@ src/api/                 http.ts, opencloud.ts, roblox-public.ts, backend.ts, ba
                          server-history, compare)
 src/store/accounts.tsx   key, backends, tokens, prefs (secure store)
 src/features/            project (projects list, analytics, tabs), typetorch (pages registry, hooks, screen frame,
-                         filters.tsx = the filter bar + useTTAnalytics, bits.tsx = query state / tables / share bars /
-                         player rows / products / JSON, graph.tsx = the node graph as lists, marks.tsx, roblox-cards.ts)
-src/components/ui.tsx    design system;  src/charts/LineChart.tsx  LineChart (dashed series, deploy marks), BarChart (tap
-                         a bar), Sparkline, ShareBars
+                         filters.tsx = the filter bar (saved per backend) + useTTAnalytics, bits.tsx = query state /
+                         share bars / player rows / products / JSON, table/ = DataTable (model, view, export),
+                         cards.tsx = player and product cards, event-table.tsx, graph.tsx + graph-view.tsx = the node
+                         graph drawn and as lists, marks.tsx = deploy / live-event marks and their cards, view-link.tsx
+                         = page params in the route and "Copy link to this view", sheet.tsx, persist.ts, roblox-cards.ts)
+src/components/ui.tsx    design system;  src/charts/LineChart.tsx  LineChart (dashed series, tappable marks), BarChart (tap
+                         a bar, previous period dashed, tappable marks), Sparkline, ShareBars
 ```
 
 ### Adding a TypeTorch page
@@ -155,11 +160,16 @@ Phase 2 TypeTorch pages (web: `../backend/web/src/pages/`), all ported:
 - [x] AuditLog (admin)
 - [x] BackendStats (admin)
 
-Where the phone differs from the web: the node graph (Flow, a player's timeline) is a list of states with their moves
-out, a one-session path and the exit / move tables, not a drawn graph ("Copy Mermaid" gives the drawing); tables are
-sideways-scrolling lists without the web's per-column filters, column picker or CSV export (the Query page copies TSV);
-the filter bar's state lives in memory per backend, not in a shareable URL; Roblox benchmarks are kept per backend on the
-phone (secure store), not per browser.
+Where the phone differs from the web: the node graph (Flow, a player's timeline) is drawn with dagre + react-native-svg
+(one finger pans, two pinch, buttons zoom / fit / flip / full screen, tap a state for its details and moves; the list
+view stays as a toggle); every table is the shared DataTable (`features/typetorch/table/`, a port of the web's): tap a
+header to sort, long-press to add it to the sort, filter sheets with chips, Columns (show / hide, − / + widths instead of
+dragging), paging, long-press a row to copy a cell or the row, Export saves CSV / JSON through the share sheet or copies
+CSV / TSV / JSON; hover cards are a long-press (players) or a tap (product ids, deploy marks); the filter bar is one state
+per backend saved on the phone, and the link button in every TypeTorch header copies or shares a typetorch:// link with
+the page, its parameters (the web's names), the filters and every table's view (another phone with the same backend
+connected opens it on its own account); Roblox benchmarks are kept per backend on the phone (secure store), with copy /
+paste / file export of the web's JSON.
 
 Also not yet in the app: remote debug commands on the server page, changing runtime settings (read only here),
 deploy notifications (push needs a dev build), place versions (no Open Cloud read API).

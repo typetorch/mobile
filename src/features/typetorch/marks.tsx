@@ -23,6 +23,7 @@ import { fmtTime } from "@/lib/format";
 import { space, useTheme, type Palette } from "@/theme";
 
 import { useTTQuery } from "./hooks";
+import { TT_PAGES } from "./pages";
 import { storedValue } from "./persist";
 import { Sheet } from "./sheet";
 
@@ -123,10 +124,13 @@ function marksOf(mark: ChartMark | DeployMark[]): DeployMark[] {
 	return Array.isArray(mark.data) ? (mark.data as DeployMark[]) : [];
 }
 
+/** The Live events page is in the app (pages.ts lists it as ready). */
+const liveEventsPage = () => TT_PAGES.some((x) => x.key === "live-events" && x.status === "ready");
+
 /** Opens a release's deploy page (kernel and backup marks have none), or the Live events page for an event's mark. */
 export function openMark(backendId: string, mark: DeployMark) {
 	if (mark.kind === "event") {
-		router.push(`/tt/${backendId}/live-events`);
+		if (liveEventsPage()) router.push(`/tt/${backendId}/live-events`);
 		return;
 	}
 	const seq = markDeploySeq(mark);
@@ -164,7 +168,7 @@ export function MarkCardBody({ backendId, marks, onDone }: { backendId: string; 
 										}}
 									/>
 								) : null}
-								{m.kind === "event" ? (
+								{m.kind === "event" && liveEventsPage() ? (
 									<Button
 										title="Live events"
 										small
