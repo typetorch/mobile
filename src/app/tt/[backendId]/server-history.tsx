@@ -6,12 +6,45 @@ import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { View } from "react-native";
 
-import { Chips, Dot, List, Row, SearchBar, Stat, StatGrid, Txt } from "@/components/ui";
+import type { Api } from "@/api/backend";
+import { Chips, Dot, SearchBar, Stat, StatGrid, Txt } from "@/components/ui";
 import { Note, QueryState } from "@/features/typetorch/bits";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { TTScreen } from "@/features/typetorch/screen";
+import { DataTable, type DataColumn } from "@/features/typetorch/table";
 import { fmtAgo, fmtDuration, fmtInt, fmtTime, shortId } from "@/lib/format";
 import { space } from "@/theme";
+
+type Gone = NonNullable<Awaited<ReturnType<Api["fleetGoneServers"]>>>[number];
+const wentAt = (s: Gone) => s.closedAt ?? s.lostAt ?? s.lastSeen ?? null;
+
+const GONE_COLUMNS: DataColumn<Gone>[] = [
+	{ id: "job", header: "JobId", width: 110, mono: true, accessor: (s) => s.job, format: (_v, s) => shortId(s.job, 8), cell: (s) => (
+		<View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+			<Dot tone={s.state === "lost" ? "critical" : "muted"} />
+			<Txt variant="mono" style={{ fontSize: 11 }}>
+				{shortId(s.job, 8)}
+			</Txt>
+		</View>
+	) },
+	{ id: "state", header: "State", type: "enum", width: 70, order: ["lost", "closed"], accessor: (s) => s.state },
+	{ id: "went", header: "Gone", type: "date", width: 96, accessor: (s) => wentAt(s), format: (_v, s) => fmtAgo(wentAt(s)), searchText: (s) => (wentAt(s) ? fmtTime(wentAt(s)) : "") },
+	{ id: "branch", header: "Branch", type: "enum", width: 80, accessor: (s) => s.branch },
+	{ id: "artifact", header: "Build", width: 96, mono: true, accessor: (s) => s.artifact, format: (_v, s) => shortId(s.artifact, 6) },
+	{ id: "kernel", header: "Kernel", type: "enum", width: 70, accessor: (s) => s.kernel },
+	{
+		id: "ran",
+		header: "Ran",
+		type: "number",
+		width: 80,
+		accessor: (s) => {
+			const went = wentAt(s);
+			return s.startedAt && went ? Date.parse(went) - Date.parse(s.startedAt) : null;
+		},
+		format: (v) => (typeof v === "number" && v >= 0 ? fmtDuration(v) : "–"),
+	},
+	{ id: "health", header: "Health", type: "enum", width: 80, accessor: (s) => s.health },
+];
 
 export default function ServerHistoryScreen() {
 	return <TTScreen title="Server history">{({ backendId }) => <ServerHistory backendId={backendId} />}</TTScreen>;
@@ -52,34 +85,17 @@ function ServerHistory({ backendId }: { backendId: string }) {
 						/>
 						{branches.length > 1 ? <Chips options={[{ value: "", label: "All branches" }, ...branches.map((b) => ({ value: b, label: b }))]} value={branch} onChange={setBranch} /> : null}
 						{list.length ? (
-							<List>
-								{list.map((s) => {
-									const went = s.closedAt ?? s.lostAt ?? s.lastSeen ?? null;
-									const life = s.startedAt && went ? Date.parse(went) - Date.parse(s.startedAt) : null;
-									return (
-										<Row
-											key={s.job}
-											chevron
-											onPress={() => router.push(`/tt/${backendId}/server/${encodeURIComponent(s.job)}`)}
-											left={<Dot tone={s.state === "lost" ? "critical" : "muted"} />}
-											title={<Txt variant="mono">{shortId(s.job, 6)}</Txt>}
-											subtitle={
-												<View style={{ gap: 1 }}>
-													<Txt variant="small">
-														{s.state} {fmtAgo(went)} · {s.branch ?? "–"} · {shortId(s.artifact, 6)}
-														{s.kernel ? ` · kernel ${s.kernel}` : ""}
-													</Txt>
-													<Txt variant="small">
-														{went ? fmtTime(went) : "–"}
-														{life !== null && life >= 0 ? ` · ran ${fmtDuration(life)}` : ""}
-														{s.health && s.health !== "ok" ? ` · ${s.health}` : ""}
-													</Txt>
-												</View>
-											}
-										/>
-									);
-								})}
-							</List>
+							<DataTable
+								id="fleet-gone"
+								label="Recently gone"
+								columns={GONE_COLUMNS}
+								data={list}
+								rowId={(s) => s.job}
+								onRowPress={(s) => router.push(`/tt/${backendId}/server/${encodeURIComponent(s.job)}`)}
+								defaultSort={[{ id: "went", desc: true }]}
+								density="compact"
+								search={false}
+							/>
 						) : (
 							<Txt variant="muted" style={{ paddingHorizontal: space.xs }}>
 								No server matches.
