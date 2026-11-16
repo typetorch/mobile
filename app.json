@@ -33,7 +33,7 @@
         {
           "backgroundColor": "#ffffff",
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76,
+          "imageWidth": 120,
           "dark": {
             "backgroundColor": "#0a0a0a",
             "image": "./assets/images/splash-icon.png"
@@ -44,6 +44,25 @@
     ],
     "experiments": {
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "ca57b78e-9ea6-405e-a65a-3d462b8ca33d"
+      }
+    },
+    "owner": "phasenull",
+    "updates": {
+      "url": "https://u.expo.dev/ca57b78e-9ea6-405e-a65a-3d462b8ca33d",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "fingerprint"
     }
   }
 }

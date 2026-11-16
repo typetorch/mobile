@@ -6,6 +6,7 @@ import { View } from "react-native";
 import { scopeList } from "@/api/opencloud";
 import { getUser, userByName } from "@/api/roblox-public";
 import { Badge, Button, Card, confirm, ErrorState, Field, Icon, KV, List, Row, Screen, Section, Segmented, Txt } from "@/components/ui";
+import { AppUpdatesCard } from "@/features/app-updates";
 import { FEATURES, missingScopes } from "@/lib/features";
 import { daysLeft, fmtDate } from "@/lib/format";
 import { useAccounts } from "@/store/accounts";
@@ -201,6 +202,10 @@ export default function SettingsScreen() {
 					value={prefs.appearance}
 					onChange={(v) => setPrefs({ appearance: v })}
 				/>
+			</Section>
+
+			<Section title="App updates">
+				<AppUpdatesCard />
 			</Section>
 
 			<Section title="Privacy">
