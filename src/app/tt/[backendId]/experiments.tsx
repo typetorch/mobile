@@ -7,11 +7,13 @@ import { Pressable, View } from "react-native";
 
 import type { ExperimentOverride, ExperimentOverrides, ExperimentPlayer, ExperimentResult } from "@/api/tt/types";
 import { Badge, Button, Chips, List, Segmented, Txt } from "@/components/ui";
-import { NamedPlayerRow, Note, Panel, QueryState, ShareBar } from "@/features/typetorch/bits";
-import { DataTable } from "@/features/typetorch/table";
+import { Note, openPlayer, Panel, QueryState, ShareBar } from "@/features/typetorch/bits";
 import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
 import { useTTQuery } from "@/features/typetorch/hooks";
+import { playerColumns } from "@/features/typetorch/cards";
 import { TTScreen } from "@/features/typetorch/screen";
+import { DataTable, type DataColumn } from "@/features/typetorch/table";
+import { usePageParam, usePageParams } from "@/features/typetorch/view-link";
 import { fmtAgo, fmtInt, fmtNum, fmtPct, plural } from "@/lib/format";
 import { space, useTheme, type Tone } from "@/theme";
 
@@ -91,7 +93,9 @@ export default function ExperimentsScreen() {
 }
 
 function Experiments({ backendId }: { backendId: string }) {
-	const [scope, setScope] = useState<"player" | "server">("player");
+	// The web's URL parameters: scope, experiment, assigned + assignedVariant (the players sheet).
+	const [scopeParam, setScope] = usePageParam("scope", "player");
+	const scope: "player" | "server" = scopeParam === "server" ? "server" : "player";
 	return (
 		<>
 			<FilterBar backendId={backendId} />
@@ -117,8 +121,11 @@ function ServerScope({ backendId }: { backendId: string }) {
 function PlayerScope({ backendId }: { backendId: string }) {
 	const list = useTTAnalytics(backendId, "experiment", {});
 	const overrides = useTTQuery(backendId, ["experiment-overrides"], (api, s) => api.experimentOverrides(s), { retry: false });
-	const [picked, setPicked] = useState("");
-	const [assigned, setAssigned] = useState<{ experiment: string; variant: string } | null>(null);
+	const [params, setParams] = usePageParams();
+	const picked = params.experiment ?? "";
+	const setPicked = (v: string) => setParams({ experiment: v });
+	const assigned: { experiment: string; variant: string } | null = params.assigned ? { experiment: params.assigned, variant: params.assignedVariant ?? "" } : null;
+	const setAssigned = (a: { experiment: string; variant: string } | null) => setParams({ assigned: a?.experiment ?? null, assignedVariant: a?.variant || null });
 	const names = list.data && list.data.experiment === null ? [...new Set(list.data.experiments.map((e) => e.experiment))] : [];
 	const name = picked || names[0] || "";
 	const results = useTTAnalytics(backendId, "experiment", { experiment: name, scope: "player" }, { enabled: Boolean(name) });
@@ -275,6 +282,17 @@ const HOW: Record<ExperimentPlayer["how"], string> = { random: "random", forced:
 function AssignedPlayers({ backendId, experiment, variant, onVariant, onClose }: { backendId: string; experiment: string; variant: string; onVariant(v: string): void; onClose(): void }) {
 	const { state, apiFilters } = useTTFilters(backendId);
 	const q = useTTQuery(backendId, ["experiment-players", experiment, apiFilters, variant], (api, s) => api.experimentPlayers(experiment, apiFilters, variant ? { variant } : {}, s));
+	const columns = useMemo<DataColumn<ExperimentPlayer>[]>(
+		() => [
+			...playerColumns<ExperimentPlayer>(backendId),
+			{ id: "variant", header: "Variant", type: "enum", width: 100, accessor: (x) => x.variant, format: (_v, x) => `${x.variant}${x.mixed ? " (mixed)" : ""}` },
+			{ id: "how", header: "How", type: "enum", width: 96, accessor: (x) => x.how, format: (v) => HOW[v as ExperimentPlayer["how"]] ?? String(v) },
+			{ id: "assignedAt", header: "Assigned", type: "date", width: 110, accessor: (x) => x.assignedAt ?? x.firstAt, format: (_v, x) => (x.assignedAt ? fmtAgo(x.assignedAt) : `seen ${fmtAgo(x.firstAt)}`) },
+			{ id: "lastAt", header: "Last seen", type: "date", width: 100, accessor: (x) => x.lastAt, format: (_v, x) => fmtAgo(x.lastAt) },
+			{ id: "events", header: "Events", type: "number", width: 70, accessor: (x) => x.events, cell: (x) => fmtInt(x.events) },
+		],
+		[backendId],
+	);
 	return (
 		<Panel title={`Players in ${experiment}`} note={`${describeRange(state)}, under the page's filters.`} right={<Button title="Close" small variant="ghost" onPress={onClose} />}>
 			<QueryState q={q} rows={3}>
@@ -289,18 +307,16 @@ function AssignedPlayers({ backendId, experiment, variant, onVariant, onClose }:
 						) : null}
 						{d.players.length ? (
 							<>
-								<List>
-									{[...d.players]
-										.sort((a, b) => b.lastAt.localeCompare(a.lastAt))
-										.map((x) => (
-											<NamedPlayerRow
-												key={`${x.pid}:${x.variant}`}
-												backendId={backendId}
-												row={x}
-												detail={`${x.variant}${x.mixed ? " (mixed)" : ""} · ${HOW[x.how]} · ${x.assignedAt ? `assigned ${fmtAgo(x.assignedAt)}` : `seen ${fmtAgo(x.firstAt)}`} · last ${fmtAgo(x.lastAt)} · ${plural(x.events, "event")}`}
-											/>
-										))}
-								</List>
+								<DataTable
+									id="experiment-players"
+									label={`Players in ${experiment}`}
+									columns={columns}
+									data={d.players}
+									rowId={(x) => `${x.pid}:${x.variant}`}
+									onRowPress={(x) => openPlayer(backendId, x.pid)}
+									defaultSort={[{ id: "lastAt", desc: true }]}
+									density="compact"
+								/>
 								<Note>
 									{d.more ? `The ${fmtInt(d.players.length)} most recently seen, of ${fmtInt(d.total)}. ` : ""}
 									How comes from the assignment rows in the range: random, forced by the settings, or before the range when only their stamped events are in it.

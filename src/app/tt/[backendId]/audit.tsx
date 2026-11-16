@@ -11,6 +11,9 @@ import type { AuditEntry, AuditFilters, AuditPage } from "@/api/tt/types";
 import { Badge, Button, Chips, EmptyState, ErrorState, List, SkeletonList, Txt } from "@/components/ui";
 import { JsonBlock, Note } from "@/features/typetorch/bits";
 import { TTScreen } from "@/features/typetorch/screen";
+import { Sheet } from "@/features/typetorch/sheet";
+import { DataTable, type DataColumn } from "@/features/typetorch/table";
+import { usePageParams } from "@/features/typetorch/view-link";
 import { compactJson, fmtAgo, fmtInt, fmtTime } from "@/lib/format";
 import { useBackend } from "@/store/accounts";
 import { space, useTheme, type Tone } from "@/theme";
@@ -51,8 +54,14 @@ export default function AuditScreen() {
 
 function Audit({ backendId }: { backendId: string }) {
 	const { api, account } = useBackend(backendId);
-	const [filters, setFilters] = useState<AuditFilters>({});
-	const [open, setOpen] = useState<number | null>(null);
+	// The web's URL parameters: actor, action, outcome.
+	const [params, setParams] = usePageParams();
+	const filters = useMemo<AuditFilters>(
+		() => ({ ...(params.actor ? { actor: params.actor } : {}), ...(params.action ? { action: params.action } : {}), ...(params.outcome && (OUTCOMES as string[]).includes(params.outcome) ? { outcome: params.outcome as AuditEntry["outcome"] } : {}) }),
+		[params.actor, params.action, params.outcome],
+	);
+	const setFilters = (f: AuditFilters) => setParams({ actor: f.actor ?? null, action: f.action ?? null, outcome: f.outcome ?? null });
+	const [open, setOpen] = useState<AuditEntry | null>(null);
 	const query = useInfiniteQuery({
 		queryKey: ["tt", backendId, "audit", filters],
 		queryFn: ({ pageParam, signal }) => (api as Api).audit({ ...filters, limit: PAGE, ...(pageParam ? { before: pageParam } : { facets: true }) }, signal),
@@ -65,7 +74,7 @@ function Audit({ backendId }: { backendId: string }) {
 	const entries = useMemo(() => pages.flatMap((p) => p.entries), [pages]);
 	const facets = pages[0]?.facets;
 	const keepDays = pages[0]?.keepDays;
-	const set = (key: keyof AuditFilters, value: string) => setFilters((f) => ({ ...f, [key]: value || undefined }));
+	const set = (key: keyof AuditFilters, value: string) => setParams({ [key]: value || null });
 	const withCurrent = (opts: { value: string; label: string }[], current: string | undefined) => [{ value: "", label: "every" }, ...(current && !opts.some((o) => o.value === current) ? [{ value: current, label: current }] : []), ...opts];
 	const any = !!(filters.actor || filters.action || filters.outcome);
 	return (
@@ -84,11 +93,10 @@ function Audit({ backendId }: { backendId: string }) {
 				<ErrorState error={query.error} onRetry={() => query.refetch()} />
 			) : entries.length ? (
 				<>
-					<List>
-						{entries.map((e) => (
-							<Entry key={e.id} e={e} open={open === e.id} onPress={() => setOpen(open === e.id ? null : e.id)} />
-						))}
-					</List>
+					<DataTable id="audit-log" label="Audit log" columns={AUDIT_COLUMNS} data={entries} rowId={(e) => String(e.id)} onRowPress={setOpen} defaultSort={[{ id: "at", desc: true }]} density="compact" pageSize={100} />
+					<Sheet open={!!open} onClose={() => setOpen(null)} title={open?.action ?? ""}>
+						{open ? <Entry e={open} /> : null}
+					</Sheet>
 					{query.hasNextPage ? (
 						<Button title={query.isFetchingNextPage ? "Loading" : "Load older entries"} small loading={query.isFetchingNextPage} onPress={() => void query.fetchNextPage()} style={{ alignSelf: "flex-start" }} />
 					) : (
@@ -102,11 +110,25 @@ function Audit({ backendId }: { backendId: string }) {
 	);
 }
 
-function Entry({ e, open, onPress }: { e: AuditEntry; open: boolean; onPress(): void }) {
+const AUDIT_COLUMNS: DataColumn<AuditEntry>[] = [
+	{ id: "at", header: "When", type: "date", width: 110, accessor: (e) => e.at, format: (_v, e) => fmtAgo(e.at), exportValue: (e) => e.at, searchText: (e) => fmtTime(e.at) },
+	{ id: "actor", header: "Actor", type: "enum", width: 170, accessor: (e) => e.actor },
+	{ id: "role", header: "Role", type: "enum", width: 70, accessor: (e) => e.role, defaultHidden: true },
+	{ id: "via", header: "Via", type: "enum", width: 80, accessor: (e) => e.via, defaultHidden: true },
+	{ id: "action", header: "Action", type: "enum", width: 150, mono: true, accessor: (e) => e.action },
+	{ id: "outcome", header: "Outcome", type: "enum", width: 90, order: ["failed", "refused", "ok"], accessor: (e) => e.outcome, cell: (e) => <Badge label={`${e.outcome}${e.status && e.status >= 400 ? ` ${e.status}` : ""}`} tone={OUTCOME_TONE[e.outcome]} /> },
+	{ id: "status", header: "Status", type: "number", width: 64, accessor: (e) => e.status, defaultHidden: true },
+	{ id: "summary", header: "What changed", width: 240, accessor: (e) => auditSummary(e), filter: "text" },
+	{ id: "ip", header: "IP", width: 120, mono: true, accessor: (e) => e.ip || null, defaultHidden: true },
+	{ id: "details", header: "Details", width: 200, mono: true, accessor: (e) => (e.details ? compactJson(e.details, 400) : null), exportValue: (e) => (e.details ? JSON.stringify(e.details) : ""), defaultHidden: true },
+];
+
+function Entry({ e }: { e: AuditEntry }) {
 	const p = useTheme();
 	const summary = auditSummary(e);
+	const open = true;
 	return (
-		<Pressable onPress={onPress} android_ripple={{ color: p.accent }} style={{ paddingVertical: 8, paddingHorizontal: space.md, gap: 3 }}>
+		<View style={{ gap: 3 }}>
 			<View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
 				<Txt variant="mono" style={{ flex: 1 }} numberOfLines={1}>
 					{e.action}
@@ -131,6 +153,6 @@ function Entry({ e, open, onPress }: { e: AuditEntry; open: boolean; onPress(): 
 					{e.details ? <JsonBlock value={e.details} max={260} /> : null}
 				</View>
 			) : null}
-		</Pressable>
+		</View>
 	);
 }
