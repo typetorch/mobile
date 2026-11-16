@@ -3,10 +3,10 @@
  * and weights (read-only, GET /v1/experiments), and the players in an experiment or variant (GET /v1/experiments/<e>/players).
  */
 import { useMemo, useState } from "react";
-import { Pressable, View } from "react-native";
+import { View } from "react-native";
 
-import type { ExperimentOverride, ExperimentOverrides, ExperimentPlayer, ExperimentResult } from "@/api/tt/types";
-import { Badge, Button, Chips, List, Segmented, Txt } from "@/components/ui";
+import type { Comparison, ExperimentOverride, ExperimentOverrides, ExperimentPlayer, ExperimentResult } from "@/api/tt/types";
+import { Badge, Button, Chips, Segmented, Txt } from "@/components/ui";
 import { Note, openPlayer, Panel, QueryState, ShareBar } from "@/features/typetorch/bits";
 import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
 import { useTTQuery } from "@/features/typetorch/hooks";
@@ -28,6 +28,63 @@ const METRICS: Record<string, string> = {
 	robux: "Robux per player",
 	sessions: "sessions per player",
 };
+
+/** What newer servers add to a comparison (web lib/types.ts Comparison): p-values, the detectable effect, days to tell. */
+type ComparisonRow = Comparison & { pValue?: number; pAdjusted?: number; mde?: number | null; mdeLift?: number | null; days?: number | null };
+
+/** "±12% (±0.4 min)": the minimum detectable effect, relative when the control's value isn't 0. */
+function mdeText(c: ComparisonRow): string {
+	if (c.mde === undefined) return "–";
+	if (c.mde === null || !Number.isFinite(c.mde)) return "no players";
+	const absolute = `±${fmtMetric(c.metric, c.mde)}`;
+	return c.mdeLift === null || c.mdeLift === undefined ? absolute : `±${fmtPct(c.mdeLift, 0)} (${absolute})`;
+}
+
+/** "now", "~3 days", "over a year" or "–". */
+function daysText(days: number | null | undefined): string {
+	if (days === null || days === undefined) return "–";
+	if (days === 0) return "now";
+	if (days > 365) return "over a year";
+	return days < 1 ? "under a day" : `~${fmtInt(Math.ceil(days))} days`;
+}
+
+const liftText = (c: ComparisonRow) => (c.lift === null ? "–" : `${c.lift > 0 ? "+" : ""}${fmtPct(c.lift)}`);
+
+/** The web's COMPARISON_COLUMNS (DataTable `experiment-comparisons`). */
+function comparisonColumns(p: ReturnType<typeof useTheme>): DataColumn<ComparisonRow>[] {
+	return [
+		{ id: "words", header: "In words", width: 200, accessor: (c) => c.words, cell: (c) => <Txt variant="small" color={p.foreground} style={{ fontWeight: "600" }}>{c.words}</Txt> },
+		{ id: "metric", header: "Metric", type: "enum", width: 110, accessor: (c) => c.metric, format: (v) => METRICS[v as string] ?? String(v) },
+		{ id: "control", header: "Control", type: "number", width: 80, accessor: (c) => c.control, format: (_v, c) => fmtMetric(c.metric, c.control) },
+		{ id: "value", header: "Variant", type: "number", width: 80, accessor: (c) => c.value, format: (_v, c) => fmtMetric(c.metric, c.value) },
+		{ id: "lift", header: "Lift", type: "number", width: 70, accessor: (c) => c.lift, format: (_v, c) => liftText(c) },
+		{
+			id: "sure",
+			header: "Sure",
+			type: "number",
+			width: 90,
+			accessor: (c) => c.sure,
+			format: (_v, c) => fmtPct(c.sure, 0),
+			cell: (c) => (
+				<View style={{ gap: 2 }}>
+					<Txt variant="small" color={p.foreground}>
+						{fmtPct(c.sure, 0)}
+					</Txt>
+					<ShareBar share={c.sure} tone={c.sure >= 0.95 ? "good" : c.sure >= 0.8 ? "warning" : "muted"} width={70} />
+				</View>
+			),
+		},
+		{ id: "mde", header: "Can detect", title: "The smallest true difference these group sizes find 80% of the time (5%, corrected over the variants)", type: "number", width: 110, accessor: (c) => c.mdeLift ?? null, format: (_v, c) => mdeText(c) },
+		{ id: "days", header: "Time to tell", title: "At the range's traffic: days more until the observed difference would be sure (or now)", type: "number", width: 90, accessor: (c) => c.days ?? null, format: (_v, c) => daysText(c.days) },
+		{
+			id: "method",
+			header: "Test",
+			width: 160,
+			accessor: (c) => `${c.method}${c.pValue !== undefined && c.pAdjusted !== undefined && c.pAdjusted !== c.pValue ? `; p ${fmtNum(c.pValue, 4)}, corrected ${fmtNum(c.pAdjusted, 4)}` : ""}`,
+			defaultHidden: true,
+		},
+	];
+}
 
 function fmtMetric(metric: string, value: number): string {
 	if (metric === "returned" || metric === "payers") return fmtPct(value);
@@ -130,6 +187,8 @@ function PlayerScope({ backendId }: { backendId: string }) {
 	const name = picked || names[0] || "";
 	const results = useTTAnalytics(backendId, "experiment", { experiment: name, scope: "player" }, { enabled: Boolean(name) });
 	const rows = useMemo(() => (list.data && list.data.experiment === null ? experimentRows(list.data.experiments, overrides.data) : []), [list.data, overrides.data]);
+	const p = useTheme();
+	const experimentColumns = useMemo(() => experimentListColumns(p), [p]);
 	return (
 		<QueryState q={list} isEmpty={(d) => d.experiment === null && d.experiments.length === 0} empty="No experiment rows in this range.">
 			{() => (
@@ -156,11 +215,15 @@ function PlayerScope({ backendId }: { backendId: string }) {
 								: "This server holds no copy of the game's settings, so the overrides in the game's signed settings are not shown here."
 						}`}
 					>
-						<List>
-							{rows.map((e) => (
-								<ExperimentItem key={e.experiment} row={e} selected={assigned?.experiment === e.experiment} onPress={() => setAssigned(assigned?.experiment === e.experiment && !assigned.variant ? null : { experiment: e.experiment, variant: "" })} />
-							))}
-						</List>
+						<DataTable
+							id="experiments-list"
+							label="Experiments"
+							columns={experimentColumns}
+							data={rows}
+							rowId={(e) => e.experiment}
+							isRowSelected={(e) => assigned?.experiment === e.experiment}
+							onRowPress={(e) => setAssigned(assigned?.experiment === e.experiment && !assigned.variant ? null : { experiment: e.experiment, variant: "" })}
+						/>
 					</Panel>
 				</>
 			)}
@@ -168,44 +231,58 @@ function PlayerScope({ backendId }: { backendId: string }) {
 	);
 }
 
-function ExperimentItem({ row, selected, onPress }: { row: ExperimentRow; selected: boolean; onPress(): void }) {
-	const p = useTheme();
-	const w = row.weights;
-	return (
-		<Pressable onPress={onPress} android_ripple={{ color: p.accent }} style={{ padding: space.md, gap: 6, backgroundColor: selected ? p.muted : undefined }}>
-			<View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-				<Txt style={{ fontWeight: "600", flex: 1 }} numberOfLines={1}>
-					{row.experiment}
-				</Txt>
-				<Badge label={w.state === "settled" ? `settled on ${w.settledOn}` : w.state} tone={STATE_TONE[w.state]} />
-			</View>
-			<Txt variant="small">
-				{fmtInt(row.players)} assigned · {fmtInt(row.forced)} forced · seen: {row.variants.join(", ") || "–"}
-			</Txt>
-			{w.shares.length ? (
-				w.shares.map((s) => (
-					<View key={s.label} style={{ gap: 2 }}>
-						<View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-							<Txt variant="small" color={p.foreground} numberOfLines={1} style={{ flex: 1 }}>
-								{s.label}
-							</Txt>
-							<Txt variant="small">{fmtPct(s.share, 0)}</Txt>
-						</View>
-						<ShareBar share={s.share} tone="brand" />
-					</View>
-				))
-			) : (
-				<Txt variant="small">Weights unknown</Txt>
-			)}
-			<Txt variant="small" style={{ fontSize: 11 }}>
-				{w.note}
-			</Txt>
-		</Pressable>
-	);
+/** The web's EXPERIMENT_COLUMNS (DataTable `experiments-list`): state, weights with their note, variants seen, counts. */
+function experimentListColumns(p: ReturnType<typeof useTheme>): DataColumn<ExperimentRow>[] {
+	return [
+		{ id: "experiment", header: "Experiment", width: 130, accessor: (e) => e.experiment, cell: (e) => <Txt variant="small" color={p.foreground} style={{ fontWeight: "600" }}>{e.experiment}</Txt> },
+		{
+			id: "state",
+			header: "State",
+			type: "enum",
+			width: 110,
+			accessor: (e) => e.weights.state,
+			cell: (e) => <Badge label={e.weights.state === "settled" ? `settled on ${e.weights.settledOn}` : e.weights.state} tone={STATE_TONE[e.weights.state]} />,
+		},
+		{
+			id: "weights",
+			header: "Weights",
+			width: 200,
+			searchable: false,
+			accessor: (e) => e.weights.shares.map((x) => `${x.label} ${fmtPct(x.share, 0)}`).join(", "),
+			cell: (e) => (
+				<View style={{ gap: 4 }}>
+					{e.weights.shares.length ? (
+						e.weights.shares.map((x) => (
+							<View key={x.label} style={{ gap: 2 }}>
+								<View style={{ flexDirection: "row", justifyContent: "space-between", gap: 6 }}>
+									<Txt variant="small" color={p.foreground} numberOfLines={1} style={{ flex: 1, fontSize: 11 }}>
+										{x.label}
+									</Txt>
+									<Txt variant="small" style={{ fontSize: 11 }}>
+										{fmtPct(x.share, 0)}
+									</Txt>
+								</View>
+								<ShareBar share={x.share} tone="brand" />
+							</View>
+						))
+					) : (
+						<Txt variant="small">Weights unknown</Txt>
+					)}
+					<Txt variant="small" style={{ fontSize: 10 }}>
+						{e.weights.note}
+					</Txt>
+				</View>
+			),
+		},
+		{ id: "variants", header: "Variants seen", width: 120, accessor: (e) => e.variants.join(", ") },
+		{ id: "players", header: "Assigned", title: "Players with an assignment row in the range, per variant (a player in two variants counts twice)", type: "number", width: 76, accessor: (e) => e.players, cell: (e) => fmtInt(e.players) },
+		{ id: "forced", header: "Forced", title: "Players whose variant the settings forced, in the range", type: "number", width: 66, accessor: (e) => e.forced, cell: (e) => fmtInt(e.forced) },
+	];
 }
 
 function ResultsView({ data, onOpenVariant, selectedVariant }: { data: Results; onOpenVariant?: (variant: string) => void; selectedVariant?: string | undefined }) {
 	const p = useTheme();
+	const comparisons = useMemo(() => comparisonColumns(p), [p]);
 	if (!data.variants.length) return <Txt variant="muted">No player in this experiment in this range.</Txt>;
 	const rate = (r: { rate: number; count: number }) => `${fmtPct(r.rate)} (${fmtInt(r.count)})`;
 	return (
@@ -247,28 +324,12 @@ function ResultsView({ data, onOpenVariant, selectedVariant }: { data: Results; 
 					{...(onOpenVariant ? { onRowPress: (v: Variant) => onOpenVariant(v.variant) } : {})}
 				/>
 			</Panel>
-			<Panel title="How sure" note="Each variant against the control: two-proportion test for shares, bootstrap (or Welch) for averages.">
+			<Panel
+				title="How sure"
+				note={`Each variant against the control: two-proportion test for shares, bootstrap (or Welch) for averages.${data.variants.length > 2 ? ` With ${data.variants.length - 1} variants against the control, "sure" is Holm-corrected so more variants don't mean more lucky wins.` : ""} Can detect and time to tell assume 80% power at the range's traffic.`}
+			>
 				{data.comparisons.length ? (
-					<List>
-						{data.comparisons.map((c) => (
-							<View key={`${c.variant}-${c.metric}`} style={{ paddingVertical: 8, paddingHorizontal: space.md, gap: 3 }}>
-								<Txt style={{ fontWeight: "600" }}>{c.words}</Txt>
-								<Txt variant="small">
-									{METRICS[c.metric] ?? c.metric}: {fmtMetric(c.metric, c.control)} → {fmtMetric(c.metric, c.value)}
-									{c.lift === null ? "" : ` · lift ${c.lift > 0 ? "+" : ""}${fmtPct(c.lift)}`}
-								</Txt>
-								<View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-									<View style={{ flex: 1 }}>
-										<ShareBar share={c.sure} tone={c.sure >= 0.95 ? "good" : c.sure >= 0.8 ? "warning" : "muted"} />
-									</View>
-									<Txt variant="small">{fmtPct(c.sure, 0)} sure</Txt>
-								</View>
-								<Txt variant="small" style={{ fontSize: 11 }}>
-									{c.method}
-								</Txt>
-							</View>
-						))}
-					</List>
+					<DataTable id="experiment-comparisons" label="Comparisons with the control" columns={comparisons} data={data.comparisons as ComparisonRow[]} rowId={(c) => `${c.variant}-${c.metric}`} density="compact" />
 				) : (
 					<Txt variant="muted">Nothing to compare yet: it needs a control and at least one other variant with players.</Txt>
 				)}
