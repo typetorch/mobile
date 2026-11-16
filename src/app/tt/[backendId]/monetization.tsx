@@ -3,17 +3,21 @@
  * charts (tap a bar: who bought that day), revenue by product (tap: its buyers, `monetization-players`), top buyers, the
  * latest purchases (`monetization-purchases`), and when new players first buy.
  */
-import { useState } from "react";
+import { useMemo } from "react";
 import { View } from "react-native";
 
-import type { MonetizationDay, MonetizationResult } from "@/api/tt/types";
+import type { MonetizationDay, MonetizationPlayer, MonetizationProduct, MonetizationPurchase, MonetizationResult } from "@/api/tt/types";
 import { BarChart } from "@/charts/LineChart";
-import { Button, Card, EmptyState, List, Stat, StatGrid, Txt } from "@/components/ui";
-import { NamedPlayerRow, Note, Panel, ProductName, productKindLabel, QueryState, ShareBar, ShareRow } from "@/features/typetorch/bits";
+import { Button, Card, EmptyState, Stat, StatGrid, Txt } from "@/components/ui";
+import { Note, openPlayer, Panel, productKindLabel, QueryState, ShareBar } from "@/features/typetorch/bits";
+import { playerColumns, ProductId, ProductKind } from "@/features/typetorch/cards";
 import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
+import { chartMarks, DeployMarksToggle, useDeployMarks, useMarkCard } from "@/features/typetorch/marks";
 import { TTScreen } from "@/features/typetorch/screen";
-import { fmtAgo, fmtInt, fmtMinutes, fmtNum, fmtPct, plural } from "@/lib/format";
-import { space } from "@/theme";
+import { DataTable, type DataColumn } from "@/features/typetorch/table";
+import { usePageParams } from "@/features/typetorch/view-link";
+import { fmtAgo, fmtInt, fmtMinutes, fmtNum, fmtPct, fmtTime, plural, shortId } from "@/lib/format";
+import { space, useTheme } from "@/theme";
 
 const CHARTS: { key: keyof Omit<MonetizationDay, "date">; label: string; decimals?: number; description: string }[] = [
 	{ key: "revenue", label: "Revenue", description: "Robux the creator keeps per day (UTC), after Roblox's cut." },
@@ -31,7 +35,10 @@ export default function MonetizationScreen() {
 function Monetization({ backendId }: { backendId: string }) {
 	const { state } = useTTFilters(backendId);
 	const q = useTTAnalytics(backendId, "monetization");
-	const [buyers, setBuyers] = useState<BuyersOf>(null);
+	// The web's URL state: `buyers` = "<kind>:<product id>" (a product's buyers), `buyersDay` = a UTC day's buyers.
+	const [params, setParams] = usePageParams();
+	const buyers: BuyersOf = params.buyersDay ? { day: params.buyersDay } : params.buyers && params.buyers.includes(":") ? { kind: params.buyers.slice(0, params.buyers.indexOf(":")), product: params.buyers.slice(params.buyers.indexOf(":") + 1) } : null;
+	const setBuyers = (b: BuyersOf) => setParams(b === null ? { buyers: null, buyersDay: null } : "day" in b ? { buyers: null, buyersDay: b.day } : { buyers: `${b.kind}:${b.product}`, buyersDay: null });
 	return (
 		<>
 			<FilterBar backendId={backendId} />
@@ -58,7 +65,48 @@ function Monetization({ backendId }: { backendId: string }) {
 }
 
 function Body({ backendId, data, buyers, onBuyers }: { backendId: string; data: MonetizationResult; buyers: BuyersOf; onBuyers(b: BuyersOf): void }) {
+	const p = useTheme();
 	const t = data.totals;
+	const range = useMemo(() => ({ from: Date.parse(`${data.from.slice(0, 10)}T00:00:00Z`), to: Date.parse(`${data.to.slice(0, 10)}T00:00:00Z`) + 86_400_000 }), [data.from, data.to]);
+	const deploys = useDeployMarks(backendId, range);
+	const card = useMarkCard(backendId);
+	const productColumns = useMemo<DataColumn<MonetizationProduct>[]>(
+		() => [
+			{
+				id: "product",
+				header: "Product",
+				width: 170,
+				accessor: (x) => x.product,
+				filter: "text",
+				cell: (x) => (x.product === null ? <Txt variant="small">no id</Txt> : <ProductId backendId={backendId} id={x.product} kind={x.kind} showName filterColumn="product" />),
+			},
+			{ id: "kind", header: "Kind", type: "enum", width: 120, accessor: (x) => x.kind, format: (v) => productKindLabel(String(v)), cell: (x) => <ProductKind kind={x.kind} filterColumn="kind" /> },
+			{ id: "revenue", header: "Revenue", type: "number", width: 84, accessor: (x) => x.revenue, cell: (x) => fmtInt(x.revenue) },
+			{ id: "robux", header: "Robux paid", type: "number", width: 84, accessor: (x) => x.robux, cell: (x) => fmtInt(x.robux) },
+			{
+				id: "share",
+				header: "Share",
+				type: "number",
+				width: 110,
+				accessor: (x) => x.share,
+				format: (v) => fmtPct(v as number),
+				filter: false,
+				cell: (x) => (
+					<View style={{ flexDirection: "row", alignItems: "center", gap: 6, width: "100%" }}>
+						<View style={{ flex: 1 }}>
+							<ShareBar share={x.share} />
+						</View>
+						<Txt variant="small" style={{ width: 40, textAlign: "right" }}>
+							{fmtPct(x.share)}
+						</Txt>
+					</View>
+				),
+			},
+			{ id: "purchases", header: "Purchases", type: "number", width: 80, accessor: (x) => x.purchases, cell: (x) => fmtInt(x.purchases) },
+			{ id: "payers", header: "Payers", type: "number", width: 70, accessor: (x) => x.payers, cell: (x) => fmtInt(x.payers) },
+		],
+		[backendId],
+	);
 	const fp = data.firstPurchase;
 	const cut = fmtPct(1 - data.creatorShare, 0);
 	return (
@@ -74,32 +122,37 @@ function Body({ backendId, data, buyers, onBuyers }: { backendId: string; data: 
 				<Stat label="Time to first purchase" value={fmtMinutes(fp.medianMinutes)} sub={fp.payers ? `median, ${plural(fp.payers, "new player")} (avg ${fmtMinutes(fp.avgMinutes)})` : "no new player bought yet"} />
 			</StatGrid>
 			{buyers && "day" in buyers ? <BuyersPanel backendId={backendId} of={buyers} onClose={() => onBuyers(null)} /> : null}
+			<DeployMarksToggle {...deploys} />
 			{CHARTS.map((c) => (
 				<Card key={c.key} style={{ gap: 6 }}>
 					<Txt variant="label">{c.label}</Txt>
 					<Note>{c.description} Tap a bar for who bought that day.</Note>
-					<BarChart points={data.days.map((d) => ({ t: Date.parse(`${d.date}T00:00:00Z`), v: d[c.key] }))} format={(v) => (c.decimals ? fmtNum(v, c.decimals) : fmtInt(v))} onPick={(pt) => onBuyers({ day: new Date(pt.t).toISOString().slice(0, 10) })} />
+					<BarChart
+						points={data.days.map((d) => ({ t: Date.parse(`${d.date}T00:00:00Z`), v: d[c.key] }))}
+						format={(v) => (c.decimals ? fmtNum(v, c.decimals) : fmtInt(v))}
+						onPick={(pt) => onBuyers({ day: new Date(pt.t).toISOString().slice(0, 10) })}
+						marks={chartMarks(p, deploys.marks)}
+						onMarkPress={card.open}
+					/>
 				</Card>
 			))}
-			<Panel title="Revenue by product" note="Tap a product for who bought it.">
-				<List>
-					{data.products.map((x) => (
-						<View key={`${x.kind}:${x.product ?? ""}`}>
-							<ShareRow
-								label={<ProductName backendId={backendId} id={x.product} kind={x.kind} style="body" />}
-								value={`${fmtInt(x.revenue)} R$`}
-								share={x.share}
-								sub={`${productKindLabel(x.kind)} · ${fmtPct(x.share)} · ${fmtInt(x.robux)} R$ paid · ${plural(x.purchases, "purchase")} · ${plural(x.payers, "payer")}`}
-								{...(x.product !== null ? { onPress: () => onBuyers(buyers && "product" in buyers && buyers.product === x.product && buyers.kind === x.kind ? null : { kind: x.kind, product: x.product as string }) } : {})}
-							/>
-							{buyers && "product" in buyers && buyers.product === x.product && buyers.kind === x.kind ? (
-								<View style={{ padding: space.sm }}>
-									<BuyersPanel backendId={backendId} of={buyers} onClose={() => onBuyers(null)} />
-								</View>
-							) : null}
-						</View>
-					))}
-				</List>
+			{card.sheet}
+			<Panel title="Revenue by product" note="Tap a product for who bought it, a kind to show only game passes or developer products. Tap an id for its name, icon and price on Roblox (and Show only this).">
+				<DataTable
+					id="monetization-products"
+					label="Revenue by product"
+					columns={productColumns}
+					data={data.products}
+					rowId={(x) => `${x.kind}:${x.product ?? ""}`}
+					density="compact"
+					defaultSort={[{ id: "revenue", desc: true }]}
+					isRowSelected={(x) => !!buyers && "product" in buyers && buyers.product === x.product && buyers.kind === x.kind}
+					onRowPress={(x) => {
+						if (x.product === null) return;
+						onBuyers(buyers && "product" in buyers && buyers.product === x.product && buyers.kind === x.kind ? null : { kind: x.kind, product: x.product });
+					}}
+				/>
+				{buyers && "product" in buyers ? <BuyersPanel backendId={backendId} of={buyers} onClose={() => onBuyers(null)} /> : null}
 			</Panel>
 			<Panel title="Top buyers" note="Who spent the most in this range, on anything. Tap one to open the player.">
 				<Buyers backendId={backendId} />
@@ -141,22 +194,33 @@ function Buyers({ backendId, kind, product, day }: { backendId: string; kind?: s
 	const all = kind === undefined && product === undefined;
 	const { apiFilters } = useTTFilters(backendId);
 	const q = useTTAnalytics(backendId, "monetization-players", all ? {} : { kind, product }, day ? { filters: { ...apiFilters, from: day, to: day } } : {});
+	const columns = useMemo<DataColumn<MonetizationPlayer>[]>(
+		() => [
+			...playerColumns<MonetizationPlayer>(backendId),
+			{ id: "revenue", header: "Revenue", type: "number", width: 80, accessor: (x) => x.revenue, cell: (x) => fmtInt(x.revenue) },
+			{ id: "robux", header: "Robux paid", type: "number", width: 84, accessor: (x) => x.robux, cell: (x) => fmtInt(x.robux) },
+			{ id: "purchases", header: "Purchases", type: "number", width: 80, accessor: (x) => x.purchases, cell: (x) => fmtInt(x.purchases) },
+			...(all ? [{ id: "products", header: "Products", title: "Different products bought", type: "number" as const, width: 76, accessor: (x: MonetizationPlayer) => x.products, cell: (x: MonetizationPlayer) => fmtInt(x.products) }] : []),
+			{ id: "firstAt", header: "First purchase", type: "date", width: 110, accessor: (x) => x.firstAt, format: (_v, x) => fmtAgo(x.firstAt), defaultHidden: !all },
+			{ id: "lastAt", header: "Last purchase", type: "date", width: 110, accessor: (x) => x.lastAt, format: (_v, x) => fmtAgo(x.lastAt) },
+		],
+		[backendId, all],
+	);
 	return (
 		<QueryState q={q} rows={4}>
 			{(d) =>
 				d.players.length ? (
 					<View style={{ gap: space.sm }}>
-						<List>
-							{d.players.map((x) => (
-								<NamedPlayerRow
-									key={x.pid}
-									backendId={backendId}
-									row={x}
-									detail={`${plural(x.purchases, "purchase")}${all ? ` · ${plural(x.products, "product")}` : ""} · last ${fmtAgo(x.lastAt)}`}
-									right={<Txt style={{ fontWeight: "600" }}>{fmtInt(x.revenue)} R$</Txt>}
-								/>
-							))}
-						</List>
+						<DataTable
+							id={day ? "monetization-day-buyers" : all ? "monetization-buyers" : "monetization-product-buyers"}
+							label={day ? `Buyers on ${day}` : all ? "Top buyers" : "Buyers of this product"}
+							columns={columns}
+							data={d.players}
+							rowId={(x) => x.pid}
+							onRowPress={(x) => openPlayer(backendId, x.pid)}
+							defaultSort={[{ id: "revenue", desc: true }]}
+							density="compact"
+						/>
 						{d.more ? <Note>{`The ${fmtInt(d.players.length)} biggest spenders, of ${fmtInt(d.total)}.`}</Note> : null}
 					</View>
 				) : (
@@ -169,28 +233,42 @@ function Buyers({ backendId, kind, product, day }: { backendId: string; kind?: s
 
 function LatestPurchases({ backendId }: { backendId: string }) {
 	const q = useTTAnalytics(backendId, "monetization-purchases", { limit: 100 });
-	const [all, setAll] = useState(false);
+	const columns = useMemo<DataColumn<MonetizationPurchase>[]>(
+		() => [
+			{ id: "at", header: "When", type: "date", width: 110, accessor: (x) => x.at, format: (_v, x) => fmtAgo(x.at), exportValue: (x) => x.at, searchText: (x) => fmtTime(x.at) },
+			...playerColumns<MonetizationPurchase>(backendId).slice(0, 1),
+			{
+				id: "product",
+				header: "Product",
+				width: 160,
+				accessor: (x) => x.product,
+				filter: "text",
+				cell: (x) => (x.product === null ? <Txt variant="small">no id</Txt> : <ProductId backendId={backendId} id={x.product} kind={x.kind} showName filterColumn="product" />),
+			},
+			{ id: "kind", header: "Kind", type: "enum", width: 120, accessor: (x) => x.kind, format: (v) => productKindLabel(String(v)), cell: (x) => <ProductKind kind={x.kind} filterColumn="kind" /> },
+			{ id: "robux", header: "Robux paid", type: "number", width: 84, accessor: (x) => x.robux, cell: (x) => fmtInt(x.robux) },
+			{ id: "revenue", header: "Revenue", type: "number", width: 80, accessor: (x) => x.revenue, cell: (x) => fmtInt(x.revenue), defaultHidden: true },
+			{ id: "where", header: "Where", type: "enum", width: 100, accessor: (x) => x.where },
+			...playerColumns<MonetizationPurchase>(backendId).slice(1),
+			{ id: "sid", header: "Session", width: 110, mono: true, accessor: (x) => x.sid, format: (_v, x) => shortId(x.sid, 10), defaultHidden: true },
+		],
+		[backendId],
+	);
 	return (
 		<QueryState q={q} rows={4}>
 			{(d) =>
 				d.purchases.length ? (
 					<View style={{ gap: space.sm }}>
-						<List>
-							{(all ? d.purchases : d.purchases.slice(0, 25)).map((x) => (
-								<View key={`${x.at}:${x.pid}:${x.kind}:${x.product ?? ""}:${x.sid}`}>
-									<NamedPlayerRow
-										backendId={backendId}
-										row={x}
-										detail={`${fmtAgo(x.at)} · ${productKindLabel(x.kind)}${x.where ? ` · ${x.where}` : ""}`}
-										right={<Txt style={{ fontWeight: "600" }}>{fmtInt(x.robux)} R$</Txt>}
-									/>
-									<View style={{ paddingHorizontal: 12, paddingBottom: 6, marginTop: -4 }}>
-										{x.product === null ? <Txt variant="small">no id</Txt> : <ProductName backendId={backendId} id={x.product} kind={x.kind} />}
-									</View>
-								</View>
-							))}
-						</List>
-						{d.purchases.length > 25 ? <Button title={all ? "Show fewer" : `Show all ${d.purchases.length}`} small variant="ghost" onPress={() => setAll((a) => !a)} style={{ alignSelf: "flex-start" }} /> : null}
+						<DataTable
+							id="monetization-purchases"
+							label="Latest purchases"
+							columns={columns}
+							data={d.purchases}
+							rowId={(x) => `${x.at}:${x.pid}:${x.kind}:${x.product ?? ""}:${x.sid}`}
+							defaultSort={[{ id: "at", desc: true }]}
+							density="compact"
+							pageSize={25}
+						/>
 						{d.more ? <Note>{`The latest ${fmtInt(d.purchases.length)}, of ${fmtInt(d.total)}.`}</Note> : null}
 					</View>
 				) : (

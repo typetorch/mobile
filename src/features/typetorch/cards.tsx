@@ -20,7 +20,7 @@ import { radius, space, useTheme } from "@/theme";
 import { openPlayer, parseProductId, productTypeOf, useProductInfo, type ProductType } from "./bits";
 import { useTTQuery } from "./hooks";
 import { Sheet } from "./sheet";
-import { useTableFilter } from "./table";
+import { useTableFilter, type DataColumn } from "./table";
 
 // Players -----------------------------------------------------------------------------------------------------------------
 
@@ -117,6 +117,50 @@ export function PlayerHover({ backendId, pid, uid, name, displayName, children, 
 			</Pressable>
 			<PlayerCardSheet backendId={backendId} pid={pid} known={known} open={open} onClose={() => setOpen(false)} />
 		</>
+	);
+}
+
+/** A player list's first columns (the web's PlayerPageLink + UserIdLink): the name or pid (tap: open, long-press: card) and the UserId. */
+export function playerColumns<T extends { pid: string; uid?: number | undefined; name?: string | undefined; displayName?: string | undefined }>(backendId: string): DataColumn<T>[] {
+	return [
+		{
+			id: "player",
+			header: "Player",
+			width: 150,
+			accessor: (r) => r.name ?? r.pid,
+			searchText: (r) => `${r.pid} ${r.displayName ?? ""} ${r.uid ?? ""}`,
+			filter: false,
+			cell: (r) => <PlayerCell backendId={backendId} row={r} />,
+		},
+		{
+			id: "uid",
+			header: "UserId",
+			width: 100,
+			type: "number",
+			filter: false,
+			accessor: (r) => r.uid ?? null,
+			format: (v) => (v === null || v === undefined ? "not linked" : String(v)),
+			exportValue: (r) => (r.uid !== undefined ? String(r.uid) : ""),
+		},
+	];
+}
+
+function PlayerCell({ backendId, row }: { backendId: string; row: { pid: string; uid?: number | undefined; name?: string | undefined; displayName?: string | undefined } }) {
+	const p = useTheme();
+	const label = row.name ? (row.displayName && row.displayName !== row.name ? `${row.displayName} (@${row.name})` : `@${row.name}`) : shortId(row.pid, 10);
+	return (
+		<PlayerHover backendId={backendId} pid={row.pid} uid={row.uid} name={row.name} displayName={row.displayName}>
+			<View>
+				<Txt variant="small" color={p.brand} numberOfLines={1} style={{ fontWeight: "600" }}>
+					{label}
+				</Txt>
+				{row.name ? (
+					<Txt variant="mono" numberOfLines={1} style={{ fontSize: 10, color: p.mutedForeground }}>
+						{shortId(row.pid, 10)}
+					</Txt>
+				) : null}
+			</View>
+		</PlayerHover>
 	);
 }
 

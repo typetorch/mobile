@@ -3,12 +3,15 @@
  * two compared. A step opens the players who reached it or dropped off there (`funnel-players`).
  */
 import type { UseQueryResult } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo } from "react";
 import { Pressable, View } from "react-native";
 
 import type { FunnelPlayer, FunnelResult, PlaytimeFunnelResult } from "@/api/tt/types";
 import { Button, Chips, Icon, List, Segmented, Txt } from "@/components/ui";
-import { NamedPlayerRow, Note, Panel, QueryState, ShareBar } from "@/features/typetorch/bits";
+import { Note, openPlayer, Panel, QueryState, ShareBar } from "@/features/typetorch/bits";
+import { playerColumns } from "@/features/typetorch/cards";
+import { DataTable, type DataColumn } from "@/features/typetorch/table";
+import { usePageParams } from "@/features/typetorch/view-link";
 import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
 import { TTScreen } from "@/features/typetorch/screen";
 import { fmtAgo, fmtInt, fmtNum, fmtPct, plural } from "@/lib/format";
@@ -80,10 +83,16 @@ export default function FunnelsScreen() {
 
 function Funnels({ backendId }: { backendId: string }) {
 	const list = useTTAnalytics(backendId, "funnel", {});
-	const [picked, setPicked] = useState("");
-	const [compare, setCompare] = useState("");
-	const [open, setOpen] = useState<Open | null>(null);
-	const [mode, setMode] = useState<Mode>("reached");
+	// The web's URL state: funnel, compare, and the step sheet (stepFunnel, step, stepMode).
+	const [params, setParams] = usePageParams();
+	const picked = params.funnel ?? "";
+	const compare = params.compare ?? "";
+	const open: Open | null = params.stepFunnel && params.step !== undefined && Number.isFinite(Number(params.step)) ? { funnel: params.stepFunnel, step: Number(params.step) } : null;
+	const mode: Mode = params.stepMode === "dropped" ? "dropped" : "reached";
+	const setPicked = (v: string) => setParams({ funnel: v });
+	const setCompare = (v: string) => setParams({ compare: v });
+	const setOpen = (o: Open | null) => setParams(o ? { stepFunnel: o.funnel, step: String(o.step) } : { stepFunnel: null, step: null, stepMode: null });
+	const setMode = (m: Mode) => setParams({ stepMode: m === "dropped" ? "dropped" : null });
 	const funnels = list.data && list.data.funnel === null ? list.data.funnels : [];
 	const name = picked || funnels[0]?.name || (VIRTUAL[0] as (typeof VIRTUAL)[number]).key;
 	const other = compare && compare !== name ? compare : "";
@@ -105,10 +114,7 @@ function Funnels({ backendId }: { backendId: string }) {
 						small
 						icon="swap-horizontal"
 						variant="ghost"
-						onPress={() => {
-							setPicked(other);
-							setCompare(name);
-						}}
+						onPress={() => setParams({ funnel: other, compare: name })}
 						style={{ alignSelf: "flex-start" }}
 					/>
 				) : null}
@@ -232,6 +238,24 @@ function StepPlayers({ backendId, funnelKey, steps: data, index, step, mode, onM
 		const last = x.lastStep === null ? "" : labelOf(x.lastStep);
 		return mode === "reached" ? `reached ${x.at ? fmtAgo(x.at) : "–"}${last ? ` · furthest ${last}` : ""} · seen ${x.lastAt ? fmtAgo(x.lastAt) : "–"}` : `last step ${last || "–"} ${x.at ? fmtAgo(x.at) : ""} · seen ${x.lastAt ? fmtAgo(x.lastAt) : "–"}`;
 	};
+	const columns = useMemo<DataColumn<FunnelPlayer>[]>(() => {
+		const stepText = (x: FunnelPlayer) => (x.lastStep === null ? "" : labelOf(x.lastStep));
+		const cols: DataColumn<FunnelPlayer>[] = [...playerColumns<FunnelPlayer>(backendId)];
+		if (v) cols.push({ id: "playtime", header: "Playtime", width: 90, accessor: (x) => x.playtimeSeconds ?? 0, format: (_x, x) => fmtPlaytime(x.playtimeSeconds ?? 0) });
+		else if (mode === "reached")
+			cols.push(
+				{ id: "at", header: "Reached", title: "When they first logged this step or a later one", type: "date", width: 110, accessor: (x) => x.at, format: (_x, x) => (x.at ? fmtAgo(x.at) : "–") },
+				{ id: "lastStep", header: "Furthest step", width: 140, accessor: (x) => x.lastStep, format: (_x, x) => stepText(x), defaultHidden: true },
+			);
+		else
+			cols.push(
+				{ id: "lastStep", header: "Last step", width: 140, accessor: (x) => x.lastStep, format: (_x, x) => stepText(x) },
+				{ id: "at", header: "At", title: "When they first logged their last step", type: "date", width: 110, accessor: (x) => x.at, format: (_x, x) => (x.at ? fmtAgo(x.at) : "–") },
+			);
+		cols.push({ id: "lastAt", header: "Last seen", type: "date", width: 110, accessor: (x) => x.lastAt, format: (_x, x) => (x.lastAt ? fmtAgo(x.lastAt) : "–") });
+		return cols;
+		// labelOf reads the steps
+	}, [backendId, v, mode, steps]);
 	return (
 		<View style={{ gap: space.sm, paddingLeft: space.sm }}>
 			<Segmented
@@ -247,13 +271,15 @@ function StepPlayers({ backendId, funnelKey, steps: data, index, step, mode, onM
 				{(d) =>
 					d.players.length ? (
 						<View style={{ gap: space.sm }}>
-							<List>
-								{[...d.players]
-									.sort((a, b) => ((v ? b.lastAt : b.at) ?? "").localeCompare((v ? a.lastAt : a.at) ?? ""))
-									.map((x) => (
-										<NamedPlayerRow key={x.pid} backendId={backendId} row={x} detail={detail(x)} />
-									))}
-							</List>
+							<DataTable
+								id="funnel-players"
+								label={`Players ${mode === "reached" ? "who reached" : "who dropped off at"} ${labelOf(step)}`}
+								columns={columns}
+								data={d.players}
+								rowId={(x) => x.pid}
+								onRowPress={(x) => openPlayer(backendId, x.pid)}
+								defaultSort={[{ id: v ? "lastAt" : "at", desc: true }]}
+							/>
 							<Note>
 								{d.more ? `The ${fmtInt(d.players.length)} most recent, of ${fmtInt(d.total)}. ` : ""}
 								{v
