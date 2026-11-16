@@ -1,13 +1,15 @@
-/** Deploys: the release history, newest first, a page at a time (GET /v1/fleet/deploys). */
+/** Deploys: the release history, newest first, a page at a time (GET /v1/fleet/deploys), one branch or all (`branch`). */
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
+import { useEffect, useState } from "react";
 
 import type { DeployRecord } from "@/api/tt/deploys";
 import { DEPLOY_OUTCOMES_ORDER, OUTCOME_STYLE, startedByText } from "@/api/tt/deploys";
-import { Badge, Button, EmptyState, ErrorState, Section, SkeletonList, Txt } from "@/components/ui";
+import { Badge, Button, EmptyState, ErrorState, Field, Section, SkeletonList, Txt } from "@/components/ui";
 import { outcomeTone } from "@/features/typetorch/hooks";
 import { TTScreen } from "@/features/typetorch/screen";
 import { DataTable, type DataColumn } from "@/features/typetorch/table";
+import { usePageParam } from "@/features/typetorch/view-link";
 import { fmtAgo, shortId } from "@/lib/format";
 import { useBackend } from "@/store/accounts";
 
@@ -32,19 +34,55 @@ const DEPLOY_COLUMNS: DataColumn<DeployRecord>[] = [
 
 function Deploys({ backendId }: { backendId: string }) {
 	const { api, account } = useBackend(backendId);
+	const [branch, setBranch] = usePageParam("branch");
+	const [text, setText] = useState(branch);
+	useEffect(() => setText(branch), [branch]);
 	const q = useInfiniteQuery({
-		queryKey: ["tt", backendId, "deploys", "pages"],
+		queryKey: ["tt", backendId, "deploys", "pages", branch],
 		enabled: !!api && !account?.signedOut,
 		initialPageParam: undefined as number | undefined,
-		queryFn: ({ pageParam, signal }) => api!.fleetDeploys({ limit: 30, ...(pageParam ? { before: pageParam } : {}) }, signal),
+		queryFn: ({ pageParam, signal }) => api!.fleetDeploys({ limit: 50, ...(branch ? { branch } : {}), ...(pageParam ? { before: pageParam } : {}) }, signal),
 		getNextPageParam: (last) => last.next ?? undefined,
 	});
-	if (q.error) return <ErrorState error={q.error} onRetry={() => q.refetch()} />;
-	if (!q.data) return <SkeletonList rows={8} />;
+	const filter = (
+		<Field
+			label="Branch"
+			value={text}
+			placeholder="any branch"
+			autoCapitalize="none"
+			autoCorrect={false}
+			onChangeText={(t) => {
+				setText(t);
+				if (!t) setBranch("");
+			}}
+			onSubmitEditing={() => setBranch(text.trim())}
+			onBlur={() => setBranch(text.trim())}
+			returnKeyType="done"
+		/>
+	);
+	if (q.error) return (
+		<>
+			{filter}
+			<ErrorState error={q.error} onRetry={() => q.refetch()} />
+		</>
+	);
+	if (!q.data) return (
+		<>
+			{filter}
+			<SkeletonList rows={8} />
+		</>
+	);
 	const deploys = q.data.pages.flatMap((p) => p.deploys);
-	if (!deploys.length) return <EmptyState icon="rocket-outline" title="No deploys yet" body="Releases made with the TypeTorch CLI show up here with their rollout outcome." />;
+	if (!deploys.length)
+		return (
+			<>
+				{filter}
+				<EmptyState icon="rocket-outline" title={`No deploy yet${branch ? ` on ${branch}` : ""}`} body="A release shows up when the CLI posts it or its first server reports it." />
+			</>
+		);
 	return (
 		<Section title="Releases">
+			{filter}
 			<DataTable id="deploys" label="Releases" columns={DEPLOY_COLUMNS} data={deploys} rowId={(d) => String(d.seq)} onRowPress={(d) => router.push(`/tt/${backendId}/deploy/${d.seq}`)} defaultSort={[{ id: "seq", desc: true }]} density="compact" pageSize={50} />
 			{q.hasNextPage ? <Button title="Load more" small loading={q.isFetchingNextPage} onPress={() => q.fetchNextPage()} style={{ alignSelf: "center" }} /> : <Txt variant="small" style={{ textAlign: "center" }}>That's all of them.</Txt>}
 		</Section>

@@ -2,7 +2,8 @@
  * Errors: the error kinds seen in a window (GET /v1/errors), by realm, branch and build, searchable, with their trend and
  * "vs previous period" chips on the tiles; a header tap asks the server for the 200 first in that order; new errors
  * refetch the list live (SSE GET /v1/live?topics=error, features/typetorch/live-feeds.ts). The web's `fp` (its side
- * sheet) is the kind's own page here (error/<fp>); a link with `fp` opens it.
+ * sheet) is the kind's own page here (error/<fp>); a link with `fp` opens it. The total trend (every listed kind's
+ * counts per step, the window's own step) with deploy marks is the phone's summary of the kinds' trend column.
  */
 import { keepPreviousData } from "@tanstack/react-query";
 import { router } from "expo-router";
@@ -12,12 +13,13 @@ import { Switch, View } from "react-native";
 import type { ErrorParams } from "@/api/backend";
 import { change } from "@/api/tt/benchmarks";
 import { previousWindow } from "@/api/tt/compare";
-import type { ErrorKind } from "@/api/tt/types";
-import { Sparkline } from "@/charts/LineChart";
+import type { ErrorKind, ErrorList } from "@/api/tt/types";
+import { BarChart, Sparkline } from "@/charts/LineChart";
 import { Badge, Button, Chips, EmptyState, ErrorState, Field, SearchBar, Section, Segmented, SkeletonList, Stat, StatGrid, Txt } from "@/components/ui";
 import { ChangeChip } from "@/features/typetorch/bits";
 import { bucketLabel, ERROR_WINDOWS, errorKindHref, errorWindow, errorWindowLabel, KIND_SORT_COLUMNS } from "@/features/typetorch/errors";
 import { useTTQuery } from "@/features/typetorch/hooks";
+import { chartMarks, DeployMarksToggle, useDeployMarks, useMarkCard } from "@/features/typetorch/marks";
 import { streamLabel, useErrorStream } from "@/features/typetorch/live-feeds";
 import { TTScreen } from "@/features/typetorch/screen";
 import { DataTable, type DataColumn, type SortSpec } from "@/features/typetorch/table";
@@ -184,6 +186,7 @@ function Errors({ backendId }: { backendId: string }) {
 						<Stat label="Trend step" value={bucketLabel(list.data.window.bucketSeconds)} sub={`${list.data.window.buckets} steps`} />
 					</StatGrid>
 					{compareOn && prev.error ? <Txt variant="small">Couldn't load the window before: {prev.error.message}</Txt> : null}
+					{list.data.kinds.length ? <TotalTrend backendId={backendId} data={list.data} branch={branch} /> : null}
 					{list.data.kinds.length ? (
 						<Section title={list.data.more ? `Top ${list.data.kinds.length} kinds (${list.data.more} more)` : "Error kinds"}>
 							<DataTable
@@ -204,6 +207,36 @@ function Errors({ backendId }: { backendId: string }) {
 				</>
 			) : null}
 		</>
+	);
+}
+
+/** Every listed kind's errors per step of the window (the kinds' trend column summed), with deploy marks. */
+function TotalTrend({ backendId, data, branch }: { backendId: string; data: ErrorList; branch: string }) {
+	const p = useTheme();
+	const from = Date.parse(data.window.from);
+	const to = Date.parse(data.window.to);
+	const stepMs = data.window.bucketSeconds * 1000;
+	const points = useMemo(() => {
+		const n = Math.max(0, ...data.kinds.map((k) => k.spark.length));
+		const sums = Array.from({ length: n }, (_, i) => data.kinds.reduce((s, k) => s + (k.spark[i] ?? 0), 0));
+		// The spark's last bucket ends at the window's end.
+		const first = to - n * stepMs;
+		return sums.map((v, i) => ({ t: first + i * stepMs, v }));
+	}, [data.kinds, to, stepMs]);
+	const markRange = useMemo(() => ({ from, to }), [from, to]);
+	const deploys = useDeployMarks(backendId, markRange, branch || undefined);
+	const card = useMarkCard(backendId);
+	const daily = data.window.bucketSeconds >= 86_400;
+	if (!points.length) return null;
+	return (
+		<Section title="Trend">
+			<Txt variant="small">
+				Errors per {bucketLabel(data.window.bucketSeconds)}, every listed kind together{data.more ? ` (the ${compact(data.more)} kinds not shown are left out)` : ""}. Deploy marks: tap one for its card.
+			</Txt>
+			<DeployMarksToggle {...deploys} />
+			<BarChart points={points} color={p.destructive} format={compact} marks={chartMarks(p, deploys.marks)} onMarkPress={card.open} timeLabel={(t) => (daily ? new Date(t).toISOString().slice(5, 10) : new Date(t).toISOString().slice(11, 16))} />
+			{card.sheet}
+		</Section>
 	);
 }
 
