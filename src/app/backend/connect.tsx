@@ -8,9 +8,9 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 
 import { createApi } from "@/api/backend";
-import { deviceLabel, isDevRedirect, loginOptions, normalizeBackendUrl, signInWithAdminToken, signInWithBrowser, type MobileToken } from "@/api/backend-auth";
+import { deviceLabel, isDevRedirect, isUnencrypted, loginOptions, normalizeBackendUrl, signInWithAdminToken, signInWithBrowser, UNENCRYPTED_HINT, type MobileToken } from "@/api/backend-auth";
 import { ProjectRow } from "@/components/ProjectRow";
-import { Button, Card, Field, Icon, List, Screen, Section, Txt } from "@/components/ui";
+import { Button, Card, confirm, Field, Icon, List, Screen, Section, Txt } from "@/components/ui";
 import { useProjects } from "@/features/project/projects";
 import { useAccounts } from "@/store/accounts";
 import { useTheme } from "@/theme";
@@ -45,7 +45,7 @@ async function describe(url: string, token: MobileToken): Promise<Pending> {
 export default function ConnectBackend() {
 	const p = useTheme();
 	const { reauth } = useLocalSearchParams<{ reauth?: string }>();
-	const { backends, addBackend, replaceToken, updateBackend } = useAccounts();
+	const { backends, addBackend, replaceToken } = useAccounts();
 	const existing = backends.find((b) => b.id === reauth) ?? null;
 	const projects = useProjects();
 	const [url, setUrl] = useState(existing?.url ?? "");
@@ -59,6 +59,12 @@ export default function ConnectBackend() {
 	/** null: unknown yet; false: the backend has no browser sign-in (hide the button). */
 	const [mobileLogin, setMobileLogin] = useState<boolean | null>(null);
 	const devRedirect = isDevRedirect();
+	let plainHttp = false;
+	try {
+		plainHttp = !!url.trim() && isUnencrypted(normalizeBackendUrl(url));
+	} catch {
+		// not a usable address yet
+	}
 
 	// Ask the backend which sign-ins it offers once the address looks complete.
 	useEffect(() => {
@@ -83,8 +89,8 @@ export default function ConnectBackend() {
 
 	async function finish(next: Pending) {
 		if (existing) {
-			await replaceToken(existing.id, next.token);
-			if (!existing.universeId && next.universeId) await updateBackend(existing.id, { universeId: next.universeId });
+			// One write: a separate updateBackend after this would build on the list from before the token changed.
+			await replaceToken(existing.id, next.token, !existing.universeId && next.universeId ? { universeId: next.universeId } : {});
 			router.replace(`/tt/${existing.id}`);
 			return;
 		}
@@ -116,7 +122,15 @@ export default function ConnectBackend() {
 					return;
 				}
 				token = r.token;
-			} else token = await signInWithAdminToken(base, adminToken);
+			} else {
+				// The admin token is full admin on the backend: never send it in the clear without asking.
+				if (
+					isUnencrypted(base) &&
+					!(await confirm("Send the admin token unencrypted?", `${base} is http://: anyone on this network can read the admin token. Only continue on a network you trust.`, "Send anyway"))
+				)
+					return;
+				token = await signInWithAdminToken(base, adminToken);
+			}
 			setAdminToken("");
 			const info = await describe(base, token);
 			if (info.universeId || existing?.universeId) await finish(info);
@@ -175,6 +189,14 @@ export default function ConnectBackend() {
 			<Card style={{ gap: 10 }}>
 				<Field label="Backend address" value={url} onChangeText={setUrl} placeholder="https://typetorch.mygame.com" keyboardType="url" editable={!existing} />
 				<Txt variant="small">This device will appear as “{deviceLabel()}” in the backend's sessions.</Txt>
+				{plainHttp ? (
+					<View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start" }}>
+						<Icon name="warning-outline" size={15} color={p.warning} />
+						<Txt variant="small" color={p.warning} style={{ flex: 1 }}>
+							{UNENCRYPTED_HINT}
+						</Txt>
+					</View>
+				) : null}
 			</Card>
 
 			{devRedirect ? (

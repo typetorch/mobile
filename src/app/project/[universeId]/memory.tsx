@@ -24,7 +24,7 @@ function Memory({ universeId, cloud, canMap, canQueue }: { universeId: number; c
 	});
 	const queue = useQuery({ queryKey: ["oc", "memory", "queue", universeId, open], enabled: kind === "queue" && !!open && canQueue, queryFn: () => cloud.peekQueue(universeId, open!, 100), retry: false });
 	const allowed = kind === "map" ? canMap : canQueue;
-	const items = map.data?.pages.flatMap((p) => p.items ?? []) ?? [];
+	const items = map.data?.pages.flatMap((p) => p.memoryStoreSortedMapItems ?? p.items ?? []) ?? [];
 	return (
 		<>
 			<Segmented options={[{ value: "map", label: "Sorted map" }, { value: "queue", label: "Queue" }]} value={kind} onChange={(v) => { setKind(v); setOpen(null); }} />

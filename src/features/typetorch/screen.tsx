@@ -1,13 +1,14 @@
 /** The frame of every TypeTorch screen: the title, pull to refresh (refetches this backend's queries), missing backend. */
 import { useQueryClient } from "@tanstack/react-query";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Button, EmptyState, Screen } from "@/components/ui";
 import { useBackend, type BackendAccount } from "@/store/accounts";
 import type { Api } from "@/api/backend";
 
 import { SignedOutNotice } from "./components";
+import { refreshFilterNow } from "./filters";
 
 export function useBackendParam(): string {
 	const { backendId } = useLocalSearchParams<{ backendId: string }>();
@@ -33,6 +34,10 @@ export function TTScreen({
 	const { account, api } = useBackend(backendId);
 	const queryClient = useQueryClient();
 	const [refreshing, setRefreshing] = useState(false);
+	// A screen opening moves the filter bar's "now" forward (when a minute has passed), so "1 h" means the last hour.
+	useEffect(() => {
+		if (backendId) refreshFilterNow(backendId, 60_000);
+	}, [backendId]);
 	if (!account || !api) {
 		return (
 			<Screen>
@@ -43,6 +48,8 @@ export function TTScreen({
 	}
 	const onRefresh = async () => {
 		setRefreshing(true);
+		// Hour presets end "now": move it, so the pull shows the last 1 h / 6 h, not a window that kept growing.
+		refreshFilterNow(backendId);
 		try {
 			await queryClient.refetchQueries({ queryKey: ["tt", backendId, ...(refreshKeys ?? [])], type: "active" });
 		} finally {

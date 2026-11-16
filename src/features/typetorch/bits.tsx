@@ -12,10 +12,10 @@ import type { Api } from "@/api/backend";
 import type { FunnelProgress, RobloxProductInfo } from "@/api/tt/types";
 import { Badge, Button, Card, EmptyState, ErrorState, Icon, SkeletonList, Txt } from "@/components/ui";
 import { compactJson, fmtPct, fmtTime, prettyJson, shortId } from "@/lib/format";
-import { useBackend } from "@/store/accounts";
 import { radius, space, toneColor, useTheme, type Tone } from "@/theme";
 
 import { useTTQuery } from "./hooks";
+import { loaderFor, type ProductType } from "./product-loader";
 
 /** Loading, error and empty states around a query's data (the web's QueryState). */
 export function QueryState<T>({
@@ -275,7 +275,7 @@ export function FunnelStepList({ steps, progress }: { steps: readonly { step: nu
 
 // Products (the web's lib/products.ts) ---------------------------------------------------------------------------------
 
-export type ProductType = RobloxProductInfo["type"];
+export type { ProductType } from "./product-loader";
 
 export function productTypeOf(kind: string | null | undefined): ProductType | undefined {
 	const k = (kind ?? "").toLowerCase().replace(/[\s_-]/g, "");
@@ -294,57 +294,9 @@ export const productKindLabel = (kind: string) => {
 	return t === "gamepass" ? "Game pass" : t === "product" ? "Developer product" : kind;
 };
 
-type Waiter = { type: ProductType; id: number; resolve(info: RobloxProductInfo): void };
-const loaders = new Map<string, (type: ProductType, id: number) => Promise<RobloxProductInfo>>();
-
-/** Collects the ids asked in one tick and asks them in batches of 50 (one loader per backend). */
-function loaderFor(backendId: string, api: Api) {
-	const existing = loaders.get(backendId);
-	if (existing) return existing;
-	let pending: Waiter[] = [];
-	let scheduled = false;
-	const flush = async () => {
-		scheduled = false;
-		const waiters = pending;
-		pending = [];
-		const keys = [...new Set(waiters.map((w) => `${w.type}:${w.id}`))];
-		for (let i = 0; i < keys.length; i += 50) {
-			const chunk = keys.slice(i, i + 50);
-			const ids = { gamepass: [] as number[], product: [] as number[] };
-			for (const k of chunk) {
-				const [type, id] = k.split(":") as [ProductType, string];
-				ids[type].push(Number(id));
-			}
-			let items: RobloxProductInfo[] = [];
-			try {
-				items = await api.robloxProducts(ids);
-			} catch {
-				// the bare id below
-			}
-			const found = new Map(items.map((it) => [`${it.type}:${it.id}`, it]));
-			for (const w of waiters) {
-				const key = `${w.type}:${w.id}`;
-				if (!chunk.includes(key)) continue;
-				w.resolve(found.get(key) ?? { type: w.type, id: w.id, status: "unavailable", name: null, price: null, forSale: null, icon: null });
-			}
-		}
-	};
-	const load = (type: ProductType, id: number) =>
-		new Promise<RobloxProductInfo>((resolve) => {
-			pending.push({ type, id, resolve });
-			if (!scheduled) {
-				scheduled = true;
-				setTimeout(() => void flush(), 0);
-			}
-		});
-	loaders.set(backendId, load);
-	return load;
-}
-
 export function useProductInfo(backendId: string, type: ProductType | undefined, id: number | undefined) {
-	const { api } = useBackend(backendId);
-	return useTTQuery(backendId, ["roblox-product", type, id], () => loaderFor(backendId, api as Api)(type as ProductType, id as number), {
-		enabled: type !== undefined && id !== undefined && !!api,
+	return useTTQuery(backendId, ["roblox-product", type, id], (api) => loaderFor(backendId, api)(type as ProductType, id as number), {
+		enabled: type !== undefined && id !== undefined,
 		staleTime: 30 * 60_000,
 		gcTime: 60 * 60_000,
 		retry: false,

@@ -88,7 +88,9 @@ Auth (all shapes in `src/api/backend-auth.ts`):
   `{ token, id, expiresAt, role, user }` (`ttm_<id>_<secret>`, 30–90 days)
 - `POST /v1/auth/mobile/refresh` (Bearer; done at app start when < 15 days remain, the new token is saved before
   anything else runs because the old one is revoked at once), `POST /v1/auth/mobile/logout`
-- `GET /v1/auth/mobile/tokens[?all=1]`, `DELETE /v1/auth/mobile/tokens/<id>`
+- `GET /v1/auth/mobile/tokens` (an admin gets every user's live tokens, others their own; `?all=1` only adds revoked and
+  expired rows, which the app doesn't ask for; "Mine" filters by the signed-in user on the phone),
+  `DELETE /v1/auth/mobile/tokens/<id>`
 - `GET /v1/auth/check` (`game: { universeId, label }` links the backend to its project; a 401 has `mobileLogin`),
   `GET /v1/place` (name). A 401 `{ code: "mobile_token_dead" }` marks the backend signed out.
 

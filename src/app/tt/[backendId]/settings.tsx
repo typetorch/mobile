@@ -7,7 +7,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
 
-import { listSessions, refreshToken, revokeSession } from "@/api/backend-auth";
+import { listSessions, refreshToken, revokeSession, sameSessionUser } from "@/api/backend-auth";
 import type { RuntimeSetting } from "@/api/tt/types";
 import { Badge, Button, Card, confirm, ErrorState, Field, KV, List, Row, Section, Segmented, Skeleton, Txt } from "@/components/ui";
 import { useTTQuery } from "@/features/typetorch/hooks";
@@ -39,7 +39,9 @@ function BackendSettings({ account }: { account: BackendAccount }) {
 	const token = backendToken(account.id) ?? "";
 
 	const health = useTTQuery(account.id, ["health"], (api, s) => api.health(s), { staleTime: 30_000 });
-	const sessions = useTTQuery(account.id, ["mobile-sessions", all], () => listSessions(account.url, token, account.tokenId, all));
+	const sessions = useTTQuery(account.id, ["mobile-sessions"], () => listSessions(account.url, token, account.tokenId));
+	// An admin's list holds every user's sessions: "Mine" keeps the signed-in user's (and this phone).
+	const shown = sessions.data?.filter((s) => (admin && all) || s.current || sameSessionUser(s.user, account.user));
 	const settings = useTTQuery(account.id, ["admin-settings"], (api, s) => api.settings(s), { enabled: admin, retry: false });
 
 	const revoke = useMutation({
@@ -93,11 +95,11 @@ function BackendSettings({ account }: { account: BackendAccount }) {
 			<Section title="App sessions" right={admin ? <Segmented options={[{ value: 0, label: "Mine" }, { value: 1, label: "Everyone" }]} value={all ? 1 : 0} onChange={(v) => setAll(v === 1)} style={{ width: 170 }} /> : undefined}>
 				{sessions.error ? (
 					<ErrorState error={sessions.error} onRetry={() => sessions.refetch()} />
-				) : !sessions.data ? (
+				) : !shown ? (
 					<Skeleton height={80} />
 				) : (
 					<List>
-						{sessions.data.map((s) => (
+						{shown.map((s) => (
 							<Row
 								key={s.id}
 								title={

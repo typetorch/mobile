@@ -14,6 +14,7 @@ import { createApi, type Api } from "@/api/backend";
 import { logout as backendLogout, needsRefresh, refreshToken, type MobileToken } from "@/api/backend-auth";
 import { HttpError } from "@/api/http";
 import { introspectKey, OpenCloud, type KeyInfo } from "@/api/opencloud";
+import { resetProductLoader } from "@/features/typetorch/product-loader";
 import type { AuthRole, AuthUser } from "@/api/tt/types";
 import type { Appearance } from "@/theme";
 
@@ -67,8 +68,8 @@ interface AccountsValue {
 	updateBackend: (id: string, patch: Partial<BackendAccount>) => Promise<void>;
 	/** Logs out on the backend (best effort) and forgets it here. */
 	removeBackend: (id: string) => Promise<void>;
-	/** Replaces a backend's token (sign in again). */
-	replaceToken: (id: string, token: MobileToken) => Promise<void>;
+	/** Replaces a backend's token (sign in again), with other fields to change in the same write (e.g. universeId). */
+	replaceToken: (id: string, token: MobileToken, patch?: Partial<BackendAccount>) => Promise<void>;
 	backendApi: (id: string) => Api | null;
 	backendToken: (id: string) => string | null;
 	backendForUniverse: (universeId: number) => BackendAccount[];
@@ -104,14 +105,26 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
 	const [ready, setReady] = useState(false);
 	const [prefs, setPrefsState] = useState<Prefs>(DEFAULT_PREFS);
 	const [ocKey, setOcKey] = useState<string | null>(null);
-	const [backends, setBackends] = useState<BackendAccount[]>([]);
+	const [backends, setBackendsState] = useState<BackendAccount[]>([]);
+	/** The latest list, so writes that follow each other in one handler build on each other, not on a stale render. */
+	const backendsRef = useRef<BackendAccount[]>([]);
 	const tokens = useRef(new Map<string, string>());
 	const [tokenVersion, setTokenVersion] = useState(0);
 
-	const persistBackends = useCallback(async (next: BackendAccount[]) => {
-		setBackends(next);
-		await SecureStore.setItemAsync(KEY_BACKENDS, JSON.stringify(next));
+	const setBackends = useCallback((next: BackendAccount[]) => {
+		backendsRef.current = next;
+		setBackendsState(next);
 	}, []);
+
+	/** Applies `update` to the LATEST list (not the one this render saw), then saves it. */
+	const persistBackends = useCallback(
+		async (update: (list: BackendAccount[]) => BackendAccount[]) => {
+			const next = update(backendsRef.current);
+			setBackends(next);
+			await SecureStore.setItemAsync(KEY_BACKENDS, JSON.stringify(next));
+		},
+		[setBackends],
+	);
 
 	// Load everything once.
 	useEffect(() => {
@@ -213,44 +226,48 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
 			await SecureStore.setItemAsync(tokenKey(account.id), token.token);
 			tokens.current.set(account.id, token.token);
 			setTokenVersion((v) => v + 1);
-			await persistBackends([...backends, account]);
+			await persistBackends((list) => [...list, account]);
 			return account;
 		},
-		[backends, persistBackends],
+		[persistBackends],
 	);
 
 	const updateBackend = useCallback(
 		async (id: string, patch: Partial<BackendAccount>) => {
-			await persistBackends(backends.map((b) => (b.id === id ? { ...b, ...patch, id } : b)));
+			await persistBackends((list) => list.map((b) => (b.id === id ? { ...b, ...patch, id } : b)));
 		},
-		[backends, persistBackends],
+		[persistBackends],
 	);
 
 	const replaceToken = useCallback(
-		async (id: string, token: MobileToken) => {
+		async (id: string, token: MobileToken, patch: Partial<BackendAccount> = {}) => {
 			await SecureStore.setItemAsync(tokenKey(id), token.token);
 			tokens.current.set(id, token.token);
 			setTokenVersion((v) => v + 1);
-			await persistBackends(
-				backends.map((b) => (b.id === id ? { ...b, tokenId: token.id, expiresAt: token.expiresAt, role: token.role, user: token.user ?? b.user, signedOut: false } : b)),
+			resetProductLoader(id);
+			await persistBackends((list) =>
+				list.map((b) =>
+					b.id === id ? { ...b, ...patch, id, tokenId: token.id, expiresAt: token.expiresAt, role: token.role, user: token.user ?? b.user, signedOut: false } : b,
+				),
 			);
 			queryClient.removeQueries({ queryKey: ["tt", id] });
 		},
-		[backends, persistBackends, queryClient],
+		[persistBackends, queryClient],
 	);
 
 	const removeBackend = useCallback(
 		async (id: string) => {
-			const b = backends.find((x) => x.id === id);
+			const b = backendsRef.current.find((x) => x.id === id);
 			const t = tokens.current.get(id);
 			if (b && t) await backendLogout(b.url, t).catch(() => undefined);
 			await SecureStore.deleteItemAsync(tokenKey(id)).catch(() => undefined);
 			tokens.current.delete(id);
 			setTokenVersion((v) => v + 1);
+			resetProductLoader(id);
 			queryClient.removeQueries({ queryKey: ["tt", id] });
-			await persistBackends(backends.filter((x) => x.id !== id));
+			await persistBackends((list) => list.filter((x) => x.id !== id));
 		},
-		[backends, persistBackends, queryClient],
+		[persistBackends, queryClient],
 	);
 
 	// One API client per backend and token.
@@ -266,11 +283,9 @@ export function AccountsProvider({ children }: { children: ReactNode }) {
 					token: t,
 					// A 401 on a mobile token (code mobile_token_dead) means revoked / expired / replaced: sign in again.
 					onUnauthorized: () => {
-						setBackends((list) => {
-							const next = list.map((x) => (x.id === b.id ? { ...x, signedOut: true } : x));
-							SecureStore.setItemAsync(KEY_BACKENDS, JSON.stringify(next)).catch(() => undefined);
-							return next;
-						});
+						// An Api built for an older token (renewed or signed in again since) says nothing about the new one.
+						if (tokens.current.get(b.id) !== t) return;
+						persistBackends((list) => list.map((x) => (x.id === b.id ? { ...x, signedOut: true } : x))).catch(() => undefined);
 					},
 				}),
 			);

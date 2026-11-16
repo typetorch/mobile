@@ -10,7 +10,8 @@
  *   POST <backend>/v1/auth/mobile/refresh  (Bearer <mobile token>)  -> MobileToken; the old token is revoked at once
  *   POST <backend>/v1/auth/mobile/logout   (Bearer <mobile token>)  -> { ok: true }
  *   GET  <backend>/v1/auth/mobile/tokens[?all=1]  (Bearer)  -> { tokens: [{ id, device, user, role, createdAt, expiresAt,
- *        lastUsedAt, revokedAt?, revokeReason?, current? }], lifetimeDays }
+ *        lastUsedAt, revokedAt?, revokeReason?, current? }], lifetimeDays }. An admin gets EVERY user's tokens, others
+ *        only their own; ?all=1 adds revoked and expired rows (it does not widen whose tokens are listed).
  *   DELETE <backend>/v1/auth/mobile/tokens/<id>  (Bearer)
  *   GET  <backend>/v1/auth/check -> always game: { universeId|null, label|null }; a 401 says mobileLogin: true|false
  *        (whether browser sign-in exists); with a mobile token: mobile: { id, expiresAt }
@@ -54,13 +55,43 @@ export interface MobileSession {
 export const REFRESH_WHEN_DAYS_LEFT = 15;
 const DAY_MS = 86_400_000;
 
-/** "https://x.example.com/" or "x.example.com" -> "https://x.example.com" (http only for LAN / localhost testing). */
+/** The host part of `host[:port]` ("[::1]:3000" -> "::1"), lower case. */
+function hostName(host: string): string {
+	const h = host.toLowerCase();
+	if (h.startsWith("[")) return h.slice(1, h.indexOf("]") > 0 ? h.indexOf("]") : undefined);
+	return h.replace(/:\d+$/, "");
+}
+
+/** localhost, loopback, the private IPv4 ranges (10/8, 172.16/12, 192.168/16, link-local) and *.local: LAN testing only. */
+export function isLocalHost(host: string): boolean {
+	const h = hostName(host);
+	if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h === "::1") return true;
+	const ip = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
+	if (!ip) return false;
+	const [a, b] = [Number(ip[1]), Number(ip[2])];
+	return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+}
+
+/** A backend address without TLS: tokens to it travel in the clear (allowed only for local hosts, see normalizeBackendUrl). */
+export function isUnencrypted(url: string): boolean {
+	return /^http:\/\//i.test(url.trim());
+}
+
+export const UNENCRYPTED_HINT = "Not encrypted (http://): anyone on this network can read the tokens sent to it. Use it only for local testing.";
+
+/**
+ * "https://x.example.com/" or "x.example.com" -> "https://x.example.com". http:// only for localhost and LAN addresses:
+ * the admin token, the sign-in code and every ttm_ token would otherwise cross the network in the clear (and a server
+ * that redirects http to https still gets each request in the clear first).
+ */
 export function normalizeBackendUrl(input: string): string {
 	let url = input.trim();
 	if (!url) throw new Error("enter the backend's address");
 	if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
 	const parsed = new URL(url);
 	const path = parsed.pathname.replace(/\/+$/, "");
+	if (parsed.protocol === "http:" && !isLocalHost(parsed.host))
+		throw new Error("http:// is only allowed for localhost and LAN addresses: use https:// (the tokens would cross the network unencrypted)");
 	return `${parsed.protocol}//${parsed.host}${path}`;
 }
 
@@ -224,11 +255,19 @@ export async function logout(backendUrl: string, token: string): Promise<void> {
 	}
 }
 
-/** This user's app sessions (`all`: every user's, admins only). Revoked ones are left out. */
-export async function listSessions(backendUrl: string, token: string, currentId?: string, all = false): Promise<MobileSession[]> {
-	const body = await requestJson<Record<string, unknown>>(`${backendUrl}/v1/auth/mobile/tokens${all ? "?all=1" : ""}`, { headers: { authorization: `Bearer ${token}` } });
+/**
+ * The live app sessions the backend shows this token: an admin gets every user's, others only their own (filter with
+ * `sameSessionUser` for "mine"). Revoked and expired ones are left out (the list is asked without ?all=1).
+ */
+export async function listSessions(backendUrl: string, token: string, currentId?: string): Promise<MobileSession[]> {
+	const body = await requestJson<Record<string, unknown>>(`${backendUrl}/v1/auth/mobile/tokens`, { headers: { authorization: `Bearer ${token}` } });
 	const list = Array.isArray(body?.tokens) ? body.tokens : [];
-	return (list as Record<string, unknown>[]).filter((t) => !t.revokedAt).map((t) => {
+	const now = Date.now();
+	return (list as Record<string, unknown>[]).filter((t) => {
+		if (t.revokedAt) return false;
+		const ends = toMs(t.expiresAt);
+		return ends === null || ends > now;
+	}).map((t) => {
 		const id = String(t.id ?? "");
 		return {
 			id,
@@ -241,6 +280,13 @@ export async function listSessions(backendUrl: string, token: string, currentId?
 			user: (t.user as AuthUser | undefined) ?? null,
 		};
 	});
+}
+
+/** The same user, as the backend counts it (the admin token is one user; Roblox users by id). */
+export function sameSessionUser(a: AuthUser | null | undefined, b: AuthUser | null | undefined): boolean {
+	if (!a || !b) return false;
+	if (a.kind === "token" || b.kind === "token") return a.kind === b.kind;
+	return a.userId === b.userId;
 }
 
 export async function revokeSession(backendUrl: string, token: string, id: string): Promise<void> {
