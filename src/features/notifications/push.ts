@@ -120,34 +120,3 @@ export function pushTarget(response: Notifications.NotificationResponse | null |
 	const data = response?.notification.request.content.data as { backendUrl?: unknown; kind?: unknown } | undefined;
 	return data && typeof data.backendUrl === "string" ? { backendUrl: data.backendUrl, kind: typeof data.kind === "string" ? data.kind : "" } : null;
 }
-
-/** "18 m 40 s" (the backend's push uses the same shape). */
-function duration(seconds: number | null | undefined): string {
-	if (seconds === null || seconds === undefined) return "–";
-	const s = Math.round(seconds);
-	const h = Math.floor(s / 3600);
-	const m = Math.floor((s % 3600) / 60);
-	if (h) return `${h} h ${m} m`;
-	return m ? `${m} m ${String(s % 60).padStart(2, "0")} s` : `${s % 60} s`;
-}
-
-/**
- * A milestone notification shown on this phone only (no Firebase or backend push involved), with the game's current
- * numbers: the milestone it would announce next (10, 20, 40, … at or below the CCU) and the last hour.
- */
-export async function previewMilestone(account: BackendAccount, api: Api): Promise<void> {
-	if (!(await askPermission())) throw new Error("Notifications are off for TypeTorch: allow them in the phone's settings.");
-	const live = await api.mobileLive(5);
-	let milestone = 10;
-	while (milestone * 2 <= live.ccu) milestone *= 2;
-	const hours = live.lastHour ? Math.round(live.lastHour.playtimeHours).toLocaleString("en-US") : "–";
-	await Notifications.scheduleNotificationAsync({
-		content: {
-			title: `Reached ${milestone} CCU`,
-			body: `${live.game.name || account.name} · last hour: ${duration(live.lastHour?.avgSessionSeconds)} avg session · ${hours} h played`,
-			data: { kind: "preview", backendUrl: account.url },
-			sound: "default",
-		},
-		trigger: Platform.OS === "android" ? { channelId: MILESTONE_CHANNEL } : null,
-	});
-}

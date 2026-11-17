@@ -10,7 +10,7 @@ import { liveAvailable, setWatching, useWatching } from "@/features/live/watch";
 import { useAccounts, type BackendAccount } from "@/store/accounts";
 import { space, useTheme } from "@/theme";
 
-import { previewMilestone, PushNotSetUp, setMilestones, usePushPrefs } from "./push";
+import { PushNotSetUp, setMilestones, usePushPrefs } from "./push";
 
 function Toggle({ value, onChange, disabled }: { value: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
 	const p = useTheme();
@@ -22,13 +22,13 @@ function BackendNotifications({ account }: { account: BackendAccount }) {
 	const { backendApi } = useAccounts();
 	const prefs = usePushPrefs();
 	const watching = useWatching();
-	const [busy, setBusy] = useState<"" | "push" | "test" | "watch" | "preview">("");
+	const [busy, setBusy] = useState<"" | "push" | "test" | "watch">("");
 	const [problem, setProblem] = useState<string | null>(null);
 	const api = backendApi(account.id);
 	const on = !!prefs[account.id]?.on;
 	const watched = watching.includes(account.id);
 
-	const run = async (what: "push" | "test" | "watch" | "preview", work: () => Promise<void>) => {
+	const run = async (what: "push" | "test" | "watch", work: () => Promise<void>) => {
 		setBusy(what);
 		setProblem(null);
 		try {
@@ -53,17 +53,6 @@ function BackendNotifications({ account }: { account: BackendAccount }) {
 				</View>
 				<Toggle value={on} disabled={!api || account.signedOut || busy !== ""} onChange={(v) => api && void run("push", () => setMilestones(account, api, v))} />
 			</View>
-			{api && !account.signedOut ? (
-				<Button
-					title="Preview a milestone notification"
-					small
-					variant="ghost"
-					icon="eye-outline"
-					loading={busy === "preview"}
-					onPress={() => void run("preview", () => previewMilestone(account, api))}
-					style={{ alignSelf: "flex-start" }}
-				/>
-			) : null}
 			{on && api ? (
 				<Button
 					title="Send a test push"
