@@ -10,6 +10,7 @@ import type { FunnelPlayer, FunnelResult, PlaytimeFunnelResult } from "@/api/tt/
 import { Button, Chips, Icon, List, Segmented, Txt } from "@/components/ui";
 import { Note, openPlayer, Panel, QueryState, ShareBar } from "@/features/typetorch/bits";
 import { playerColumns } from "@/features/typetorch/cards";
+import { useExportBlock } from "@/features/export/context";
 import { DataTable, type DataColumn } from "@/features/typetorch/table";
 import { usePageParams } from "@/features/typetorch/view-link";
 import { describeRange, FilterBar, useTTAnalytics, useTTFilters } from "@/features/typetorch/filters";
@@ -130,6 +131,19 @@ function CompareSummary({ backendId, a, b }: { backendId: string; a: string; b: 
 	const p = useTheme();
 	const da = useFunnel(backendId, a).data;
 	const db = useFunnel(backendId, b).data;
+	useExportBlock(() =>
+		da && db && da.players && db.players
+			? {
+					kind: "stats",
+					title: `${da.funnel} vs ${db.funnel}`,
+					items: [da, db].flatMap((d) => [
+						{ label: `${d.funnel}: started`, value: fmtInt(d.players), sub: `${d.steps.length} steps` },
+						{ label: `${d.funnel}: completed`, value: fmtPct(completion(d)), sub: d.biggestDrop ? `biggest drop ${fmtPct(d.biggestDrop.share)} lost` : "no drop" },
+					]),
+					note: "Completed = share of the players who started (playtime funnels: of their base) that reached the funnel's last step.",
+				}
+			: null,
+	);
 	if (!da || !db || !da.players || !db.players || !da.steps.length || !db.steps.length) return null;
 	const delta = (completion(db) - completion(da)) * 100;
 	const line = (d: Steps) => (
@@ -177,6 +191,17 @@ function StepBars({ backendId, funnelKey, data, open, mode, onMode, onOpen }: { 
 	const drop = data.biggestDrop;
 	const pt = data.playtime;
 	const base = pt ? (pt.measure === "first" ? "of new players" : "of all players") : "of start";
+	useExportBlock(() => ({
+		kind: "bars",
+		title: pt ? `${data.funnel}: ${plural(data.players, pt.measure === "first" ? "new player" : "player")}` : `${data.funnel}: ${plural(data.players, "player")} started`,
+		rows: data.steps.map((s: Step) => ({
+			label: pt ? (s.label ?? "") : `${s.step}. ${s.label ?? ""}`,
+			share: s.ofStart,
+			text: `${fmtInt(s.reached)} reached · ${fmtPct(s.ofStart)} ${base} · ${fmtPct(s.fromPrevious)} from previous${pt ? "" : ` · ${s.medianSecondsFromStart === null ? "–" : `${fmtNum(s.medianSecondsFromStart, 1)} s`} median`}`,
+			...(drop?.step === s.step ? { alert: true, sub: `Biggest drop: ${plural(drop.lost, "player")} (${fmtPct(drop.share)}) stopped before ${pt ? "reaching this" : "this step"}` } : {}),
+		})),
+		note: pt ? playtimeDescription(pt) : "Reached = players whose furthest step is at least this one. Time = median from their first step.",
+	}));
 	return (
 		<Panel
 			title={pt ? `${data.funnel}: ${plural(data.players, pt.measure === "first" ? "new player" : "player")}` : `${data.funnel}: ${plural(data.players, "player")} started`}

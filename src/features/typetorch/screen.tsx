@@ -11,6 +11,8 @@ import { Pressable, View } from "react-native";
 
 import type { Api } from "@/api/backend";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { createExportRegistry, ExportProvider } from "@/features/export/context";
+import { ExportButton, slug } from "@/features/export/ExportButton";
 import { Button, EmptyState, Icon, Screen } from "@/components/ui";
 import { useAccounts, useBackend, type BackendAccount } from "@/store/accounts";
 import { useTheme } from "@/theme";
@@ -147,6 +149,7 @@ export function TTScreen({
 	const queryClient = useQueryClient();
 	const [refreshing, setRefreshing] = useState(false);
 	const registry = useMemo(() => createViewLinkRegistry(), []);
+	const exports = useMemo(() => createExportRegistry(), []);
 	const foreign = useForeignBackendLink(backendId, !!account);
 	const current = useCurrentPage();
 	useLinkFilters(backendId, !!account);
@@ -181,6 +184,7 @@ export function TTScreen({
 	};
 	return (
 		<ViewLinkProvider registry={registry}>
+			<ExportProvider registry={exports}>
 			<Screen refreshing={refreshing} onRefresh={scroll ? onRefresh : undefined} scroll={scroll}>
 				<Stack.Screen
 					options={{
@@ -199,6 +203,14 @@ export function TTScreen({
 							<View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
 								<HealthDot backendId={backendId} />
 								<CommandPalette account={account} registry={registry} />
+								<ExportButton
+									registry={exports}
+									fileBase={() => `${slug(account.name)}-${slug(typeof title === "function" ? title(account) : title)}`}
+									header={() => ({
+										title: `${typeof title === "function" ? title(account) : title} · ${account.name}`,
+										lines: [`${account.url.replace(/^https?:\/\//, "")} · exported ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC`, ...exports.lines()],
+									})}
+								/>
 								<LinkButton backendId={backendId} backendUrl={account.url} registry={registry} />
 							</View>
 						),
@@ -210,6 +222,7 @@ export function TTScreen({
 					{children({ account, api, backendId })}
 				</ErrorBoundary>
 			</Screen>
+			</ExportProvider>
 		</ViewLinkProvider>
 	);
 }

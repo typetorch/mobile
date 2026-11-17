@@ -16,6 +16,7 @@ import { Button, Chips, Field, Icon, Segmented, Txt } from "@/components/ui";
 import { radius, space, useTheme } from "@/theme";
 
 import { cleanFilters } from "@/api/backend";
+import { useExportLines } from "@/features/export/context";
 
 import { HistoryImportingBanner } from "./history-banner";
 import { useTTQuery } from "./hooks";
@@ -183,6 +184,22 @@ export function describeRange(state: FilterState): string {
 		default:
 			return `last ${Number.parseInt(state.range, 10)} days (UTC)`;
 	}
+}
+
+/** Every filter in effect as "Name: value" lines (an export's header): the range first, then only what is set. */
+export function describeFilters(state: FilterState): string[] {
+	const out = [`Range: ${describeRange(state)}`];
+	if (state.branch) out.push(`Branch: ${state.branch}`);
+	if (state.art) out.push(`Artifact: ${state.art}`);
+	if (state.dev) out.push(`Device: ${state.dev}`);
+	if (state.players) out.push(`Players: ${state.players === "new" ? "new" : "returning"}`);
+	if (state.exp && state.variant) out.push(`Experiment: ${state.exp}, variant ${state.variant}`);
+	if (state.country) out.push(`Country: ${state.country}`);
+	if (state.lang) out.push(`Language: ${state.lang}`);
+	if (state.age) out.push(`Account age: ${ACCOUNT_AGE[state.age]}`);
+	if (state.prem) out.push(state.prem === "true" ? "Premium players" : "Players without Premium");
+	if (state.source) out.push(`Join source: ${joinSourceName(state.source)}`);
+	return out;
 }
 
 export function activeFilterCount(state: FilterState): number {
@@ -355,6 +372,8 @@ const AUDIENCE_LABELS: Record<AudienceKey, string> = { country: "Country", lang:
 export function FilterBar({ backendId, ranges }: { backendId: string; ranges?: RangePreset[] }) {
 	const p = useTheme();
 	const { state, apiFilters, set, reset } = useTTFilters(backendId);
+	// An export of this page lists the filters in effect (a page with its own period, ranges=[], leaves the range out).
+	useExportLines(() => (ranges && ranges.length === 0 ? describeFilters(state).slice(1) : describeFilters(state)));
 	const [open, setOpen] = useState(false);
 	const range = rangeOnly(apiFilters);
 	const values = useTTAnalytics(backendId, "values", {}, { filters: range, enabled: open, staleTime: 120_000 });

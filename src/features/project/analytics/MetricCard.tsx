@@ -202,14 +202,14 @@ export function MetricCard({
 
 			{bars.length && !(strings.length && bars.every((b) => !b.value)) ? (
 				<>
-					{bars.length === 1 && !breakdown.length ? null : <ShareBars rows={bars.slice(0, MAX_BARS)} format={fmt} />}
+					{bars.length === 1 && !breakdown.length ? null : <ShareBars exportTitle={`${metric.title}: breakdown`} rows={bars.slice(0, MAX_BARS)} format={fmt} />}
 					{bars.length > MAX_BARS ? <Txt variant="small">The first {MAX_BARS} of {bars.length}; set Top N or a filter to narrow it.</Txt> : null}
 				</>
 			) : null}
 
 			{chart.some((s) => s.points.length) ? (
 				<>
-					<LineChart series={chart} height={150} format={fmt} timeLabel={timeLabelFor(granularity)} />
+					<LineChart exportTitle={metric.title} series={chart} height={150} format={fmt} timeLabel={timeLabelFor(granularity)} />
 					{chart.length > 1 ? <Legend items={chart.map((c, i) => ({ label: c.label, color: p.chart[i % p.chart.length]! }))} /> : null}
 					{breakdown.length && all.length > lines.length ? <Txt variant="small">The {lines.length} biggest of {all.length}.</Txt> : null}
 				</>

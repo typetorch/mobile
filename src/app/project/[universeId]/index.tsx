@@ -4,11 +4,13 @@
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
 
 import { GameIcon } from "@/components/ProjectRow";
 import { Badge, Button, Card, Chips, ErrorState, Icon, Screen, Segmented, Skeleton, Txt } from "@/components/ui";
+import { createExportRegistry, ExportProvider } from "@/features/export/context";
+import { ExportButton, slug } from "@/features/export/ExportButton";
 import { togglePin, usePins } from "@/features/project/pins";
 import { AnalyticsTab } from "@/features/project/AnalyticsTab";
 import { OverviewTab } from "@/features/project/OverviewTab";
@@ -36,6 +38,9 @@ export default function ProjectScreen() {
 	const queryClient = useQueryClient();
 	const [refreshing, setRefreshing] = useState(false);
 	const backend = backends.find((b) => b.id === backendId) ?? backends[0] ?? null;
+	const exports = useMemo(() => createExportRegistry(), []);
+	const tabLabel = (t: Tab) => (t === "overview" ? "Overview" : t === "analytics" ? "Analytics" : t === "tools" ? "Tools" : "TypeTorch");
+	const projectName = project.data?.name ?? `Universe ${id}`;
 
 	const tabs: { value: Tab; label: string }[] = [
 		{ value: "overview", label: "Overview" },
@@ -62,9 +67,21 @@ export default function ProjectScreen() {
 					// The header shows the experience as the picker; this is the line under it.
 					title: tabs.find((t) => t.value === tab)?.label ?? "Overview",
 					headerRight: () => (
-						<Pressable onPress={() => togglePin(id)} hitSlop={10} accessibilityRole="button" accessibilityLabel={pinned ? "Unpin this experience" : "Pin this experience"}>
-							<Icon name={pinned ? "star" : "star-outline"} size={22} color={pinned ? theme.warning : theme.mutedForeground} />
-						</Pressable>
+						<View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+							{tab === "overview" || tab === "analytics" ? (
+								<ExportButton
+									registry={exports}
+									fileBase={() => `${slug(projectName)}-${tab}`}
+									header={() => ({
+										title: `${tabLabel(tab)} · ${projectName}`,
+										lines: [`Universe ${id} · exported ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC`, ...exports.lines()],
+									})}
+								/>
+							) : null}
+							<Pressable onPress={() => togglePin(id)} hitSlop={10} accessibilityRole="button" accessibilityLabel={pinned ? "Unpin this experience" : "Pin this experience"}>
+								<Icon name={pinned ? "star" : "star-outline"} size={22} color={pinned ? theme.warning : theme.mutedForeground} />
+							</Pressable>
+						</View>
 					),
 				}}
 			/>
@@ -96,8 +113,10 @@ export default function ProjectScreen() {
 				}}
 			/>
 
-			{tab === "overview" && project.data ? <OverviewTab project={project.data} /> : null}
-			{tab === "analytics" ? <AnalyticsTab universeId={id} /> : null}
+			<ExportProvider registry={exports}>
+				{tab === "overview" && project.data ? <OverviewTab project={project.data} /> : null}
+				{tab === "analytics" ? <AnalyticsTab universeId={id} /> : null}
+			</ExportProvider>
 			{tab === "tools" ? <ToolsTab universeId={id} name={project.data?.name ?? `universe ${id}`} /> : null}
 			{tab === "typetorch" && backend ? (
 				<View style={{ gap: 12 }}>

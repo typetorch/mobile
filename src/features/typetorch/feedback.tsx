@@ -159,9 +159,9 @@ export function TrendChart({ summary }: { summary: FeedbackSummaryResult }) {
 	return (
 		<View style={{ gap: space.sm }}>
 			<Txt variant="small">Feedback per {summary.bucket}</Txt>
-			<BarChart points={counts} height={130} color={p.chart[0]} timeLabel={label} format={(v) => fmtInt(v)} />
+			<BarChart exportTitle={`Feedback per ${summary.bucket}`} points={counts} height={130} color={p.chart[0]} timeLabel={label} format={(v) => fmtInt(v)} />
 			<Txt variant="small">Average (% of top)</Txt>
-			<LineChart series={[{ label: "Average (% of top)", color: p.chart[2], points: score }]} height={120} area={false} timeLabel={label} format={(v) => `${fmtNum(v, 1)}%`} />
+			<LineChart exportTitle="Average rating (% of top)" series={[{ label: "Average (% of top)", color: p.chart[2], points: score }]} height={120} area={false} timeLabel={label} format={(v) => `${fmtNum(v, 1)}%`} />
 		</View>
 	);
 }

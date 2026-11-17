@@ -10,6 +10,7 @@ import { View } from "react-native";
 
 import { ANALYTICS_READ_SCOPE, hasScope } from "@/api/opencloud";
 import { Chips, ScopeNotice, Txt } from "@/components/ui";
+import { useExportLines } from "@/features/export/context";
 import { useAccounts } from "@/store/accounts";
 
 import { DAY, METRIC_GROUPS, timeRange, type GranularityChoice, type RangeSpec } from "./analytics";
@@ -29,6 +30,17 @@ export function AnalyticsTab({ universeId }: { universeId: number }) {
 	const [granularity, setGranularity] = useState<GranularityChoice>("Auto");
 	const [groupKey, setGroupKey] = useState(METRIC_GROUPS[0]!.key);
 	const [picks, setPicks] = useState<Record<string, string | null>>({});
+	// An export's header: the range, the step and the page of metrics (and its pick) in effect.
+	useExportLines(() => {
+		const g = METRIC_GROUPS.find((x) => x.key === groupKey) ?? METRIC_GROUPS[0]!;
+		const pickedValue = g.pick ? (picks[g.key] ?? null) : null;
+		return [
+			`Range: ${range.kind === "custom" ? `${range.start} to ${range.end} (UTC)` : range.days === 1 ? "the last 24 hours" : `the last ${range.days} days`}`,
+			`Granularity: ${granularity === "Auto" ? "automatic" : granularity}`,
+			`Metrics: ${g.title}${g.pick && pickedValue !== null ? ` (${g.pick.label}: ${pickedValue})` : ""}`,
+			"Source: Roblox Analytics Query API",
+		];
+	});
 	if (!hasKey || !hasScope(keyInfo, ANALYTICS_READ_SCOPE, universeId)) return <ScopeNotice what="Analytics" scopes={[ANALYTICS_READ_SCOPE]} />;
 
 	const group = METRIC_GROUPS.find((g) => g.key === groupKey) ?? METRIC_GROUPS[0]!;

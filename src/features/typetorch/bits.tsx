@@ -2,6 +2,7 @@
  * Small shared pieces of the phase 2 TypeTorch pages (the web's components/common, DataTable, ShareBar, PlayerLink,
  * ProductId, FunnelProgressBar), sized for a phone.
  */
+import { ExportTitle } from "@/features/export/context";
 import type { UseQueryResult } from "@tanstack/react-query";
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
@@ -258,7 +259,7 @@ export function Panel({ title, note, right, children }: { title: string; note?: 
 				{right}
 			</View>
 			{note ? <Note>{note}</Note> : null}
-			{children}
+			<ExportTitle title={title}>{children}</ExportTitle>
 		</Card>
 	);
 }

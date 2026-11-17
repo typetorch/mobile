@@ -2,7 +2,7 @@
  * The app's small design system: dense, dark-first, shadcn-like surfaces on the TypeTorch tokens (theme.tsx).
  */
 import Ionicons from "@expo/vector-icons/Ionicons";
-import { useEffect, useRef, type ComponentProps, type ReactNode } from "react";
+import { Children, Fragment, isValidElement, useEffect, useRef, type ComponentProps, type ReactNode } from "react";
 import {
 	ActivityIndicator,
 	Alert,
@@ -20,6 +20,7 @@ import {
 	type ViewStyle,
 } from "react-native";
 
+import { ExportTitle, textOf, useExportBlock } from "@/features/export/context";
 import { font, radius, space, toneColor, useTheme, type Tone } from "@/theme";
 
 export type IconName = ComponentProps<typeof Ionicons>["name"];
@@ -128,7 +129,7 @@ export function Section({ title, right, children, style }: { title?: string; rig
 					{right}
 				</View>
 			) : null}
-			{children}
+			{title ? <ExportTitle title={title}>{children}</ExportTitle> : children}
 		</View>
 	);
 }
@@ -438,7 +439,23 @@ export function Stat({ label, value, sub, tone, style }: { label: string; value:
 	);
 }
 
-export function StatGrid({ children }: { children: ReactNode }) {
+/** The Stat cards among a grid's children (through fragments), as an export's key numbers. */
+function statItems(children: ReactNode): { label: string; value: string; sub?: string }[] {
+	const out: { label: string; value: string; sub?: string }[] = [];
+	Children.forEach(children, (child) => {
+		if (!isValidElement(child)) return;
+		const props = child.props as { label?: unknown; value?: ReactNode; sub?: ReactNode; children?: ReactNode };
+		if (child.type === Fragment) out.push(...statItems(props.children));
+		else if (typeof props.label === "string" && props.value !== undefined) {
+			const sub = textOf(props.sub);
+			out.push({ label: props.label, value: textOf(props.value), ...(sub ? { sub } : {}) });
+		}
+	});
+	return out;
+}
+
+export function StatGrid({ children, title }: { children: ReactNode; /** The export's name for these numbers (default: the panel's or "Key numbers"). */ title?: string }) {
+	useExportBlock((around) => ({ kind: "stats", title: title ?? around ?? "Key numbers", items: statItems(children) }));
 	return <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>{children}</View>;
 }
 

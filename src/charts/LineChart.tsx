@@ -7,6 +7,7 @@ import { View, type LayoutChangeEvent } from "react-native";
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from "react-native-svg";
 
 import { Txt } from "@/components/ui";
+import { useExportBlock } from "@/features/export/context";
 import { font, useTheme } from "@/theme";
 
 export interface ChartPoint {
@@ -106,6 +107,7 @@ export function LineChart({
 	marks,
 	onMarkPress,
 	gaps = false,
+	exportTitle,
 }: {
 	series: ChartSeries[];
 	height?: number;
@@ -120,10 +122,20 @@ export function LineChart({
 	/** A null point breaks the line (recharts' connectNulls={false}): one path per run of values, a dot for a lone value.
 	 * Default off: the line joins the values on either side of a null. */
 	gaps?: boolean;
+	/** The chart's name in an export (default: the panel's title, else "Chart"). */
+	exportTitle?: string;
 }) {
 	const p = useTheme();
 	const [width, setWidth] = useState(0);
 	const [hover, setHover] = useState<number | null>(null);
+	useExportBlock((around) => ({
+		kind: "series",
+		chart: "line",
+		title: exportTitle ?? around ?? "Chart",
+		series: series.map((s, i) => ({ name: s.label, color: s.color ?? p.chart[i % p.chart.length], ...(s.dashed ? { dashed: true } : {}), points: s.points })),
+		format,
+		timeLabel,
+	}));
 
 	const times = useMemo(() => Array.from(new Set(series.flatMap((s) => s.points.map((pt) => pt.t)))).sort((a, b) => a - b), [series]);
 	const maxV = useMemo(() => niceMax(Math.max(0, ...series.flatMap((s) => s.points.map((pt) => pt.v ?? 0)))), [series]);
@@ -312,6 +324,7 @@ export function BarChart({
 	previousLabel = "Previous period",
 	marks,
 	onMarkPress,
+	exportTitle,
 }: {
 	points: ChartPoint[];
 	height?: number;
@@ -323,10 +336,23 @@ export function BarChart({
 	previousLabel?: string;
 	marks?: ChartMark[];
 	onMarkPress?: (mark: ChartMark) => void;
+	/** The chart's name in an export (default: the panel's title, else "Chart"). */
+	exportTitle?: string;
 }) {
 	const p = useTheme();
 	const [width, setWidth] = useState(0);
 	const [hover, setHover] = useState<number | null>(null);
+	useExportBlock((around) => ({
+		kind: "series",
+		chart: "bar",
+		title: exportTitle ?? around ?? "Chart",
+		series: [
+			{ name: previous ? "This period" : (exportTitle ?? around ?? "Value"), color: color ?? p.brand, points },
+			...(previous ? [{ name: previousLabel, dashed: true, points: points.map((pt, i) => ({ t: pt.t, v: previous[i] ?? null })) }] : []),
+		],
+		format,
+		timeLabel,
+	}));
 	const touch = useRef<{ x: number; moved: boolean } | null>(null);
 	const max = niceMax(Math.max(0, ...points.map((pt) => pt.v ?? 0), ...(previous ?? []).map((v) => v ?? 0)));
 	const plotW = Math.max(1, width - PAD.left - PAD.right);
@@ -476,9 +502,10 @@ export function Sparkline({ values, width = 64, height = 20, color }: { values: 
 }
 
 /** Horizontal share bars (a breakdown table: label, bar, value). */
-export function ShareBars({ rows, format = shortNumber, color }: { rows: { label: string; value: number }[]; format?: (v: number) => string; color?: string }) {
+export function ShareBars({ rows, format = shortNumber, color, exportTitle }: { rows: { label: string; value: number }[]; format?: (v: number) => string; color?: string; exportTitle?: string }) {
 	const p = useTheme();
 	const max = Math.max(1, ...rows.map((r) => r.value));
+	useExportBlock((around) => ({ kind: "bars", title: exportTitle ?? around ?? "Breakdown", rows: rows.map((r) => ({ label: r.label, share: r.value / max, text: format(r.value) })) }));
 	return (
 		<View style={{ gap: 8 }}>
 			{rows.map((r, i) => (

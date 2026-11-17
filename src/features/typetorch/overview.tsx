@@ -123,6 +123,7 @@ export function OverviewAnalytics({ backendId, compare }: { backendId: string; c
 								<Txt variant="label">{c.label}</Txt>
 								<Txt variant="small">{before ? `${per}; dashed: the previous period` : per}</Txt>
 								<BarChart
+									exportTitle={c.label}
 									points={points}
 									format={c.format ?? compact}
 									marks={marks}

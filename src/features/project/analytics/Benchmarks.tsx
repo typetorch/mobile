@@ -162,7 +162,7 @@ export function Benchmarks({ universeId, range }: { universeId: number; range: R
 
 			{chart.some((s) => s.points.length) && !(own.isLoading || bench.isLoading) ? (
 				<>
-					<LineChart series={chart} height={170} format={fmt} area={false} />
+					<LineChart exportTitle={`${metric.title} vs comparable experiences`} series={chart} height={170} format={fmt} area={false} />
 					<Legend items={chart.map((c) => ({ label: c.label, color: c.color ?? p.brand }))} />
 					<View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
 						{meta?.benchmarkType ? <Badge label={`vs ${TYPE_LABEL[meta.benchmarkType] ?? meta.benchmarkType}${meta.genre ? ` (${meta.genre === "general" ? "all experiences" : meta.genre})` : ""}`} /> : null}

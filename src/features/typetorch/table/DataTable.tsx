@@ -20,6 +20,7 @@ import { Pressable, ScrollView, StyleSheet, TextInput, View } from "react-native
 import { Button, Field, Icon, SearchBar, Skeleton, Txt } from "@/components/ui";
 import { fmtInt } from "@/lib/format";
 import { useBackend } from "@/store/accounts";
+import { useExportBlock } from "@/features/export/context";
 import { radius, space, useTheme } from "@/theme";
 
 import { useBackendParam } from "../screen";
@@ -210,6 +211,14 @@ export function DataTable<T>({
 			return key;
 		});
 	}, [data, rowId]);
+
+	// The page's export: every row as filtered and sorted (not just this page of them), the visible columns.
+	useExportBlock((around) => {
+		const rows = sorted.map((e) => e.row);
+		const parts = [isFiltered(view) ? `${fmtInt(rows.length)} of ${fmtInt(data.length)} rows (the table's filters${view.search ? `, search "${view.search}"` : ""})` : `${fmtInt(rows.length)} rows`];
+		if (sorting.length) parts.push(`sorted by ${sorting.map((sp) => `${byId.get(sp.id)?.header ?? sp.id}${sp.desc ? " ↓" : " ↑"}`).join(", ")}`);
+		return { kind: "table", title: label ?? around ?? "Table", columns: visibleCols.map((c) => c.header), rows: rows.map((r) => visibleCols.map((c) => c.text(r))), csv: () => toCsv(visibleCols, rows), note: parts.join(" · ") };
+	});
 
 	const [pageIndex, setPageIndex] = useState(0);
 	const pageCount = Math.max(1, Math.ceil(sorted.length / view.pageSize));

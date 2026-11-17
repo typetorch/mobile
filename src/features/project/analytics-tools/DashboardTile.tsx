@@ -174,13 +174,13 @@ export function DashboardTile({
 				<Txt variant="title">{summaryValue === null ? "–" : compact(summaryValue)}</Txt>
 			) : q.data.kind === "totals" ? (
 				q.data.rows.length ? (
-					<ShareBars rows={q.data.rows} />
+					<ShareBars exportTitle={tile.title} rows={q.data.rows} />
 				) : (
 					<Txt variant="small">No data for this range.</Txt>
 				)
 			) : q.data.series.some((s) => s.points.length) ? (
 				<>
-					<LineChart series={q.data.series.map((s, i) => ({ ...s, color: p.chart[i % p.chart.length] }))} format={shortNumber} timeLabel={timeLabel(tile.granularity)} area={q.data.series.length === 1} />
+					<LineChart exportTitle={tile.title} series={q.data.series.map((s, i) => ({ ...s, color: p.chart[i % p.chart.length] }))} format={shortNumber} timeLabel={timeLabel(tile.granularity)} area={q.data.series.length === 1} />
 					{q.data.series.length > 1 ? <Legend items={q.data.series.map((s, i) => ({ label: s.label || "all", color: p.chart[i % p.chart.length]! }))} /> : null}
 				</>
 			) : (
