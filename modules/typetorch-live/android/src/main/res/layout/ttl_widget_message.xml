@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Widget states without numbers: pick a game, sign in, loading, can't reach. -->
+<!-- The initial layout (before the first draw) and the last resort when even the built-in widget spec cannot be
+     drawn (docs/WIDGET_SPEC.md); every normal state is drawn from the spec. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
   android:id="@android:id/background"
   android:layout_width="match_parent"

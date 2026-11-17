@@ -2,6 +2,7 @@
  * Keeps what runs outside the app in step with the accounts (docs/PUSH_WATCH_WIDGETS.md):
  *  - the native module's backend list (the live watch and the widgets poll with these tokens; a token refresh revokes
  *    the old one at once, so every change of the accounts is handed over), and the widgets redrawn on start and return;
+ *  - the widget's look (the widget spec, docs/WIDGET_SPEC.md), handed over before every redraw from here;
  *  - milestone push registrations made again where the mobile token changed;
  *  - a tapped push opens its backend's Fleet page (found by the backend's URL; a cold start reads the last response).
  * Renders nothing; mounted once inside the accounts provider and the router.
@@ -12,6 +13,7 @@ import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
 
 import { ensureChannels, installForegroundHandler, pushTarget, syncPushRegistrations } from "@/features/notifications/push";
+import { WIDGET_SPEC_JSON } from "@/features/live/widget-spec";
 import { useAccounts } from "@/store/accounts";
 import * as Live from "@modules/typetorch-live";
 
@@ -37,6 +39,8 @@ export function LiveSync() {
 		});
 		try {
 			Live.setBackends(list);
+			// The look first (a no-op natively when unchanged), so this redraw already uses it.
+			Live.setWidgetSpec(WIDGET_SPEC_JSON);
 			Live.refreshWidgets();
 		} catch {
 			// no native module (Expo Go): nothing runs outside the app there

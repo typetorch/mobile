@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
   <dimen name="ttl_widget_radius">16dp</dimen>
+  <!-- The widget's refresh hit area (a corner square; the spec picks the corner). -->
+  <dimen name="ttl_widget_hit">36dp</dimen>
 </resources>

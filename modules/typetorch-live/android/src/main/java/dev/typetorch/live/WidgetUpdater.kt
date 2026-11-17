@@ -6,25 +6,40 @@ import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.SystemClock
 import android.util.SizeF
 import android.view.View
 import android.widget.RemoteViews
-import androidx.core.content.ContextCompat
+import androidx.annotation.RequiresApi
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
 
-/** Draws the home-screen widgets from the cache and refreshes them from the network (off the main thread). */
+/**
+ * Draws the home-screen widgets from the cache and refreshes them from the network (off the main thread). The look
+ * comes from the widget spec (docs/WIDGET_SPEC.md): [WidgetRenderer] draws it as a bitmap at the widget's size.
+ */
 internal object WidgetUpdater {
   const val ACTION_REFRESH = "dev.typetorch.live.action.REFRESH_WIDGET"
 
-  /** Medium from about 4x2 cells (launchers report a bit less than the nominal 250 x 110 dp). */
-  private const val MEDIUM_W = 220f
-  private const val MEDIUM_H = 95f
-  private const val SMALL_W = 100f
-  private const val SMALL_H = 40f
+  /** The cache's series window (the spec's charts show up to 6 hours). */
   private const val SERIES_MINUTES = 360
-  private const val WINDOW_MS = 6 * 60 * 60 * 1000L
+
+  /** Drawings per update on Android 12+ (launchers report portrait and landscape sizes). */
+  private const val MAX_SIZES = 2
+  private const val MAX_PIXELS = 900_000
+  private const val LEAN_MAX_PIXELS = 250_000
+  private const val MIN_PIXELS = 40_000
+  private const val MIN_DP = 40f
+  private const val MAX_DP = 1200f
+
+  /** Before the launcher reports a size (about a 2x1 cell). */
+  private const val DEFAULT_W = 180f
+  private const val DEFAULT_H = 80f
 
   /** A broadcast may run 60 s with goAsync (background); stay well inside it. */
   private const val FETCH_DEADLINE_MS = 25_000L
@@ -119,116 +134,223 @@ internal object WidgetUpdater {
     }
   }
 
-  /** Draws one widget from the cache. Any thread, no network, never throws. */
+  /**
+   * Draws one widget from the cache. Any thread (a worker preferably: it draws bitmaps), no network, never throws.
+   * If the launcher refuses the update (too much bitmap memory, or too big for Binder), it tries once more, lean.
+   */
   fun render(ctx: Context, mgr: AppWidgetManager, widgetId: Int, refreshing: Boolean) {
     try {
-      mgr.updateAppWidget(widgetId, build(ctx, mgr, widgetId, refreshing))
+      mgr.updateAppWidget(widgetId, build(ctx, mgr, widgetId, refreshing, false))
+      return
+    } catch (t: Throwable) {
+      Log.w("widget update failed, retrying lean", t)
+    }
+    try {
+      mgr.updateAppWidget(widgetId, build(ctx, mgr, widgetId, refreshing, true))
     } catch (t: Throwable) {
       Log.w("widget update failed", t)
     }
   }
 
-  private fun build(ctx: Context, mgr: AppWidgetManager, widgetId: Int, refreshing: Boolean): RemoteViews {
+  /** [render] on a new thread, then finishes [pending] (a resize: onAppWidgetOptionsChanged runs on the main thread). */
+  fun renderAsync(ctx: Context, widgetId: Int, pending: BroadcastReceiver.PendingResult?) {
+    val app = ctx.applicationContext
+    try {
+      Thread({
+        try {
+          val mgr = AppWidgetManager.getInstance(app)
+          if (mgr != null) render(app, mgr, widgetId, false)
+        } catch (t: Throwable) {
+          Log.w("widget draw failed", t)
+        } finally {
+          finish(pending)
+        }
+      }, "TypeTorchLive-widget-draw").start()
+    } catch (t: Throwable) {
+      Log.w("widget thread failed", t)
+      finish(pending)
+    }
+  }
+
+  /** What one widget shows, whatever the spec: the state (a key of the spec's `layouts`), its inputs, where taps go. */
+  private class Look(
+    val state: String,
+    val backend: Backend?,
+    val snap: Snapshot?,
+    val refreshing: Boolean,
+    val click: PendingIntent,
+    val refresh: PendingIntent?,
+  )
+
+  private fun look(ctx: Context, widgetId: Int, refreshing: Boolean): Look {
     val backendId = Store.widgetBackend(ctx, widgetId)
-      ?: return message(ctx, ctx.getString(R.string.ttl_widget_pick), configurePending(ctx, widgetId), null)
+      ?: return Look(WidgetSpecs.PICK, null, null, false, configurePending(ctx, widgetId), null)
     val b = Store.backend(ctx, backendId)
     if (b == null || Store.isDead(ctx, b.id, b.token)) {
-      return message(ctx, ctx.getString(R.string.ttl_widget_sign_in), Links.openPending(ctx, widgetId, null), null)
+      return Look(WidgetSpecs.SIGNED_OUT, b, null, false, Links.openPending(ctx, widgetId, null), null)
     }
     val open = Links.openPending(ctx, widgetId, b.link)
     val refresh = refreshPending(ctx, widgetId)
     val snap = Store.snapshot(ctx, b.id)
-    val data = snap?.data
-    if (snap == null || data == null) {
-      val text = if (!refreshing && snap != null && snap.failedAt > 0) "Can't reach ${b.name.ifBlank { "the backend" }}"
-      else ctx.getString(R.string.ttl_loading)
-      return message(ctx, text, open, refresh)
+    if (snap?.data == null) {
+      val state = if (!refreshing && snap != null && snap.failedAt > 0) WidgetSpecs.UNREACHABLE else WidgetSpecs.LOADING
+      return Look(state, b, snap, refreshing, open, refresh)
     }
-    val small = small(ctx, b, snap, data, open, refresh, refreshing)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      // Android 12+: the launcher picks the layout by the widget's current size.
-      val medium = medium(ctx, b, snap, data, open, refresh, refreshing)
-      return RemoteViews(mapOf(SizeF(SMALL_W, SMALL_H) to small, SizeF(MEDIUM_W, MEDIUM_H) to medium))
+    return Look(WidgetSpecs.DATA, b, snap, refreshing, open, refresh)
+  }
+
+  /** The sent spec, else (absent, unparseable or failing to draw) the built-in one, else a plain text widget. */
+  private fun build(ctx: Context, mgr: AppWidgetManager, widgetId: Int, refreshing: Boolean, lean: Boolean): RemoteViews {
+    val look = look(ctx, widgetId, refreshing)
+    val sizes = sizes(ctx, mgr, widgetId, lean)
+    val sent = WidgetSpecs.stored(ctx)
+    if (sent != null) {
+      try {
+        return views(ctx, sent, look, sizes, lean)
+      } catch (t: Throwable) {
+        Log.w("sent widget spec failed to draw, using the built-in one", t)
+      }
     }
-    // Older: by the minimum size the launcher reports.
-    val opts = try {
+    return try {
+      views(ctx, WidgetSpecs.default, look, sizes, lean)
+    } catch (t: Throwable) {
+      Log.w("built-in widget spec failed to draw", t)
+      message(ctx, plainText(ctx, look), look.click, look.refresh)
+    }
+  }
+
+  /**
+   * Android 12+ with several reported sizes (portrait and landscape cells): one drawing per size, the launcher picks.
+   * Else one drawing at the current size.
+   */
+  private fun views(ctx: Context, spec: WidgetSpec, look: Look, sizes: List<SizeF>, lean: Boolean): RemoteViews {
+    val values = WidgetValues.of(ctx, spec, look.backend, look.snap, look.refreshing)
+    val budget = pixelBudget(ctx, sizes.size * (if (lean) 1 else 2), lean)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && sizes.size > 1) {
+      val map = LinkedHashMap<SizeF, RemoteViews>()
+      for (sz in sizes) map[sz] = one(ctx, spec, look, values, sz, lean, budget)
+      return RemoteViews(map)
+    }
+    return one(ctx, spec, look, values, sizes[0], lean, budget)
+  }
+
+  /**
+   * One size: the day and the night drawing (the layout shows the one matching the system's mode, so a mode switch
+   * needs no redraw), the tap, and the refresh hit area in the layout's corner. Lean: only the current mode's drawing.
+   */
+  private fun one(
+    ctx: Context, spec: WidgetSpec, look: Look, values: WidgetValues, size: SizeF, lean: Boolean, budget: Int,
+  ): RemoteViews {
+    val w = size.width
+    val h = size.height
+    val layout = WidgetSpecs.pick(spec, look.state, w, h)
+    val v = RemoteViews(ctx.packageName, R.layout.ttl_widget_canvas)
+    val description: String
+    if (lean) {
+      val img = WidgetRenderer.render(ctx, spec, layout, values, WidgetRenderer.isNight(ctx), w, h, budget)
+      v.setImageViewBitmap(R.id.ttl_w_img_day, img.bitmap)
+      v.setImageViewBitmap(R.id.ttl_w_img_night, img.bitmap)
+      description = img.description
+    } else {
+      val day = WidgetRenderer.render(ctx, spec, layout, values, false, w, h, budget)
+      val night = WidgetRenderer.render(ctx, spec, layout, values, true, w, h, budget)
+      v.setImageViewBitmap(R.id.ttl_w_img_day, day.bitmap)
+      v.setImageViewBitmap(R.id.ttl_w_img_night, night.bitmap)
+      description = day.description
+    }
+    v.setContentDescription(R.id.ttl_w_img_day, description)
+    v.setContentDescription(R.id.ttl_w_img_night, description)
+    v.setOnClickPendingIntent(android.R.id.background, look.click)
+    val refresh = look.refresh
+    val hit = if (refresh == null) 0 else when (layout.refresh) {
+      "none" -> 0
+      "topStart" -> R.id.ttl_w_hit_top_start
+      "bottomEnd" -> R.id.ttl_w_hit_bottom_end
+      "bottomStart" -> R.id.ttl_w_hit_bottom_start
+      else -> R.id.ttl_w_hit_top_end
+    }
+    for (id in HIT_IDS) v.setViewVisibility(id, if (id == hit) View.VISIBLE else View.GONE)
+    if (hit != 0 && refresh != null) v.setOnClickPendingIntent(hit, refresh)
+    return v
+  }
+
+  private val HIT_IDS: IntArray
+    get() = intArrayOf(
+      R.id.ttl_w_hit_top_end,
+      R.id.ttl_w_hit_top_start,
+      R.id.ttl_w_hit_bottom_end,
+      R.id.ttl_w_hit_bottom_start,
+    )
+
+  /**
+   * Pixels per bitmap: the system refuses an update whose bitmaps take more than 6 x the screen's pixels in bytes
+   * (1.5 screens of ARGB); all of this widget's bitmaps together stay under 40 % of that, each under a hard cap.
+   */
+  private fun pixelBudget(ctx: Context, bitmaps: Int, lean: Boolean): Int {
+    val dm = ctx.resources.displayMetrics
+    val screen = max(dm.widthPixels.toLong() * dm.heightPixels.toLong(), 720L * 1280L)
+    val perBitmap = 6L * screen * 2L / 5L / 4L / max(1, bitmaps).toLong()
+    val cap = if (lean) LEAN_MAX_PIXELS else MAX_PIXELS
+    return min(perBitmap, cap.toLong()).toInt().coerceAtLeast(MIN_PIXELS)
+  }
+
+  /**
+   * The widget's size(s) in dp. Android 12+: the sizes the launcher reports (OPTION_APPWIDGET_SIZES, up to
+   * [MAX_SIZES]). Else (and lean): min/max width/height by orientation (portrait: min width x max height).
+   */
+  private fun sizes(ctx: Context, mgr: AppWidgetManager, widgetId: Int, lean: Boolean): List<SizeF> {
+    val opts: Bundle? = try {
       mgr.getAppWidgetOptions(widgetId)
     } catch (t: Throwable) {
       null
     }
-    val w = opts?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) ?: 0
-    val h = opts?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0) ?: 0
-    return if (w >= MEDIUM_W && h >= MEDIUM_H) medium(ctx, b, snap, data, open, refresh, refreshing) else small
+    if (!lean && opts != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      val out = ArrayList<SizeF>()
+      for (sz in reportedSizes(opts)) {
+        val c = clampSize(sz.width, sz.height)
+        if (out.none { abs(it.width - c.width) < 1f && abs(it.height - c.height) < 1f }) out.add(c)
+        if (out.size >= MAX_SIZES) break
+      }
+      if (out.isNotEmpty()) return out
+    }
+    val minW = opts?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0) ?: 0
+    val maxW = opts?.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH, 0) ?: 0
+    val minH = opts?.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 0) ?: 0
+    val maxH = opts?.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0) ?: 0
+    val landscape = ctx.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val w = (if (landscape) maxW else minW).takeIf { it > 0 } ?: max(minW, maxW)
+    val h = (if (landscape) minH else maxH).takeIf { it > 0 } ?: max(minH, maxH)
+    return listOf(clampSize(if (w > 0) w.toFloat() else DEFAULT_W, if (h > 0) h.toFloat() else DEFAULT_H))
   }
 
-  private fun small(
-    ctx: Context, b: Backend, snap: Snapshot, data: LiveData,
-    open: PendingIntent, refresh: PendingIntent, refreshing: Boolean,
-  ): RemoteViews {
-    val v = RemoteViews(ctx.packageName, R.layout.ttl_widget_small)
-    fillCommon(ctx, v, b, snap, data, refreshing)
-    // Beside the CCU: servers and the last hour's average session (what the medium size spreads out).
-    val servers = data.servers
-    v.setTextViewText(R.id.ttl_w_servers, if (servers == null) "" else Fmt.grouped(servers) + if (servers == 1) " server" else " servers")
-    v.setTextViewText(R.id.ttl_w_avg, "avg " + Fmt.duration(data.lastHour?.avgSessionSeconds) + " (1 h)")
-    v.setOnClickPendingIntent(android.R.id.background, open)
-    v.setOnClickPendingIntent(R.id.ttl_w_refresh, refresh)
-    return v
+  @RequiresApi(Build.VERSION_CODES.S)
+  private fun reportedSizes(opts: Bundle): List<SizeF> = try {
+    // Bundle.get: no Parcelable generics needed (deprecated in 33, still works).
+    @Suppress("DEPRECATION")
+    val raw = opts.get(AppWidgetManager.OPTION_APPWIDGET_SIZES)
+    (raw as? List<*>)?.filterIsInstance<SizeF>()?.filter { it.width > 0f && it.height > 0f }.orEmpty()
+  } catch (t: Throwable) {
+    emptyList()
   }
 
-  private fun medium(
-    ctx: Context, b: Backend, snap: Snapshot, data: LiveData,
-    open: PendingIntent, refresh: PendingIntent, refreshing: Boolean,
-  ): RemoteViews {
-    val v = RemoteViews(ctx.packageName, R.layout.ttl_widget_medium)
-    fillCommon(ctx, v, b, snap, data, refreshing)
-    val servers = data.servers
-    v.setTextViewText(
-      R.id.ttl_w_servers,
-      if (servers == null) "" else Fmt.grouped(servers) + if (servers == 1) " server" else " servers",
-    )
-    val points = data.seriesWindow(WINDOW_MS)
-    val chart = if (points.isEmpty()) null
-    else Chart.render(points, 300f, 72f, ctx.resources.displayMetrics.density, 2f)
-    if (chart != null) {
-      v.setImageViewBitmap(R.id.ttl_w_chart, chart)
-      v.setViewVisibility(R.id.ttl_w_chart, View.VISIBLE)
-    } else {
-      v.setViewVisibility(R.id.ttl_w_chart, View.INVISIBLE)
-    }
-    val lh = data.lastHour
-    v.setTextViewText(
-      R.id.ttl_w_footer,
-      "Last hour: avg session " + Fmt.duration(lh?.avgSessionSeconds) + " · " + Fmt.hours(lh?.playtimeHours) + " played",
-    )
-    v.setOnClickPendingIntent(android.R.id.background, open)
-    v.setOnClickPendingIntent(R.id.ttl_w_refresh, refresh)
-    return v
-  }
+  private fun clampSize(w: Float, h: Float): SizeF = SizeF(w.coerceIn(MIN_DP, MAX_DP), h.coerceIn(MIN_DP, MAX_DP))
 
-  private fun fillCommon(ctx: Context, v: RemoteViews, b: Backend, snap: Snapshot, data: LiveData, refreshing: Boolean) {
-    v.setTextViewText(R.id.ttl_w_name, data.gameName?.takeIf { it.isNotBlank() } ?: b.name)
-    v.setTextViewText(R.id.ttl_w_ccu, Fmt.count(data.ccu))
-    val delta = Fmt.delta(data.delta)
-    if (delta != null) {
-      v.setTextViewText(R.id.ttl_w_delta, delta)
-      v.setTextColor(
-        R.id.ttl_w_delta,
-        ContextCompat.getColor(ctx, if ((data.delta ?: 0) < 0) R.color.ttl_down else R.color.ttl_up),
-      )
-      v.setViewVisibility(R.id.ttl_w_delta, View.VISIBLE)
-    } else {
-      v.setViewVisibility(R.id.ttl_w_delta, View.GONE)
+  /** The text of the last-resort widget (when even the built-in spec can't be drawn). */
+  private fun plainText(ctx: Context, look: Look): String = try {
+    val b = look.backend
+    when (look.state) {
+      WidgetSpecs.PICK -> ctx.getString(R.string.ttl_widget_pick)
+      WidgetSpecs.SIGNED_OUT -> ctx.getString(R.string.ttl_widget_sign_in)
+      WidgetSpecs.UNREACHABLE -> "Can't reach " + (b?.name?.takeIf { it.isNotBlank() } ?: "the backend")
+      WidgetSpecs.DATA -> {
+        val data = look.snap?.data
+        val game = data?.gameName?.takeIf { it.isNotBlank() } ?: b?.name ?: ""
+        (if (game.isEmpty()) "" else "$game\n") + Fmt.count(data?.ccu) + " playing"
+      }
+      else -> ctx.getString(R.string.ttl_loading)
     }
-    // A widget isn't redrawn every second, so a relative "3 min ago" would go wrong: the clock time of the data
-    // instead, prefixed when the last refresh failed.
-    val updated = when {
-      refreshing -> ctx.getString(R.string.ttl_widget_refreshing)
-      snap.okAt <= 0L -> ""
-      snap.stale -> "offline · " + Fmt.clock(ctx, snap.okAt)
-      else -> Fmt.clock(ctx, snap.okAt)
-    }
-    v.setTextViewText(R.id.ttl_w_updated, updated)
+  } catch (t: Throwable) {
+    "TypeTorch"
   }
 
   private fun message(ctx: Context, text: String, click: PendingIntent, refresh: PendingIntent?): RemoteViews {

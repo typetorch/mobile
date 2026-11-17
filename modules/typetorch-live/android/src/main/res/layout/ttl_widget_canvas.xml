@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The widget (docs/WIDGET_SPEC.md): one bitmap drawn from the widget spec, per day/night mode, plus a transparent
+     refresh hit area in one corner (the spec picks it; the others stay gone). The launcher resolves this layout with
+     the system's night mode, so layout-night/ shows the night bitmap: a mode switch needs no redraw. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@android:id/background"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent">
+
+  <ImageView
+    android:id="@+id/ttl_w_img_day"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:scaleType="fitXY" />
+
+  <ImageView
+    android:id="@+id/ttl_w_img_night"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:scaleType="fitXY"
+    android:visibility="gone" />
+
+  <FrameLayout
+    android:id="@+id/ttl_w_hit_top_end"
+    android:layout_width="@dimen/ttl_widget_hit"
+    android:layout_height="@dimen/ttl_widget_hit"
+    android:layout_gravity="top|end"
+    android:contentDescription="@string/ttl_widget_refresh"
+    android:visibility="gone" />
+
+  <FrameLayout
+    android:id="@+id/ttl_w_hit_top_start"
+    android:layout_width="@dimen/ttl_widget_hit"
+    android:layout_height="@dimen/ttl_widget_hit"
+    android:layout_gravity="top|start"
+    android:contentDescription="@string/ttl_widget_refresh"
+    android:visibility="gone" />
+
+  <FrameLayout
+    android:id="@+id/ttl_w_hit_bottom_end"
+    android:layout_width="@dimen/ttl_widget_hit"
+    android:layout_height="@dimen/ttl_widget_hit"
+    android:layout_gravity="bottom|end"
+    android:contentDescription="@string/ttl_widget_refresh"
+    android:visibility="gone" />
+
+  <FrameLayout
+    android:id="@+id/ttl_w_hit_bottom_start"
+    android:layout_width="@dimen/ttl_widget_hit"
+    android:layout_height="@dimen/ttl_widget_hit"
+    android:layout_gravity="bottom|start"
+    android:contentDescription="@string/ttl_widget_refresh"
+    android:visibility="gone" />
+</FrameLayout>

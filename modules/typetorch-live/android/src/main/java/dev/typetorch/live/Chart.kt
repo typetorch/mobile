@@ -13,7 +13,6 @@ import kotlin.math.roundToInt
 internal object Chart {
   private const val BRAND = 0xFFFB7A32.toInt()
   private const val FILL_TOP = 0x55FB7A32
-  private const val FILL_BOTTOM = 0x00FB7A32
 
   /**
    * [widthDp] x [heightDp] drawn at the screen density, capped at [maxScale] px per dp (RemoteViews bitmaps cross
@@ -26,7 +25,7 @@ internal object Chart {
       val w = (widthDp * s).roundToInt().coerceAtLeast(8)
       val h = (heightDp * s).roundToInt().coerceAtLeast(8)
       val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-      if (points.isNotEmpty()) draw(Canvas(bmp), points, w.toFloat(), h.toFloat(), s)
+      if (points.isNotEmpty()) draw(Canvas(bmp), points, w.toFloat(), h.toFloat(), s, BRAND, FILL_TOP, true, 2f)
       bmp
     } catch (t: Throwable) {
       Log.w("chart failed", t)
@@ -34,9 +33,31 @@ internal object Chart {
     }
   }
 
-  private fun draw(c: Canvas, points: List<Point>, w: Float, h: Float, s: Float) {
-    val stroke = 2f * s
-    val dot = 3f * s
+  /**
+   * The widget renderer's line: drawn into [c] inside the box [left], [top], [w], [h] (px) at [s] px per dp, in [color]
+   * with a [fill] colour fading to transparent under it (null: no fill), a dot on the newest point when [dot].
+   */
+  fun drawInto(
+    c: Canvas, points: List<Point>, left: Float, top: Float, w: Float, h: Float, s: Float,
+    color: Int, fill: Int?, dot: Boolean, strokeDp: Float,
+  ) {
+    if (points.isEmpty() || w <= 0f || h <= 0f) return
+    val save = c.save()
+    try {
+      c.translate(left, top)
+      draw(c, points, w, h, s, color, fill, dot, strokeDp)
+    } finally {
+      c.restoreToCount(save)
+    }
+  }
+
+  /** With the notification's values (BRAND, FILL_TOP, dot, 2 dp) this draws exactly what it always did. */
+  private fun draw(
+    c: Canvas, points: List<Point>, w: Float, h: Float, s: Float,
+    color: Int, fillTop: Int?, withDot: Boolean, strokeDp: Float,
+  ) {
+    val stroke = strokeDp * s
+    val dot = if (withDot) 1.5f * strokeDp * s else stroke / 2f
     val padX = dot + s
     val padTop = dot + s
     val padBottom = stroke
@@ -86,25 +107,29 @@ internal object Chart {
     fill.lineTo(endX, h)
     fill.lineTo(startX, h)
     fill.close()
-    val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      style = Paint.Style.FILL
-      shader = LinearGradient(0f, padTop, 0f, h, FILL_TOP, FILL_BOTTOM, Shader.TileMode.CLAMP)
+    if (fillTop != null) {
+      val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        shader = LinearGradient(0f, padTop, 0f, h, fillTop, fillTop and 0x00FFFFFF, Shader.TileMode.CLAMP)
+      }
+      c.drawPath(fill, fillPaint)
     }
-    c.drawPath(fill, fillPaint)
 
     val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
       style = Paint.Style.STROKE
       strokeWidth = stroke
       strokeJoin = Paint.Join.ROUND
       strokeCap = Paint.Cap.ROUND
-      color = BRAND
+      this.color = color
     }
     c.drawPath(line, linePaint)
 
-    val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-      style = Paint.Style.FILL
-      color = BRAND
+    if (withDot) {
+      val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
+        this.color = color
+      }
+      c.drawCircle(endX, ys[points.size - 1], dot, dotPaint)
     }
-    c.drawCircle(endX, ys[points.size - 1], dot, dotPaint)
   }
 }

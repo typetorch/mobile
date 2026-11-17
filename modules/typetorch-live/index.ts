@@ -25,6 +25,7 @@ type NativeTypeTorchLive = {
 	stopWatch(id: string): void;
 	watching(): string[];
 	refreshWidgets(): void;
+	setWidgetSpec(json: string): void;
 };
 
 const native: NativeTypeTorchLive | null =
@@ -106,5 +107,22 @@ export function refreshWidgets(): void {
 		native.refreshWidgets();
 	} catch (e) {
 		warn("refreshWidgets", e);
+	}
+}
+
+/**
+ * Sets the home-screen widget's look: a widget spec as JSON (docs/WIDGET_SPEC.md, typed in
+ * src/features/live/widget-spec.ts). Saved natively (the widgets draw it without JS); "" goes back to the built-in
+ * default. A spec the native renderer can't parse is rejected (false, a warning with the reason) and the saved one
+ * stays. Draws nothing by itself: call refreshWidgets() after.
+ */
+export function setWidgetSpec(json: string): boolean {
+	if (!native) return false;
+	try {
+		native.setWidgetSpec(String(json ?? ""));
+		return true;
+	} catch (e) {
+		warn("setWidgetSpec", e);
+		return false;
 	}
 }

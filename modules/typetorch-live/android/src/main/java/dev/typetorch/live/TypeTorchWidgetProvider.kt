@@ -36,8 +36,9 @@ class TypeTorchWidgetProvider : AppWidgetProvider() {
     appWidgetId: Int,
     newOptions: Bundle,
   ) {
-    // Resized: before Android 12 the layout is picked here from the cache (no network).
-    WidgetUpdater.render(context.applicationContext, appWidgetManager, appWidgetId, false)
+    // Resized (or the launcher reported new sizes): redraw at the new size from the cache (no network), on a worker
+    // thread since it draws bitmaps.
+    WidgetUpdater.renderAsync(context, appWidgetId, goAsync())
   }
 
   override fun onDeleted(context: Context, appWidgetIds: IntArray) {

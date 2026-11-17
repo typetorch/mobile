@@ -8,7 +8,7 @@ import expo.modules.kotlin.modules.ModuleDefinition
 
 /**
  * JS API (docs/PUSH_WATCH_WIDGETS.md, section 3):
- *   setBackends(list), startWatch(id), stopWatch(id), watching(), refreshWidgets()
+ *   setBackends(list), startWatch(id), stopWatch(id), watching(), refreshWidgets(), setWidgetSpec(json)
  * Synchronous functions (they run on the JS thread); nothing here touches the network.
  */
 class TypeTorchLiveModule : Module() {
@@ -73,6 +73,21 @@ class TypeTorchLiveModule : Module() {
 
     Function("refreshWidgets") {
       WidgetUpdater.refreshAll(context)
+      Unit
+    }
+
+    // The widget's look (docs/WIDGET_SPEC.md). Saved when it parses (else rejected, the saved one stays); "" goes back
+    // to the built-in default. Draws nothing: call refreshWidgets() after.
+    Function("setWidgetSpec") { json: String ->
+      val ctx = context
+      val text = json.trim()
+      if (text.isEmpty()) {
+        Store.setWidgetSpecJson(ctx, null)
+      } else if (text != Store.widgetSpecJson(ctx)) {
+        val error = WidgetSpecs.validate(text)
+        if (error != null) throw CodedException("ERR_TYPETORCH_LIVE_SPEC", "Widget spec rejected: $error", null)
+        Store.setWidgetSpecJson(ctx, text)
+      }
       Unit
     }
   }

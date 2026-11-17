@@ -23,7 +23,7 @@ internal data class Snapshot(val data: LiveData?, val okAt: Long, val failedAt: 
 
 /**
  * Everything lives in the app's private SharedPreferences (MODE_PRIVATE); the token is never logged.
- * - `dev.typetorch.live`: backends (with tokens), the watched list, notification ids, widget picks.
+ * - `dev.typetorch.live`: backends (with tokens), the watched list, notification ids, widget picks, the widget spec.
  * - `dev.typetorch.live.cache`: last answers per backend and the dead-token marks (written on every poll).
  * Read-modify-write sequences hold [lock] (the service worker, widget threads and the JS thread all write).
  */
@@ -34,6 +34,7 @@ internal object Store {
   private const val K_WATCHED = "watched"
   private const val K_NOTIF_IDS = "notifIds"
   private const val K_WIDGET = "widget:"
+  private const val K_WIDGET_SPEC = "widgetSpec"
   private const val K_SNAP = "snap:"
   private const val K_DEAD = "dead:"
 
@@ -197,6 +198,16 @@ internal object Store {
 
   fun removeWidget(ctx: Context, widgetId: Int) {
     prefs(ctx).edit().remove(K_WIDGET + widgetId).apply()
+  }
+
+  /** The widget spec JSON the app sent (docs/WIDGET_SPEC.md), or null: the built-in default. */
+  fun widgetSpecJson(ctx: Context): String? = prefs(ctx).getString(K_WIDGET_SPEC, null)
+
+  /** Saves [json] (already validated), or removes the sent spec when null (back to the built-in default). */
+  fun setWidgetSpecJson(ctx: Context, json: String?) {
+    val edit = prefs(ctx).edit()
+    if (json == null) edit.remove(K_WIDGET_SPEC) else edit.putString(K_WIDGET_SPEC, json)
+    edit.apply()
   }
 
   // endregion

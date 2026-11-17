@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Night variant of layout/ttl_widget_canvas.xml (same ids): the night bitmap shows, the day one is gone.
+     Keep the two files in step. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@android:id/background"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent">
+
+  <ImageView
+    android:id="@+id/ttl_w_img_day"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:scaleType="fitXY"
+    android:visibility="gone" />
+
+  <ImageView
+    android:id="@+id/ttl_w_img_night"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:scaleType="fitXY" />
+
+  <FrameLayout
+    android:id="@+id/ttl_w_hit_top_end"
+    android:layout_width="@dimen/ttl_widget_hit"
+    android:layout_height="@dimen/ttl_widget_hit"
+    android:layout_gravity="top|end"
+    android:contentDescription="@string/ttl_widget_refresh"
+    android:visibility="gone" />
+
+  <FrameLayout
+    android:id="@+id/ttl_w_hit_top_start"
+    android:layout_width="@dimen/ttl_widget_hit"
+    android:layout_height="@dimen/ttl_widget_hit"
+    android:layout_gravity="top|start"
+    android:contentDescription="@string/ttl_widget_refresh"
+    android:visibility="gone" />
+
+  <FrameLayout
+    android:id="@+id/ttl_w_hit_bottom_end"
+    android:layout_width="@dimen/ttl_widget_hit"
+    android:layout_height="@dimen/ttl_widget_hit"
+    android:layout_gravity="bottom|end"
+    android:contentDescription="@string/ttl_widget_refresh"
+    android:visibility="gone" />
+
+  <FrameLayout
+    android:id="@+id/ttl_w_hit_bottom_start"
+    android:layout_width="@dimen/ttl_widget_hit"
+    android:layout_height="@dimen/ttl_widget_hit"
+    android:layout_gravity="bottom|start"
+    android:contentDescription="@string/ttl_widget_refresh"
+    android:visibility="gone" />
+</FrameLayout>

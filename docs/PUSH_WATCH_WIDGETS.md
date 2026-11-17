@@ -94,6 +94,7 @@ startWatch(id: string): void       // asks nothing: the app requests POST_NOTIFI
 stopWatch(id: string): void
 watching(): string[]
 refreshWidgets(): void             // redraw every widget now (after setBackends, on app foreground)
+setWidgetSpec(json: string): boolean  // the widgets' look (docs/WIDGET_SPEC.md), sent by the app so it ships over OTA
 ```
 
 The list is kept in the app's private SharedPreferences (the service and widgets read it without JS).
