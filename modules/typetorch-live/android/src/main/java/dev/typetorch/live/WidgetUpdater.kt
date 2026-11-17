@@ -89,7 +89,7 @@ internal object WidgetUpdater {
   }
 
   private fun fetchFor(app: Context, ids: IntArray) {
-    val backends = ids.mapNotNull { Store.widgetBackend(app, it) }
+    val backends = ids.toList().mapNotNull { Store.widgetBackend(app, it) }
       .distinct()
       .mapNotNull { Store.backend(app, it) }
       .filter { !Store.isDead(app, it.id, it.token) }
