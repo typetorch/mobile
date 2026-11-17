@@ -178,11 +178,12 @@ internal class WidgetValues(
    * `value` / `prev`) comes back as a [MetricCell]; `<metric>.delta` is computed from its `value` and `prev`.
    */
   private fun path(key: String): Any? {
-    if (data == null || key.isEmpty() || key.length > 200) return null
+    val live = data ?: return null
+    if (key.isEmpty() || key.length > 200) return null
     val root = tree ?: run {
       if (treeFailed) return null
       try {
-        data.toJson(false).also { tree = it }
+        live.toJson(false).also { tree = it }
       } catch (t: Throwable) {
         treeFailed = true
         return null
