@@ -18,9 +18,9 @@
  * Focus: expo-router's Stack keeps a screen mounted under a pushed one. While it is not focused the scene is not
  * updated (no three.js rebuilds or frames for a hidden map); the latest props are drawn when it is back in front.
  */
-import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
+import { GLView, type ExpoWebGLRenderingContext, type GLViewProps } from "expo-gl";
 import { useIsFocused } from "expo-router";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { AppState, PanResponder, Pressable, StyleSheet, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -68,6 +68,27 @@ export interface MapSceneProps {
 	/** Drawn over the map, under the hint and Fit (the Player view's recorded UI, taps, caption). */
 	children?: ReactNode;
 }
+
+/**
+ * expo-gl's GLView reads its context in its own surface event handler, outside any try/catch of ours: if the native side
+ * didn't set the context up (GL unavailable, an id it doesn't know) that throws as a fatal error, which takes the whole
+ * app down in a release build. This one hands such an error to `onGLError` instead.
+ */
+type SafeGLViewProps = GLViewProps & { onGLError?: (error: Error) => void };
+class SafeGLViewClass extends GLView {
+	constructor(props: SafeGLViewProps) {
+		super(props);
+		const create = this._onSurfaceCreate;
+		this._onSurfaceCreate = (event) => {
+			try {
+				create(event);
+			} catch (error) {
+				(this.props as SafeGLViewProps).onGLError?.(error instanceof Error ? error : new Error(String(error)));
+			}
+		};
+	}
+}
+const SafeGLView = SafeGLViewClass as unknown as ComponentType<SafeGLViewProps>;
 
 /** How long a layout must hold before the GLView is made: longer for a remount than for the first one. */
 const prevSettled = (laid: { width: number; height: number } | null) => (laid ? 400 : 250);
@@ -311,7 +332,13 @@ function MapSceneView({
 				{...responder.panHandlers}
 			>
 				{failed || !laid ? null : (
-					<GLView key={`${laid.width}x${laid.height}`} style={StyleSheet.absoluteFill} onContextCreate={onContextCreate} pointerEvents="none" />
+					<SafeGLView
+						key={`${laid.width}x${laid.height}`}
+						style={StyleSheet.absoluteFill}
+						onContextCreate={onContextCreate}
+						onGLError={(error: Error) => setFailed(`The map's GL view didn't start (${error.message}).`)}
+						pointerEvents="none"
+					/>
 				)}
 			</View>
 			{children}

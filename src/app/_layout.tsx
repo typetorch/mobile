@@ -9,9 +9,11 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { HttpError } from "@/api/http";
+import { installCrashGuard } from "@/lib/crash-guard";
 import { AccountsProvider, useAccounts } from "@/store/accounts";
 import { ThemeProvider, useTheme } from "@/theme";
 
+installCrashGuard();
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 // React Query refetches when the app comes back to the foreground.
