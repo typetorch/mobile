@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
+import { router } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
 
@@ -195,6 +196,18 @@ export default function SettingsScreen() {
 
 			<Section title="Notifications">
 				<NotificationsSection />
+			</Section>
+
+			<Section title="Widgets">
+				<List>
+					<Row
+						left={<Icon name="apps-outline" size={18} color={p.foreground} />}
+						title="Home-screen widgets"
+						subtitle="Pick the stats each widget shows"
+						chevron
+						onPress={() => router.push("/widgets")}
+					/>
+				</List>
 			</Section>
 
 			<Section title="Appearance">

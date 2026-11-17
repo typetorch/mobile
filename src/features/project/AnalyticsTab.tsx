@@ -5,11 +5,11 @@
  * range and granularity, and per-card breakdowns, variants and filters. Only the first cards of the open group load
  * by themselves (Roblox allows 30 queries a minute per key owner).
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View } from "react-native";
 
 import { ANALYTICS_READ_SCOPE, hasScope } from "@/api/opencloud";
-import { Chips, ScopeNotice, Txt } from "@/components/ui";
+import { Chips, ScopeNotice, Segmented, Txt } from "@/components/ui";
 import { useExportLines } from "@/features/export/context";
 import { useAccounts } from "@/store/accounts";
 
@@ -19,16 +19,28 @@ import { Benchmarks } from "./analytics/Benchmarks";
 import { Compare } from "./analytics/Compare";
 import { MetricCard } from "./analytics/MetricCard";
 import { GranularityControls, GroupPick, RangeControls } from "./analytics/options";
+import { ThumbnailGallery } from "./analytics/ThumbnailGallery";
 import { AcquisitionFunnel, CohortTable } from "./analytics/views";
 
 /** Cards per group that load without a tap. */
 const AUTO_LOAD = 4;
 
-export function AnalyticsTab({ universeId }: { universeId: number }) {
+/**
+ * `initialGroup` / `initialView` open a group (and, for Thumbnails, the gallery) from a link
+ * (`/project/<id>?tab=analytics&group=thumbnails&view=gallery`).
+ */
+export function AnalyticsTab({ universeId, initialGroup, initialView }: { universeId: number; initialGroup?: string; initialView?: "cards" | "gallery" }) {
 	const { keyInfo, hasKey } = useAccounts();
 	const [range, setRange] = useState<RangeSpec>({ kind: "preset", days: 28 });
 	const [granularity, setGranularity] = useState<GranularityChoice>("Auto");
-	const [groupKey, setGroupKey] = useState(METRIC_GROUPS[0]!.key);
+	const [groupKey, setGroupKey] = useState(METRIC_GROUPS.find((g) => g.key === initialGroup)?.key ?? METRIC_GROUPS[0]!.key);
+	// Thumbnails: the per-metric cards or the gallery (one card per thumbnail).
+	const [thumbView, setThumbView] = useState<"cards" | "gallery">(initialView === "gallery" ? "gallery" : "cards");
+	useEffect(() => {
+		const g = METRIC_GROUPS.find((x) => x.key === initialGroup);
+		if (g) setGroupKey(g.key);
+		if (initialView === "gallery" || initialView === "cards") setThumbView(initialView);
+	}, [initialGroup, initialView]);
 	const [picks, setPicks] = useState<Record<string, string | null>>({});
 	// An export's header: the range, the step and the page of metrics (and its pick) in effect.
 	useExportLines(() => {
@@ -51,13 +63,24 @@ export function AnalyticsTab({ universeId }: { universeId: number }) {
 	const waiting = pick?.required && picked === null ? `Pick a ${pick.label.toLowerCase()} above.` : null;
 	const pickRange = timeRange(range, {}, "OneDay");
 	const custom = range.kind === "custom";
+	const gallery = views.includes("thumbnailGallery") && thumbView === "gallery";
 
 	return (
 		<View style={{ gap: 12 }}>
 			<RangeControls range={range} onChange={setRange} />
-			{views.includes("benchmarks") || views.includes("compare") ? null : <GranularityControls value={granularity} onChange={setGranularity} />}
+			{views.includes("benchmarks") || views.includes("compare") || gallery ? null : <GranularityControls value={granularity} onChange={setGranularity} />}
 			<Chips options={METRIC_GROUPS.map((g) => ({ value: g.key, label: g.title }))} value={group.key} onChange={setGroupKey} />
 			{group.help ? <Txt variant="small">{group.help}</Txt> : null}
+			{views.includes("thumbnailGallery") ? (
+				<Segmented
+					options={[
+						{ value: "cards" as const, label: "Cards" },
+						{ value: "gallery" as const, label: "Gallery" },
+					]}
+					value={thumbView}
+					onChange={setThumbView}
+				/>
+			) : null}
 
 			{pick ? (
 				<GroupPick
@@ -78,8 +101,9 @@ export function AnalyticsTab({ universeId }: { universeId: number }) {
 			{views.includes("cohorts") ? <CohortTable universeId={universeId} range={range} /> : null}
 			{views.includes("benchmarks") ? <Benchmarks universeId={universeId} range={range} /> : null}
 			{views.includes("compare") ? <Compare universeId={universeId} range={range} /> : null}
+			{gallery ? <ThumbnailGallery universeId={universeId} range={range} /> : null}
 
-			{group.metrics.map((m, i) => (
+			{gallery ? null : group.metrics.map((m, i) => (
 				<MetricCard
 					key={`${group.key}:${m.key ?? m.id}`}
 					universeId={universeId}

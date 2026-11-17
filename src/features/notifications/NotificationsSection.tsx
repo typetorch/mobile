@@ -101,7 +101,7 @@ export function NotificationsSection() {
 			))}
 			<Card style={{ gap: 6 }}>
 				<Txt variant="small">
-					Widgets: long-press the home screen → Widgets → TypeTorch, then pick the game. On Xiaomi / HyperOS the live watch and widgets keep
+					Widgets: long-press the home screen → Widgets → TypeTorch, then pick the game; choose each widget's stats in Settings → Widgets. On Xiaomi / HyperOS the live watch and widgets keep
 					updating only with Autostart on and Battery saver set to No restrictions.
 				</Txt>
 				<Button title="Open TypeTorch's phone settings" small variant="ghost" icon="settings-outline" onPress={() => void Linking.openSettings()} style={{ alignSelf: "flex-start" }} />

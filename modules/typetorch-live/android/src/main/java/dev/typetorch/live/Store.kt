@@ -23,7 +23,8 @@ internal data class Snapshot(val data: LiveData?, val okAt: Long, val failedAt: 
 
 /**
  * Everything lives in the app's private SharedPreferences (MODE_PRIVATE); the token is never logged.
- * - `dev.typetorch.live`: backends (with tokens), the watched list, notification ids, widget picks, the widget spec.
+ * - `dev.typetorch.live`: backends (with tokens), the watched list, notification ids, widget picks and stat slots, the
+ *   default slots, the widget spec.
  * - `dev.typetorch.live.cache`: last answers per backend and the dead-token marks (written on every poll).
  * Read-modify-write sequences hold [lock] (the service worker, widget threads and the JS thread all write).
  */
@@ -35,6 +36,8 @@ internal object Store {
   private const val K_NOTIF_IDS = "notifIds"
   private const val K_WIDGET = "widget:"
   private const val K_WIDGET_SPEC = "widgetSpec"
+  private const val K_WIDGET_SLOTS = "widgetSlots:"
+  private const val K_DEFAULT_SLOTS = "defaultSlots"
   private const val K_SNAP = "snap:"
   private const val K_DEAD = "dead:"
 
@@ -197,7 +200,70 @@ internal object Store {
   }
 
   fun removeWidget(ctx: Context, widgetId: Int) {
-    prefs(ctx).edit().remove(K_WIDGET + widgetId).apply()
+    prefs(ctx).edit().remove(K_WIDGET + widgetId).remove(K_WIDGET_SLOTS + widgetId).apply()
+  }
+
+  /** The stat slots new widgets get until the app sets others (docs/WIDGET_STATS.md). */
+  val BUILT_IN_SLOTS = listOf("session:1h", "dau", "d1", "revenue:72h")
+  const val MAX_SLOTS = 4
+
+  /** Metric ids per fetch (the backend answers at most 12). */
+  private const val MAX_METRICS = 12
+
+  /** A metric id: letters, digits and `: _ -` (e.g. `dau`, `revenue:72h`), at most 40 characters. */
+  private val METRIC_ID = Regex("^[A-Za-z0-9:_-]{1,40}$")
+
+  /**
+   * At most [MAX_SLOTS] slots; anything that isn't a metric id becomes "" (an empty slot, so positions keep), and
+   * trailing empty slots are dropped.
+   */
+  fun sanitizeSlots(list: List<*>): List<String> {
+    val out = ArrayList<String>(MAX_SLOTS)
+    for (v in list) {
+      if (out.size >= MAX_SLOTS) break
+      val id = (v as? String)?.trim().orEmpty()
+      out.add(if (METRIC_ID.matches(id)) id else "")
+    }
+    while (out.isNotEmpty() && out.last().isEmpty()) out.removeAt(out.size - 1)
+    return out
+  }
+
+  private fun parseSlots(raw: String?): List<String>? {
+    if (raw == null) return null
+    return try {
+      val arr = JSONArray(raw)
+      sanitizeSlots((0 until arr.length()).map { arr.opt(it) })
+    } catch (t: Throwable) {
+      null
+    }
+  }
+
+  /** The slots new widgets get: the app's last setDefaultSlots, else [BUILT_IN_SLOTS]. */
+  fun defaultSlots(ctx: Context): List<String> = parseSlots(prefs(ctx).getString(K_DEFAULT_SLOTS, null)) ?: BUILT_IN_SLOTS
+
+  fun setDefaultSlots(ctx: Context, slots: List<String>) {
+    prefs(ctx).edit().putString(K_DEFAULT_SLOTS, JSONArray(sanitizeSlots(slots)).toString()).apply()
+  }
+
+  /** True when this widget has its own slots (else it shows the defaults). */
+  fun hasWidgetSlots(ctx: Context, widgetId: Int): Boolean = prefs(ctx).contains(K_WIDGET_SLOTS + widgetId)
+
+  /** The widget's stat slots (metric ids, "" = empty); a widget placed before slots existed shows the defaults. */
+  fun widgetSlots(ctx: Context, widgetId: Int): List<String> =
+    parseSlots(prefs(ctx).getString(K_WIDGET_SLOTS + widgetId, null)) ?: defaultSlots(ctx)
+
+  fun setWidgetSlots(ctx: Context, widgetId: Int, slots: List<String>) {
+    prefs(ctx).edit().putString(K_WIDGET_SLOTS + widgetId, JSONArray(sanitizeSlots(slots)).toString()).apply()
+  }
+
+  /** The metric ids to ask [backendId] for: the union of the slots of its widgets among [widgetIds], at most 12. */
+  fun metricsFor(ctx: Context, backendId: String, widgetIds: IntArray): List<String> {
+    val out = LinkedHashSet<String>()
+    for (id in widgetIds.distinct()) {
+      if (widgetBackend(ctx, id) != backendId) continue
+      for (slot in widgetSlots(ctx, id)) if (slot.isNotEmpty()) out.add(slot)
+    }
+    return out.take(MAX_METRICS)
   }
 
   /** The widget spec JSON the app sent (docs/WIDGET_SPEC.md), or null: the built-in default. */
@@ -237,11 +303,19 @@ internal object Store {
     edit.apply()
   }
 
-  /** Saves a good answer; its series is merged with the cached one (so the 30-minute polls extend the 6-hour line). */
-  fun saveSuccess(ctx: Context, id: String, data: LiveData, now: Long) {
+  /**
+   * Saves a good answer; its series is merged with the cached one (so the 30-minute polls extend the 6-hour line).
+   * Metrics: an answer to a fetch that asked some ([askedMetrics]) replaces them (what no widget shows any more goes);
+   * one that asked none (the live watch) keeps the cached ones. The icon URL stays when the answer has none.
+   */
+  fun saveSuccess(ctx: Context, id: String, data: LiveData, now: Long, askedMetrics: Boolean) {
     synchronized(lock) {
       val prev = snapshotLocked(ctx, id)?.data
-      val merged = data.copy(series = LiveData.mergeSeries(prev?.series.orEmpty(), data.series, SERIES_WINDOW_MS))
+      val merged = data.copy(
+        series = LiveData.mergeSeries(prev?.series.orEmpty(), data.series, SERIES_WINDOW_MS),
+        metrics = if (askedMetrics) data.metrics else (prev?.metrics ?: data.metrics),
+        iconUrl = data.iconUrl ?: prev?.iconUrl,
+      )
       writeSnapshotLocked(ctx, id, Snapshot(merged, now, 0L), clearDead = true)
     }
   }
@@ -271,13 +345,16 @@ internal object Store {
 
   // endregion
 
-  /** Fetches one backend's live numbers and stores the outcome. Blocking (network): worker threads only. */
-  fun fetchAndStore(ctx: Context, b: Backend, minutes: Int): FetchResult {
-    val result = LiveApi.fetch(b.url, b.token, minutes)
+  /**
+   * Fetches one backend's live numbers (and [metrics], the widgets' stat ids) and stores the outcome. Blocking
+   * (network): worker threads only.
+   */
+  fun fetchAndStore(ctx: Context, b: Backend, minutes: Int, metrics: List<String> = emptyList()): FetchResult {
+    val result = LiveApi.fetch(b.url, b.token, minutes, metrics)
     val now = System.currentTimeMillis()
     try {
       when (result) {
-        is FetchResult.Ok -> saveSuccess(ctx, b.id, result.data, now)
+        is FetchResult.Ok -> saveSuccess(ctx, b.id, result.data, now, metrics.isNotEmpty())
         is FetchResult.SignedOut -> markDead(ctx, b.id, b.token)
         is FetchResult.Failed -> saveFailure(ctx, b.id, now)
       }

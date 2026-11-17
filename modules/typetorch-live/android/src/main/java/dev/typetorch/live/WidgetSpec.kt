@@ -57,6 +57,11 @@ internal class Node(
   val icon: String,
   // divider
   val thickness: Float,
+  // image (and chart): the binding it shows
+  val bind: String?,
+  // image: corner radius in dp, the colour drawn while the picture is missing (null: nothing)
+  val radius: Float,
+  val placeholder: String?,
 )
 
 /** One size class of one state. */
@@ -100,6 +105,9 @@ internal object WidgetSpecs {
     "up" to 0xFF2E9D57.toInt(),
     "down" to 0xFFD64545.toInt(),
     "divider" to 0x1F000000,
+    "unitTime" to 0xFFE2700F.toInt(),
+    "unitPercent" to 0xFF1F6FD1.toInt(),
+    "unitRobux" to 0xFF1F8A4C.toInt(),
   )
   private val BASE_NIGHT = mapOf(
     "bg" to 0xF21E1E22.toInt(),
@@ -109,6 +117,9 @@ internal object WidgetSpecs {
     "up" to 0xFF4CC27A.toInt(),
     "down" to 0xFFF06A6A.toInt(),
     "divider" to 0x33FFFFFF,
+    "unitTime" to 0xFFFB923C.toInt(),
+    "unitPercent" to 0xFF5AA9FF.toInt(),
+    "unitRobux" to 0xFF4CC27A.toInt(),
   )
   private val BASE_STRINGS = mapOf("refreshing" to "refreshing…", "offline" to "offline · {updated}")
 
@@ -180,6 +191,17 @@ internal object WidgetSpecs {
       ?: throw IllegalStateException("no layout for $state")
     val fits = list.filter { it.minWidth <= w && it.minHeight <= h }
     return fits.maxByOrNull { it.minWidth * it.minHeight } ?: list.minByOrNull { it.minWidth * it.minHeight } ?: list[0]
+  }
+
+  /** The bindings of every `image` element of [spec] (to download their pictures ahead of drawing). */
+  fun imageBinds(spec: WidgetSpec): Set<String> {
+    val out = LinkedHashSet<String>()
+    fun walk(n: Node) {
+      if (n.type == "image") n.bind?.let { out.add(it) }
+      for (k in n.children) walk(k)
+    }
+    for (list in spec.layouts.values) for (l in list) walk(l.root)
+    return out
   }
 
   // region parsing
@@ -286,7 +308,12 @@ internal object WidgetSpecs {
       showIf = str(o, "showIf")?.takeIf { it.isNotBlank() },
       background = fill(o, "background"),
       text = str(o, "text") ?: "",
-      size = num(o, "size")?.coerceIn(0f, 200f) ?: if (type == "icon") 16f else if (type == "spacer") 0f else 12f,
+      size = num(o, "size")?.coerceIn(0f, 200f) ?: when (type) {
+        "icon" -> 16f
+        "image" -> 22f
+        "spacer" -> 0f
+        else -> 12f
+      },
       fontWeight = fontWeight(o.opt("fontWeight")),
       color = str(o, "color") ?: textDefault,
       maxLines = (num(o, "maxLines")?.toInt() ?: 1).coerceIn(1, 20),
@@ -297,6 +324,9 @@ internal object WidgetSpecs {
       dot = if (o.has("dot")) o.optBoolean("dot", true) else true,
       icon = str(o, "name") ?: "",
       thickness = num(o, "thickness")?.coerceIn(0f, 50f) ?: 1f,
+      bind = str(o, "bind")?.trim()?.takeIf { it.isNotEmpty() } ?: if (type == "image") "game.iconUrl" else null,
+      radius = num(o, "radius")?.coerceIn(0f, 500f) ?: if (type == "image") 6f else 0f,
+      placeholder = if (o.has("placeholder")) str(o, "placeholder") else if (type == "image") "divider" else null,
     )
   }
 
@@ -391,22 +421,28 @@ internal object WidgetSpecs {
   "version": 1,
   "tokens": {
     "day": {
-      "bg": "#F7FFFFFF",
-      "text": "#FF1B1B1F",
-      "text2": "#FF5F6368",
+      "bg": "#EFFFFFFF",
+      "text": "#FF17171B",
+      "text2": "#FF62606A",
       "brand": "#FFFB7A32",
-      "up": "#FF2E9D57",
-      "down": "#FFD64545",
-      "divider": "#1F000000"
+      "up": "#FF1F8A4C",
+      "down": "#FFC93C3C",
+      "divider": "#1F000000",
+      "unitTime": "#FFE2700F",
+      "unitPercent": "#FF1F6FD1",
+      "unitRobux": "#FF1F8A4C"
     },
     "night": {
-      "bg": "#F21E1E22",
-      "text": "#FFECECEE",
-      "text2": "#FFA8A8AD",
+      "bg": "#FF1C1C20",
+      "text": "#FFF2F0F5",
+      "text2": "#FFA7A3AD",
       "brand": "#FFFB7A32",
       "up": "#FF4CC27A",
-      "down": "#FFF06A6A",
-      "divider": "#33FFFFFF"
+      "down": "#FFEF6B6B",
+      "divider": "#33FFFFFF",
+      "unitTime": "#FFFB923C",
+      "unitPercent": "#FF5AA9FF",
+      "unitRobux": "#FF4CC27A"
     }
   },
   "strings": {
@@ -417,16 +453,15 @@ internal object WidgetSpecs {
     "data": [
       {
         "name": "medium",
-        "minWidth": 220,
-        "minHeight": 95,
+        "minWidth": 240,
+        "minHeight": 120,
         "refresh": "topEnd",
-        "description": "{game}: {ccu:grouped} playing {delta}, {serversLabel}, {status}",
         "root": {
           "type": "column",
           "padding": {
             "start": 14,
-            "top": 8,
-            "end": 8,
+            "top": 4,
+            "end": 6,
             "bottom": 10
           },
           "children": [
@@ -435,9 +470,19 @@ internal object WidgetSpecs {
               "align": "center",
               "children": [
                 {
+                  "type": "image",
+                  "bind": "game.iconUrl",
+                  "size": 22,
+                  "radius": 6,
+                  "placeholder": "divider",
+                  "margin": {
+                    "end": 7
+                  }
+                },
+                {
                   "type": "text",
                   "text": "{game}",
-                  "size": 13,
+                  "size": 12,
                   "fontWeight": "medium",
                   "color": "text",
                   "weight": 1
@@ -445,7 +490,7 @@ internal object WidgetSpecs {
                 {
                   "type": "text",
                   "text": "{status}",
-                  "size": 11,
+                  "size": 10,
                   "color": "text2",
                   "margin": {
                     "start": 6
@@ -454,89 +499,235 @@ internal object WidgetSpecs {
                 {
                   "type": "icon",
                   "name": "refresh",
-                  "size": 18,
-                  "padding": 5,
+                  "size": 15,
+                  "padding": 4,
                   "color": "text2"
                 }
               ]
             },
             {
               "type": "row",
-              "align": "baseline",
+              "weight": 1,
+              "align": "stretch",
+              "margin": {
+                "top": 4
+              },
               "padding": {
-                "end": 6
+                "end": 8
               },
               "children": [
                 {
-                  "type": "text",
-                  "text": "{ccu}",
-                  "size": 26,
-                  "fontWeight": "medium",
-                  "color": "text"
-                },
-                {
-                  "type": "text",
-                  "text": "{delta}",
-                  "size": 13,
-                  "fontWeight": "bold",
-                  "color": "delta",
-                  "margin": {
-                    "start": 6
-                  },
-                  "showIf": "delta"
-                },
-                {
-                  "type": "text",
-                  "text": "{serversLabel}",
-                  "size": 12,
-                  "color": "text2",
-                  "align": "end",
+                  "type": "column",
                   "weight": 1,
+                  "children": [
+                    {
+                      "type": "row",
+                      "align": "baseline",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{ccu}",
+                          "size": 34,
+                          "fontWeight": "semibold",
+                          "color": "text"
+                        },
+                        {
+                          "type": "text",
+                          "text": "{delta}",
+                          "size": 13,
+                          "fontWeight": "bold",
+                          "color": "delta",
+                          "margin": {
+                            "start": 4
+                          },
+                          "showIf": "delta"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "chart",
+                      "bind": "series",
+                      "minutes": 360,
+                      "color": "brand",
+                      "fill": true,
+                      "weight": 1,
+                      "margin": {
+                        "top": 2,
+                        "bottom": 3
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "text": "last 6 h · {serversLabel|no servers} · peak {peakToday}",
+                      "size": 10,
+                      "color": "text2"
+                    }
+                  ]
+                },
+                {
+                  "type": "column",
+                  "weight": 1,
+                  "justify": "center",
+                  "gap": 6,
                   "margin": {
-                    "start": 6
-                  }
+                    "start": 12
+                  },
+                  "children": [
+                    {
+                      "type": "row",
+                      "align": "baseline",
+                      "showIf": "slot.1",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.1.label}",
+                          "size": 10.5,
+                          "color": "text2",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.1.value}",
+                          "size": 12,
+                          "fontWeight": "semibold",
+                          "color": "text",
+                          "margin": {
+                            "start": 8
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.1.delta}",
+                          "size": 9.5,
+                          "fontWeight": "bold",
+                          "margin": {
+                            "start": 4
+                          },
+                          "showIf": "slot.1.delta"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "row",
+                      "align": "baseline",
+                      "showIf": "slot.2",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.2.label}",
+                          "size": 10.5,
+                          "color": "text2",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.2.value}",
+                          "size": 12,
+                          "fontWeight": "semibold",
+                          "color": "text",
+                          "margin": {
+                            "start": 8
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.2.delta}",
+                          "size": 9.5,
+                          "fontWeight": "bold",
+                          "margin": {
+                            "start": 4
+                          },
+                          "showIf": "slot.2.delta"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "row",
+                      "align": "baseline",
+                      "showIf": "slot.3",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.3.label}",
+                          "size": 10.5,
+                          "color": "text2",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.3.value}",
+                          "size": 12,
+                          "fontWeight": "semibold",
+                          "color": "text",
+                          "margin": {
+                            "start": 8
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.3.delta}",
+                          "size": 9.5,
+                          "fontWeight": "bold",
+                          "margin": {
+                            "start": 4
+                          },
+                          "showIf": "slot.3.delta"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "row",
+                      "align": "baseline",
+                      "showIf": "slot.4",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.4.label}",
+                          "size": 10.5,
+                          "color": "text2",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.4.value}",
+                          "size": 12,
+                          "fontWeight": "semibold",
+                          "color": "text",
+                          "margin": {
+                            "start": 8
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.4.delta}",
+                          "size": 9.5,
+                          "fontWeight": "bold",
+                          "margin": {
+                            "start": 4
+                          },
+                          "showIf": "slot.4.delta"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
-            },
-            {
-              "type": "chart",
-              "bind": "series",
-              "minutes": 360,
-              "color": "brand",
-              "fill": true,
-              "weight": 1,
-              "margin": {
-                "top": 4,
-                "end": 6,
-                "bottom": 4
-              }
-            },
-            {
-              "type": "text",
-              "text": "Last hour: avg session {lastHour.avgSessionSeconds} · {lastHour.playtimeHours} played",
-              "size": 11,
-              "color": "text2",
-              "padding": {
-                "end": 6
-              }
             }
           ]
         }
       },
       {
-        "name": "small",
-        "minWidth": 0,
-        "minHeight": 0,
+        "name": "grid",
+        "minWidth": 100,
+        "minHeight": 115,
         "refresh": "topEnd",
-        "description": "{game}: {ccu:grouped} playing {delta}, {serversLabel}, {status}",
         "root": {
           "type": "column",
-          "justify": "center",
           "padding": {
             "start": 12,
             "top": 4,
             "end": 6,
-            "bottom": 6
+            "bottom": 10
           },
           "children": [
             {
@@ -544,9 +735,277 @@ internal object WidgetSpecs {
               "align": "center",
               "children": [
                 {
+                  "type": "image",
+                  "bind": "game.iconUrl",
+                  "size": 20,
+                  "radius": 6,
+                  "placeholder": "divider",
+                  "margin": {
+                    "end": 7
+                  }
+                },
+                {
                   "type": "text",
                   "text": "{game}",
                   "size": 12,
+                  "fontWeight": "medium",
+                  "color": "text2",
+                  "weight": 1
+                },
+                {
+                  "type": "icon",
+                  "name": "refresh",
+                  "size": 15,
+                  "padding": 4,
+                  "color": "text2"
+                }
+              ]
+            },
+            {
+              "type": "row",
+              "align": "baseline",
+              "margin": {
+                "top": 4
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "text": "{ccu}",
+                  "size": 22,
+                  "fontWeight": "semibold",
+                  "color": "text"
+                },
+                {
+                  "type": "text",
+                  "text": "{delta}",
+                  "size": 12,
+                  "fontWeight": "bold",
+                  "color": "delta",
+                  "margin": {
+                    "start": 4
+                  },
+                  "showIf": "delta"
+                },
+                {
+                  "type": "text",
+                  "text": "· {serversLabel}",
+                  "size": 10,
+                  "color": "text2",
+                  "margin": {
+                    "start": 4
+                  },
+                  "weight": 1,
+                  "showIf": "servers"
+                }
+              ]
+            },
+            {
+              "type": "spacer",
+              "weight": 1
+            },
+            {
+              "type": "row",
+              "align": "start",
+              "gap": 6,
+              "padding": {
+                "end": 6
+              },
+              "margin": {
+                "bottom": 7
+              },
+              "children": [
+                {
+                  "type": "column",
+                  "weight": 1,
+                  "showIf": "slot.1",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "{slot.1.label}",
+                      "size": 10,
+                      "color": "text2"
+                    },
+                    {
+                      "type": "row",
+                      "align": "baseline",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.1.value}",
+                          "size": 12,
+                          "fontWeight": "semibold",
+                          "color": "text"
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.1.delta}",
+                          "size": 8.5,
+                          "fontWeight": "bold",
+                          "margin": {
+                            "start": 3
+                          },
+                          "showIf": "slot.1.delta"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "column",
+                  "weight": 1,
+                  "showIf": "slot.2",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "{slot.2.label}",
+                      "size": 10,
+                      "color": "text2"
+                    },
+                    {
+                      "type": "row",
+                      "align": "baseline",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.2.value}",
+                          "size": 12,
+                          "fontWeight": "semibold",
+                          "color": "text"
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.2.delta}",
+                          "size": 8.5,
+                          "fontWeight": "bold",
+                          "margin": {
+                            "start": 3
+                          },
+                          "showIf": "slot.2.delta"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "row",
+              "align": "start",
+              "gap": 6,
+              "padding": {
+                "end": 6
+              },
+              "children": [
+                {
+                  "type": "column",
+                  "weight": 1,
+                  "showIf": "slot.3",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "{slot.3.label}",
+                      "size": 10,
+                      "color": "text2"
+                    },
+                    {
+                      "type": "row",
+                      "align": "baseline",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.3.value}",
+                          "size": 12,
+                          "fontWeight": "semibold",
+                          "color": "text"
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.3.delta}",
+                          "size": 8.5,
+                          "fontWeight": "bold",
+                          "margin": {
+                            "start": 3
+                          },
+                          "showIf": "slot.3.delta"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "column",
+                  "weight": 1,
+                  "showIf": "slot.4",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "{slot.4.label}",
+                      "size": 10,
+                      "color": "text2"
+                    },
+                    {
+                      "type": "row",
+                      "align": "baseline",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.4.value}",
+                          "size": 12,
+                          "fontWeight": "semibold",
+                          "color": "text"
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.4.delta}",
+                          "size": 8.5,
+                          "fontWeight": "bold",
+                          "margin": {
+                            "start": 3
+                          },
+                          "showIf": "slot.4.delta"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "small",
+        "minWidth": 100,
+        "minHeight": 72,
+        "refresh": "topEnd",
+        "root": {
+          "type": "column",
+          "padding": {
+            "start": 12,
+            "top": 4,
+            "end": 6,
+            "bottom": 8
+          },
+          "children": [
+            {
+              "type": "row",
+              "align": "center",
+              "children": [
+                {
+                  "type": "image",
+                  "bind": "game.iconUrl",
+                  "size": 18,
+                  "radius": 6,
+                  "placeholder": "divider",
+                  "margin": {
+                    "end": 7
+                  }
+                },
+                {
+                  "type": "text",
+                  "text": "{game}",
+                  "size": 12,
+                  "fontWeight": "medium",
                   "color": "text2",
                   "weight": 1
                 },
@@ -562,11 +1021,15 @@ internal object WidgetSpecs {
                 {
                   "type": "icon",
                   "name": "refresh",
-                  "size": 16,
+                  "size": 15,
                   "padding": 4,
                   "color": "text2"
                 }
               ]
+            },
+            {
+              "type": "spacer",
+              "weight": 1
             },
             {
               "type": "row",
@@ -579,7 +1042,7 @@ internal object WidgetSpecs {
                   "type": "text",
                   "text": "{ccu}",
                   "size": 22,
-                  "fontWeight": "medium",
+                  "fontWeight": "semibold",
                   "color": "text"
                 },
                 {
@@ -597,27 +1060,246 @@ internal object WidgetSpecs {
                   "type": "column",
                   "weight": 1,
                   "align": "end",
+                  "gap": 1,
                   "margin": {
                     "start": 8
                   },
                   "children": [
                     {
-                      "type": "text",
-                      "text": "{serversLabel}",
-                      "size": 11,
-                      "color": "text",
-                      "align": "end"
+                      "type": "row",
+                      "align": "baseline",
+                      "showIf": "slot.1",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.1.label}",
+                          "size": 10,
+                          "color": "text2",
+                          "align": "end",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.1.value:short}",
+                          "size": 11,
+                          "fontWeight": "semibold",
+                          "color": "text",
+                          "margin": {
+                            "start": 4
+                          }
+                        }
+                      ]
                     },
                     {
-                      "type": "text",
-                      "text": "avg {lastHour.avgSessionSeconds} (1 h)",
-                      "size": 11,
-                      "color": "text2",
-                      "align": "end"
+                      "type": "row",
+                      "align": "baseline",
+                      "showIf": "slot.2",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.2.label}",
+                          "size": 10,
+                          "color": "text2",
+                          "align": "end",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.2.value:short}",
+                          "size": 11,
+                          "fontWeight": "semibold",
+                          "color": "text",
+                          "margin": {
+                            "start": 4
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "row",
+                      "align": "baseline",
+                      "showIf": "slot.3",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.3.label}",
+                          "size": 10,
+                          "color": "text2",
+                          "align": "end",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.3.value:short}",
+                          "size": 11,
+                          "fontWeight": "semibold",
+                          "color": "text",
+                          "margin": {
+                            "start": 4
+                          }
+                        }
+                      ]
                     }
                   ]
                 }
               ]
+            },
+            {
+              "type": "spacer",
+              "weight": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "tiny",
+        "minWidth": 0,
+        "minHeight": 0,
+        "refresh": "topEnd",
+        "root": {
+          "type": "column",
+          "padding": {
+            "start": 12,
+            "top": 4,
+            "end": 6,
+            "bottom": 8
+          },
+          "children": [
+            {
+              "type": "row",
+              "align": "center",
+              "children": [
+                {
+                  "type": "image",
+                  "bind": "game.iconUrl",
+                  "size": 18,
+                  "radius": 6,
+                  "placeholder": "divider",
+                  "margin": {
+                    "end": 7
+                  }
+                },
+                {
+                  "type": "text",
+                  "text": "{game}",
+                  "size": 12,
+                  "fontWeight": "medium",
+                  "color": "text2",
+                  "weight": 1
+                },
+                {
+                  "type": "text",
+                  "text": "{status}",
+                  "size": 10,
+                  "color": "text2",
+                  "margin": {
+                    "start": 6
+                  }
+                },
+                {
+                  "type": "icon",
+                  "name": "refresh",
+                  "size": 15,
+                  "padding": 4,
+                  "color": "text2"
+                }
+              ]
+            },
+            {
+              "type": "spacer",
+              "weight": 1
+            },
+            {
+              "type": "row",
+              "align": "center",
+              "padding": {
+                "end": 6
+              },
+              "children": [
+                {
+                  "type": "text",
+                  "text": "{ccu}",
+                  "size": 22,
+                  "fontWeight": "semibold",
+                  "color": "text"
+                },
+                {
+                  "type": "text",
+                  "text": "{delta}",
+                  "size": 12,
+                  "fontWeight": "bold",
+                  "color": "delta",
+                  "margin": {
+                    "start": 4
+                  },
+                  "showIf": "delta"
+                },
+                {
+                  "type": "column",
+                  "weight": 1,
+                  "align": "end",
+                  "gap": 1,
+                  "margin": {
+                    "start": 8
+                  },
+                  "children": [
+                    {
+                      "type": "row",
+                      "align": "baseline",
+                      "showIf": "slot.1",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.1.label}",
+                          "size": 10,
+                          "color": "text2",
+                          "align": "end",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.1.value:short}",
+                          "size": 11,
+                          "fontWeight": "semibold",
+                          "color": "text",
+                          "margin": {
+                            "start": 4
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "row",
+                      "align": "baseline",
+                      "showIf": "slot.2",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.2.label}",
+                          "size": 10,
+                          "color": "text2",
+                          "align": "end",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "{slot.2.value:short}",
+                          "size": 11,
+                          "fontWeight": "semibold",
+                          "color": "text",
+                          "margin": {
+                            "start": 4
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "spacer",
+              "weight": 1
             }
           ]
         }

@@ -23,7 +23,7 @@ import { useTheme } from "@/theme";
 type Tab = "overview" | "analytics" | "tools" | "typetorch";
 
 export default function ProjectScreen() {
-	const { universeId, tab: initialTab } = useLocalSearchParams<{ universeId: string; tab?: Tab }>();
+	const { universeId, tab: initialTab, group: analyticsGroup, view: analyticsView } = useLocalSearchParams<{ universeId: string; tab?: Tab; group?: string; view?: "cards" | "gallery" }>();
 	const id = Number(universeId);
 	const theme = useTheme();
 	const pinned = usePins().includes(id);
@@ -115,7 +115,7 @@ export default function ProjectScreen() {
 
 			<ExportProvider registry={exports}>
 				{tab === "overview" && project.data ? <OverviewTab project={project.data} /> : null}
-				{tab === "analytics" ? <AnalyticsTab universeId={id} /> : null}
+				{tab === "analytics" ? <AnalyticsTab universeId={id} initialGroup={analyticsGroup} initialView={analyticsView} /> : null}
 			</ExportProvider>
 			{tab === "tools" ? <ToolsTab universeId={id} name={project.data?.name ?? `universe ${id}`} /> : null}
 			{tab === "typetorch" && backend ? (

@@ -37,7 +37,7 @@ export interface MetricDef {
 	order?: "value" | "label";
 }
 
-export type GroupView = "acquisitionFunnel" | "cohorts" | "benchmarks" | "compare";
+export type GroupView = "acquisitionFunnel" | "cohorts" | "benchmarks" | "compare" | "thumbnailGallery";
 
 export interface MetricGroup {
 	key: string;
@@ -317,6 +317,7 @@ export const METRIC_GROUPS: MetricGroup[] = [
 		key: "thumbnails",
 		title: "Thumbnails",
 		help: "Thumbnail personalization results per thumbnail (Roblox keeps 30 days).",
+		views: ["thumbnailGallery"],
 		metrics: [
 			{ id: "ThumbnailImpressions", title: "Impressions", help: "Impressions per thumbnail.", format: "count", granularities: ["OneHour", "OneDay", "None"], breakdowns: ["ThumbnailAsset", "ThumbnailList"], retentionDays: 30, aggregate: "sum", defaultBreakdown: ["ThumbnailAsset"] },
 			{ id: "ThumbnailQualifiedPTR", title: "Qualified play-through rate", help: "Qualified plays per impression.", format: "rate", granularities: ["OneHour", "OneDay", "None"], breakdowns: ["ThumbnailAsset", "ThumbnailList"], retentionDays: 30, aggregate: "mean", defaultBreakdown: ["ThumbnailAsset"] },

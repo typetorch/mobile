@@ -65,8 +65,8 @@ internal object WidgetUpdater {
   }
 
   /**
-   * On a new thread: draws [ids] from the cache, fetches their backends (in parallel, 6 hours of series), draws again,
-   * then finishes [pending] (the goAsync() of a broadcast) if given.
+   * On a new thread: draws [ids] from the cache, fetches their backends (in parallel, 6 hours of series, the metrics of
+   * their widgets' slots, then their pictures), draws again, then finishes [pending] (the goAsync() of a broadcast).
    */
   fun refresh(ctx: Context, ids: IntArray, pending: BroadcastReceiver.PendingResult?, showRefreshing: Boolean) {
     val app = ctx.applicationContext
@@ -110,13 +110,16 @@ internal object WidgetUpdater {
       .filter { !Store.isDead(app, it.id, it.token) }
     if (backends.isEmpty()) return
     val deadline = SystemClock.elapsedRealtime() + FETCH_DEADLINE_MS
+    // Every placed widget of a backend counts (not only [ids]): one refreshed widget mustn't drop another's metrics.
+    val all = (widgetIds(app).toList() + ids.toList()).distinct().toIntArray()
     val threads = backends.map { b ->
       Thread({
         try {
-          Store.fetchAndStore(app, b, SERIES_MINUTES)
+          Store.fetchAndStore(app, b, SERIES_MINUTES, Store.metricsFor(app, b.id, all))
         } catch (t: Throwable) {
           Log.w("widget fetch failed", t)
         }
+        fetchImages(app, b)
       }, "TypeTorchLive-fetch").apply {
         isDaemon = true
         start()
@@ -131,6 +134,25 @@ internal object WidgetUpdater {
         Thread.currentThread().interrupt()
         break
       }
+    }
+  }
+
+  /** Downloads the pictures the spec's `image` elements show for [b] (the game's icon), when missing or a day old. */
+  private fun fetchImages(app: Context, b: Backend) {
+    try {
+      val snap = Store.snapshot(app, b.id) ?: return
+      if (snap.data == null) return
+      val spec = WidgetSpecs.stored(app) ?: WidgetSpecs.default
+      // The built-in spec's too: it draws whenever the sent one fails.
+      val binds = WidgetSpecs.imageBinds(spec) + (if (spec !== WidgetSpecs.default) WidgetSpecs.imageBinds(WidgetSpecs.default) else emptySet())
+      if (binds.isEmpty()) return
+      val values = WidgetValues.of(app, spec, b, snap, false, emptyList())
+      for (bind in binds) {
+        val url = values.str(bind) ?: continue
+        if (WidgetImages.isWebUrl(url)) WidgetImages.ensure(app, url)
+      }
+    } catch (t: Throwable) {
+      Log.w("widget images failed", t)
     }
   }
 
@@ -180,6 +202,7 @@ internal object WidgetUpdater {
     val refreshing: Boolean,
     val click: PendingIntent,
     val refresh: PendingIntent?,
+    val slots: List<String> = emptyList(),
   )
 
   private fun look(ctx: Context, widgetId: Int, refreshing: Boolean): Look {
@@ -192,11 +215,12 @@ internal object WidgetUpdater {
     val open = Links.openPending(ctx, widgetId, b.link)
     val refresh = refreshPending(ctx, widgetId)
     val snap = Store.snapshot(ctx, b.id)
+    val slots = Store.widgetSlots(ctx, widgetId)
     if (snap?.data == null) {
       val state = if (!refreshing && snap != null && snap.failedAt > 0) WidgetSpecs.UNREACHABLE else WidgetSpecs.LOADING
-      return Look(state, b, snap, refreshing, open, refresh)
+      return Look(state, b, snap, refreshing, open, refresh, slots)
     }
-    return Look(WidgetSpecs.DATA, b, snap, refreshing, open, refresh)
+    return Look(WidgetSpecs.DATA, b, snap, refreshing, open, refresh, slots)
   }
 
   /** The sent spec, else (absent, unparseable or failing to draw) the built-in one, else a plain text widget. */
@@ -224,7 +248,7 @@ internal object WidgetUpdater {
    * Else one drawing at the current size.
    */
   private fun views(ctx: Context, spec: WidgetSpec, look: Look, sizes: List<SizeF>, lean: Boolean): RemoteViews {
-    val values = WidgetValues.of(ctx, spec, look.backend, look.snap, look.refreshing)
+    val values = WidgetValues.of(ctx, spec, look.backend, look.snap, look.refreshing, look.slots)
     val budget = pixelBudget(ctx, sizes.size * (if (lean) 1 else 2), lean)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && sizes.size > 1) {
       val map = LinkedHashMap<SizeF, RemoteViews>()

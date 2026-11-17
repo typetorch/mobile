@@ -9,10 +9,13 @@ up and where) therefore ships as an **OTA update** (`eas update`, JS only), not 
 |---|---|
 | The app's spec, typed | `src/features/live/widget-spec.ts` (`WIDGET_SPEC`, the TypeScript types) |
 | Sent to native | `src/features/live/LiveSync.tsx`: `setWidgetSpec(WIDGET_SPEC_JSON)`, then `refreshWidgets()` |
-| JS API | `modules/typetorch-live/index.ts`: `setWidgetSpec(json: string): boolean` |
+| JS API | `modules/typetorch-live/index.ts`: `setWidgetSpec(json: string): boolean`; the stat slots: `widgets()`, `setWidgetConfig()`, `defaultSlots()`, `setDefaultSlots()` (docs/WIDGET_STATS.md) |
 | Parser, built-in default | `modules/typetorch-live/android/.../WidgetSpec.kt` (`DEFAULT_JSON`) |
-| Renderer | `.../WidgetRenderer.kt` (layout, text, chart, icons, bindings) |
-| Widget plumbing | `.../WidgetUpdater.kt` (state, sizes, bitmaps, taps), `res/layout{,-night}/ttl_widget_canvas.xml` |
+| Renderer | `.../WidgetRenderer.kt` (layout, text, chart, icons, pictures) |
+| Bindings, rich text | `.../WidgetValues.kt` (templates, slots, paths), `.../Units.kt` (unit formats, deltas, the metric catalog) |
+| Pictures | `.../WidgetImages.kt` (download, disk cache, decode) |
+| Widget plumbing | `.../WidgetUpdater.kt` (state, sizes, bitmaps, taps, the metrics to fetch), `res/layout{,-night}/ttl_widget_canvas.xml` |
+| Stat slots | `.../Store.kt` (per widget and the defaults), the app's Settings → Widgets (`src/features/live/WidgetSettings.tsx`) |
 
 ## How it is drawn
 
@@ -75,8 +78,9 @@ wrong.
 ```
 
 The renderer picks, among the entries whose minimums fit the widget's size, the one with the largest
-minWidth x minHeight; when none fits, the smallest. Today's spec: `medium` from 220 x 95 dp (about 4x2 cells), `small`
-otherwise. `"radius": "system"` is the launcher's widget corner radius on Android 12+, 16 dp before.
+minWidth x minHeight; when none fits, the smallest. Today's spec: `medium` from 240 x 120 dp (about 4x2 cells: the CCU,
+its 6-hour line and four stat rows), `grid` from 100 x 115 dp (2x2: the CCU and a 2x2 grid of stats), `small` from
+100 x 72 dp (2x1: the CCU and three stats, short), `tiny` otherwise (two stats). `"radius": "system"` is the launcher's widget corner radius on Android 12+, 16 dp before.
 
 ### Elements
 
@@ -101,11 +105,13 @@ Every element takes these (all optional):
 | `spacer` | `size` (dp along the parent's axis) or a `weight` |
 | `divider` | a line across the parent: `color` (default `divider`), `thickness` (dp, default 1) |
 | `icon` | `name`: `flame`, `refresh`, `people`, `server`, `clock`; `size` (dp, default 16), `color` (default `text2`) |
+| `image` | a picture by URL: `bind` (the binding holding the URL, default `game.iconUrl`), `size` (dp, a square, default 22; `width` / `height` override), `radius` (corner radius in dp, default 6), `placeholder` (the colour drawn while the picture is missing, default `divider`; `null` draws nothing). Centre-cropped, scaled to the drawn size. |
 
 ### Bindings (text templates)
 
 A text is a literal with placeholders: `{name}`, `{name:format}` (another format), `{name|fallback}` (shown when the
-value is missing), `{{` and `}}` for braces. A missing number shows `—` (a missing delta shows nothing).
+value is missing), `{{` and `}}` for braces. A missing number shows `—` (a missing delta shows nothing). The format is
+what follows the last `:` when that is a format's name (metric ids hold `:` too: `{metrics.revenue:72h.value:short}`).
 
 | Binding | Default format | Example |
 |---|---|---|
@@ -123,9 +129,47 @@ value is missing), `{{` and `}}` for braces. A missing number shows `—` (a mis
 | `updated` | | 12:04 (the user's 12/24 h setting; when the numbers were last fetched) |
 | `status` | | `refreshing…`, `offline · 12:04` or `12:04` (wording from `strings`) |
 | `state` | | `fresh`, `refreshing`, `offline` or empty |
+| `game.iconUrl` | | the game's icon URL (for `image`; null from an older backend) |
+| `slot.N` (N = 1..4) | | the slot's metric id (`dau`, `revenue:72h`); missing when the slot is empty, so `showIf: "slot.3"` hides an empty slot's elements |
+| `slot.N.label` | | `DAU`, `Session 1h` (the backend's label, else the app's built-in one) |
+| `slot.N.value` | `unit` | `18m 40s`, `34.2%`, `R$2,140`, `1,830` (rich: units coloured) |
+| `slot.N.delta` | `delta` | `▲6%`, `▼14%`, ratios in points (`▲1.1`), `±0%`; coloured `up` / `down` (`text2` for ±0); missing when the backend has no `prev` |
+| any other name | | a path into the live answer: `metrics.mau.value`, `metrics.revenue:72h.delta`, `game.universeId`, `lastHour.at`, … (dots between keys, array items by index) |
 
 Formats: `count` (214, 1.2K, 1.5M), `grouped` (1,240), `delta` (▲12), `duration` (45 s, 18 m 40 s, 2 h 5 m), `hours`
-(1,240 h, 4.5 h, 35 m), `raw`.
+(1,240 h, 4.5 h, 35 m), `raw`; rich (units coloured, below): `seconds` (45s, 18m 40s, 2h 5m), `percent` (0.342 →
+34.2%), `robux` (R$2,140); for metric values `unit` (the default: by the metric's unit), `short` (34%, R$2.1K, 1.8K) and
+`plain` (`unit` without colours, e.g. for `description`).
+
+### Stat slots and metrics
+
+Each widget has up to four **stat slots**: metric ids (docs/WIDGET_STATS.md) picked in the app (Settings → Widgets),
+saved natively per widget; a newly placed widget gets the default slots (`["session:1h", "dau", "d1", "revenue:72h"]`,
+or what the app last set with `setDefaultSlots`). A widget refresh asks the backend `metrics=` for the union of the
+slots of that backend's widgets (the live watch asks none and keeps the cached metrics). Units: `count`, `ratio` (shown
+as %), `robux`, `seconds`, `hours`; an unknown unit shows the number and the unit's name.
+
+A path binding into `metrics` makes a new backend metric usable without an APK: the number of a metric's `value` (or
+`prev`) comes formatted by its `unit`, and `metrics.<id>.delta` is computed from `value` and `prev`. A metric is only in
+the answer when some widget's slot asks for it.
+
+An older backend (no `metrics`, no `game.iconUrl`) still draws: the slots `ccu`, `servers`, `peakToday`, `session:1h`,
+`playtime:1h` and `sessions:1h` fall back to the answer's top-level and `lastHour` fields, the others show `—`, and the
+icon shows its placeholder.
+
+### Rich text
+
+A value formatted by its unit becomes segments: the number in the element's `color`, the unit in a unit token (`m`/`s`/
+`h` in `unitTime`, `%` in `unitPercent`, `R$` in `unitRobux`); a delta segment carries `up` / `down`. Literal text in
+the template keeps the element's colour. To show a value without colours, use the `plain` format or set the unit
+tokens to the text colour in `tokens`.
+
+### Pictures
+
+`image` elements are downloaded by the widget's background refresh (never while drawing, never on the main thread), kept
+in the app's cache dir (`cache/ttl_widget_images/`, keyed by the URL's hash) and fetched again after 24 hours; a failed
+download keeps the old copy and is retried after 10 minutes at the earliest. Drawing reads the disk only: until the
+picture is there the `placeholder` shows. Pictures unused for 30 days are deleted. No token is sent with them.
 
 ### Colour tokens
 
@@ -140,12 +184,17 @@ A colour is a token, `#RRGGBB`, `#AARRGGBB` or `transparent`. Tokens follow the 
 | `up` | #FF2E9D57 | #FF4CC27A |
 | `down` | #FFD64545 | #FFF06A6A |
 | `divider` | #1F000000 | #33FFFFFF |
+| `unitTime` | #FFE2700F | #FFFB923C |
+| `unitPercent` | #FF1F6FD1 | #FF5AA9FF |
+| `unitRobux` | #FF1F8A4C | #FF4CC27A |
 
-`tokens.day` / `tokens.night` override them (and may add new token names to use elsewhere in the spec).
+`tokens.day` / `tokens.night` override them (and may add new token names to use elsewhere in the spec). Today's spec
+sets the agreed look: `text` near-black by day (#FF17171B) and near-white by night (#FFF2F0F5), `bg` #EFFFFFFF /
+#FF1C1C20, `up` / `down` #FF1F8A4C / #FFC93C3C by day and #FF4CC27A / #FFEF6B6B by night.
 
 ### Example
 
-A small widget with the flame, the CCU and the delta, and the last hour's sessions under it:
+A small widget with the game's icon, the CCU and the delta, and the first two stat slots under it (units coloured):
 
 ```json
 {
@@ -165,7 +214,7 @@ A small widget with the flame, the CCU and the delta, and the last hour's sessio
               "type": "row",
               "gap": 6,
               "children": [
-                { "type": "icon", "name": "flame", "size": 14, "color": "brand" },
+                { "type": "image", "bind": "game.iconUrl", "size": 18, "radius": 5 },
                 { "type": "text", "text": "{game}", "color": "text2", "weight": 1 },
                 { "type": "icon", "name": "refresh", "size": 16 }
               ]
@@ -179,7 +228,8 @@ A small widget with the flame, the CCU and the delta, and the last hour's sessio
                 { "type": "text", "text": "{delta}", "size": 13, "fontWeight": "bold", "color": "delta", "showIf": "delta" }
               ]
             },
-            { "type": "text", "text": "{lastHour.sessionsEnded} sessions · avg {lastHour.avgSessionSeconds}", "size": 11, "color": "text2" }
+            { "type": "text", "text": "{slot.1.label} {slot.1.value} {slot.1.delta}", "size": 11, "showIf": "slot.1" },
+            { "type": "text", "text": "{slot.2.label} {slot.2.value:short}", "size": 11, "showIf": "slot.2" }
           ]
         }
       }
@@ -204,7 +254,9 @@ APK (the runtime version is the native fingerprint, so `eas update` won't reach 
 that introduced the widget spec is itself such a build.
 
 If you change the **default** look, also update `DEFAULT_JSON` in `WidgetSpec.kt` at the next APK, so a fresh install
-looks right before the app first runs (generate it from `JSON.stringify(WIDGET_SPEC, null, 2)`).
+looks right before the app first runs (generate it from `JSON.stringify(WIDGET_SPEC, null, 2)`; e.g. with bun:
+`import { WIDGET_SPEC } from "./src/features/live/widget-spec.ts"; console.log(JSON.stringify(WIDGET_SPEC, null, 2))`,
+pasted between the `"""` marks, and check that the JSON holds no `$`, which a Kotlin raw string would read as a template).
 
 ## Limits
 
@@ -217,3 +269,6 @@ looks right before the app first runs (generate it from `JSON.stringify(WIDGET_S
 - A drawing scaled down by the memory budget (a very large widget on a small-screen phone) is slightly soft.
 - On Android 12+ some launchers clip widgets to their own corner radius: a smaller `radius` than the system's may not
   show.
+- A picture is downloaded right after the fetch that learnt its URL and shows in that refresh's final drawing (if both
+  finish inside the refresh's 25 s), else at the next refresh; the live watch's redraws never download.
+- Four slots at most, and the backend answers at most 12 metric ids per fetch (the union over a backend's widgets).

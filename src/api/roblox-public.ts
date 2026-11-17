@@ -213,13 +213,13 @@ export async function headshots(userIds: number[]): Promise<Record<number, strin
 	return out;
 }
 
-/** Asset thumbnails (badge / pass / product icons by image asset id). */
-export async function assetThumbs(assetIds: number[]): Promise<Record<number, string>> {
+/** Asset thumbnails (badge / pass / product icons by image asset id); `size` "480x270" for 16:9 images (ad creatives, homepage thumbnails). */
+export async function assetThumbs(assetIds: number[], size = "150x150"): Promise<Record<number, string>> {
 	const ids = assetIds.filter((n) => n > 0);
 	if (!ids.length) return {};
 	const batches = chunk(Array.from(new Set(ids)), 100);
 	const pages = await mapLimit(batches, 3, (b) =>
-		requestJson<{ data: ThumbAnswer[] }>(`${THUMBS}/v1/assets${qs({ assetIds: b.join(","), size: "150x150", format: "Png", isCircular: false })}`),
+		requestJson<{ data: ThumbAnswer[] }>(`${THUMBS}/v1/assets${qs({ assetIds: b.join(","), size, format: "Png", isCircular: false })}`),
 	);
 	const out: Record<number, string> = {};
 	for (const p of pages) for (const t of p.data ?? []) if (t.imageUrl) out[t.targetId] = t.imageUrl;

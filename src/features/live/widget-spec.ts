@@ -9,17 +9,37 @@
 /** Spec format version the native renderer understands. A spec with a higher version is ignored (built-in default). */
 export const WIDGET_SPEC_VERSION = 1;
 
-/** Colour tokens (they follow the system's day/night mode); a colour is a token, "#RRGGBB", "#AARRGGBB" or "transparent". */
-export type ColorToken = "bg" | "text" | "text2" | "brand" | "up" | "down" | "divider";
+/**
+ * Colour tokens (they follow the system's day/night mode); a colour is a token, "#RRGGBB", "#AARRGGBB" or "transparent".
+ * The unit tokens colour the units of metric values (rich text): time (m, s, h) `unitTime`, % `unitPercent`, R$ `unitRobux`.
+ */
+export type ColorToken =
+	| "bg"
+	| "text"
+	| "text2"
+	| "brand"
+	| "up"
+	| "down"
+	| "divider"
+	| "unitTime"
+	| "unitPercent"
+	| "unitRobux";
 /** "delta" (text only): `up` when the delta is ≥ 0, `down` when it is negative. */
 export type Color = ColorToken | "delta" | "transparent" | `#${string}`;
 
+/** Slot numbers: a widget shows up to four stats, picked in the app (Settings → Widgets). */
+export type SlotNumber = 1 | 2 | 3 | 4;
+
 /**
  * Values a text can show as `{name}`, `{name:format}` or `{name|fallback}` (fallback when the value is missing).
- * Formats: count (1.2K), grouped (1,240), delta (▲12), duration (18 m 40 s), hours (1,240 h), raw.
+ * Formats: count (1.2K), grouped (1,240), delta (▲12), duration (18 m 40 s), hours (1,240 h), raw; for metric values
+ * also unit (the default: 18m 40s, 34.2%, R$2,140, units coloured), short (34%, R$2.1K), plain (unit without colours),
+ * and on any number seconds (18m 40s), percent (0.342 → 34.2%), robux (R$2,140).
+ * A name that isn't listed is a path into the live answer (`metrics.mau.value`, `metrics.revenue:72h.delta`).
  */
 export type Binding =
 	| "game" // game name (falls back to the backend's name)
+	| "game.iconUrl" // the game's icon URL (image elements)
 	| "backend" // the backend's name as saved in the app
 	| "ccu" // count
 	| "delta" // delta: ▲12 / ▼3 / ±0, "" when unknown
@@ -32,7 +52,12 @@ export type Binding =
 	| "lastHour.playtimeHours" // hours
 	| "updated" // clock time of the last good answer ("12:04" / "12:04 PM"), "" when never
 	| "status" // "refreshing…" | "offline · 12:04" | "12:04" (the wording comes from `strings`)
-	| "state"; // raw: "fresh" | "refreshing" | "offline" | ""
+	| "state" // raw: "fresh" | "refreshing" | "offline" | ""
+	| `slot.${SlotNumber}` // the slot's metric id; missing when the slot is empty
+	| `slot.${SlotNumber}.label` // "DAU", "Session 1h" (the backend's label, else the app's)
+	| `slot.${SlotNumber}.value` // formatted by its unit, units coloured ("—" when unknown)
+	| `slot.${SlotNumber}.delta` // ▲6% / ▼14% (ratios in points: ▲1.1), coloured up / down; missing when unknown
+	| `metrics.${string}`; // any metric of the answer (it is only fetched when some widget's slot asks for it)
 
 /** A number (all sides) or per side, in dp. `start`/`end` are left/right (the widget is drawn left to right). */
 export type Edges =
@@ -119,6 +144,22 @@ export type SpacerElement = Common & { type: "spacer"; /** dp along the parent's
 
 export type DividerElement = Common & { type: "divider"; color?: Color; /** dp. Default 1. */ thickness?: number };
 
+/**
+ * A picture by URL, centre-cropped into a square of `size` (or `width` x `height`) with rounded corners. Downloaded by
+ * the widget's background refresh, cached on disk for a day; the `placeholder` colour shows until it is there.
+ */
+export type ImageElement = Common & {
+	type: "image";
+	/** The binding holding the URL. Default "game.iconUrl". */
+	bind?: Binding;
+	/** dp. Default 22. */
+	size?: number;
+	/** Corner radius in dp. Default 6. */
+	radius?: number;
+	/** Drawn while the picture is missing; null draws nothing. Default "divider". */
+	placeholder?: Color | null;
+};
+
 export type IconElement = Common & {
 	type: "icon";
 	name: "flame" | "refresh" | "people" | "server" | "clock";
@@ -134,7 +175,8 @@ export type WidgetElement =
 	| ChartElement
 	| SpacerElement
 	| DividerElement
-	| IconElement;
+	| IconElement
+	| ImageElement;
 
 /** Where the (invisible, fixed 36 dp) refresh hit area sits. Draw a refresh icon there yourself. */
 export type RefreshCorner = "topEnd" | "topStart" | "bottomEnd" | "bottomStart" | "none";
@@ -194,154 +236,198 @@ function message(text: string, refresh: boolean): SizeLayout[] {
 	];
 }
 
-/** The app's current widget (the same as the native built-in default). */
+/** The game's icon, name, the status time (optional) and the refresh icon in the top-end corner (its hit area). */
+function header(o: { icon: number; nameColor: Color; status: boolean }): WidgetElement {
+	const children: WidgetElement[] = [
+		{ type: "image", bind: "game.iconUrl", size: o.icon, radius: 6, placeholder: "divider", margin: { end: 7 } },
+		{ type: "text", text: "{game}", size: 12, fontWeight: "medium", color: o.nameColor, weight: 1 },
+	];
+	if (o.status) children.push({ type: "text", text: "{status}", size: 10, color: "text2", margin: { start: 6 } });
+	children.push({ type: "icon", name: "refresh", size: 15, padding: 4, color: "text2" });
+	return { type: "row", align: "center", children };
+}
+
+/** The big CCU with its delta (▲12 / ▼3). */
+function ccu(size: number, deltaSize: number): WidgetElement[] {
+	return [
+		{ type: "text", text: "{ccu}", size, fontWeight: "semibold", color: "text" },
+		{ type: "text", text: "{delta}", size: deltaSize, fontWeight: "bold", color: "delta", margin: { start: 4 }, showIf: "delta" },
+	];
+}
+
+/** 2x1: one line per slot, "label value" right-aligned, the value short (34%, R$2.1K). */
+function shortLine(n: SlotNumber): WidgetElement {
+	return {
+		type: "row",
+		align: "baseline",
+		showIf: `slot.${n}`,
+		children: [
+			{ type: "text", text: `{slot.${n}.label}`, size: 10, color: "text2", align: "end", weight: 1 },
+			{ type: "text", text: `{slot.${n}.value:short}`, size: 11, fontWeight: "semibold", color: "text", margin: { start: 4 } },
+		],
+	};
+}
+
+/** 2x2: a grid cell, the label over the value and its delta. */
+function cell(n: SlotNumber): WidgetElement {
+	return {
+		type: "column",
+		weight: 1,
+		showIf: `slot.${n}`,
+		children: [
+			{ type: "text", text: `{slot.${n}.label}`, size: 10, color: "text2" },
+			{
+				type: "row",
+				align: "baseline",
+				children: [
+					{ type: "text", text: `{slot.${n}.value}`, size: 12, fontWeight: "semibold", color: "text" },
+					{ type: "text", text: `{slot.${n}.delta}`, size: 8.5, fontWeight: "bold", margin: { start: 3 }, showIf: `slot.${n}.delta` },
+				],
+			},
+		],
+	};
+}
+
+/** 4x2: a stat row, the label left, the value and its delta right. */
+function statRow(n: SlotNumber): WidgetElement {
+	return {
+		type: "row",
+		align: "baseline",
+		showIf: `slot.${n}`,
+		children: [
+			{ type: "text", text: `{slot.${n}.label}`, size: 10.5, color: "text2", weight: 1 },
+			{ type: "text", text: `{slot.${n}.value}`, size: 12, fontWeight: "semibold", color: "text", margin: { start: 8 } },
+			{ type: "text", text: `{slot.${n}.delta}`, size: 9.5, fontWeight: "bold", margin: { start: 4 }, showIf: `slot.${n}.delta` },
+		],
+	};
+}
+
+/** 2x1 (and anything short): the header, the CCU left and the first [lines] slots right. */
+function small(name: string, minWidth: number, minHeight: number, lines: SlotNumber[]): SizeLayout {
+	return {
+		name,
+		minWidth,
+		minHeight,
+		refresh: "topEnd",
+		root: {
+			type: "column",
+			padding: { start: 12, top: 4, end: 6, bottom: 8 },
+			children: [
+				header({ icon: 18, nameColor: "text2", status: true }),
+				{ type: "spacer", weight: 1 },
+				{
+					type: "row",
+					align: "center",
+					padding: { end: 6 },
+					children: [
+						...ccu(22, 12),
+						{ type: "column", weight: 1, align: "end", gap: 1, margin: { start: 8 }, children: lines.map(shortLine) },
+					],
+				},
+				{ type: "spacer", weight: 1 },
+			],
+		},
+	};
+}
+
+/**
+ * The app's current widget (the same as the native built-in default). The look agreed on 2026-11-17
+ * (docs/WIDGET_STATS.md): the game's icon in the header, values in `text` with coloured units, ▲/▼ against the period
+ * before; 2x1 (three stats, short), 2x2 (CCU and a grid of four), 4x2 (CCU, the 6-hour line and four stat rows).
+ */
 export const WIDGET_SPEC: WidgetSpec = {
 	version: WIDGET_SPEC_VERSION,
 	tokens: {
 		day: {
-			bg: "#F7FFFFFF",
-			text: "#FF1B1B1F",
-			text2: "#FF5F6368",
+			bg: "#EFFFFFFF",
+			text: "#FF17171B",
+			text2: "#FF62606A",
 			brand: "#FFFB7A32",
-			up: "#FF2E9D57",
-			down: "#FFD64545",
+			up: "#FF1F8A4C",
+			down: "#FFC93C3C",
 			divider: "#1F000000",
+			unitTime: "#FFE2700F",
+			unitPercent: "#FF1F6FD1",
+			unitRobux: "#FF1F8A4C",
 		},
 		night: {
-			bg: "#F21E1E22",
-			text: "#FFECECEE",
-			text2: "#FFA8A8AD",
+			bg: "#FF1C1C20",
+			text: "#FFF2F0F5",
+			text2: "#FFA7A3AD",
 			brand: "#FFFB7A32",
 			up: "#FF4CC27A",
-			down: "#FFF06A6A",
+			down: "#FFEF6B6B",
 			divider: "#33FFFFFF",
+			unitTime: "#FFFB923C",
+			unitPercent: "#FF5AA9FF",
+			unitRobux: "#FF4CC27A",
 		},
 	},
 	strings: { refreshing: "refreshing…", offline: "offline · {updated}" },
 	layouts: {
 		data: [
 			{
-				// 4x2 and up: the 6-hour line and the last hour's footer.
+				// 4x2 and up: the CCU and its 6-hour line left, the four stats right.
 				name: "medium",
-				minWidth: 220,
-				minHeight: 95,
+				minWidth: 240,
+				minHeight: 120,
 				refresh: "topEnd",
-				description: "{game}: {ccu:grouped} playing {delta}, {serversLabel}, {status}",
 				root: {
 					type: "column",
-					padding: { start: 14, top: 8, end: 8, bottom: 10 },
+					padding: { start: 14, top: 4, end: 6, bottom: 10 },
 					children: [
+						header({ icon: 22, nameColor: "text", status: true }),
 						{
 							type: "row",
-							align: "center",
-							children: [
-								{ type: "text", text: "{game}", size: 13, fontWeight: "medium", color: "text", weight: 1 },
-								{ type: "text", text: "{status}", size: 11, color: "text2", margin: { start: 6 } },
-								{ type: "icon", name: "refresh", size: 18, padding: 5, color: "text2" },
-							],
-						},
-						{
-							type: "row",
-							align: "baseline",
-							padding: { end: 6 },
-							children: [
-								{ type: "text", text: "{ccu}", size: 26, fontWeight: "medium", color: "text" },
-								{
-									type: "text",
-									text: "{delta}",
-									size: 13,
-									fontWeight: "bold",
-									color: "delta",
-									margin: { start: 6 },
-									showIf: "delta",
-								},
-								{
-									type: "text",
-									text: "{serversLabel}",
-									size: 12,
-									color: "text2",
-									align: "end",
-									weight: 1,
-									margin: { start: 6 },
-								},
-							],
-						},
-						{
-							type: "chart",
-							bind: "series",
-							minutes: 360,
-							color: "brand",
-							fill: true,
 							weight: 1,
-							margin: { top: 4, end: 6, bottom: 4 },
-						},
-						{
-							type: "text",
-							text: "Last hour: avg session {lastHour.avgSessionSeconds} · {lastHour.playtimeHours} played",
-							size: 11,
-							color: "text2",
-							padding: { end: 6 },
+							align: "stretch",
+							margin: { top: 4 },
+							padding: { end: 8 },
+							children: [
+								{
+									type: "column",
+									weight: 1,
+									children: [
+										{ type: "row", align: "baseline", children: ccu(34, 13) },
+										{ type: "chart", bind: "series", minutes: 360, color: "brand", fill: true, weight: 1, margin: { top: 2, bottom: 3 } },
+										{ type: "text", text: "last 6 h · {serversLabel|no servers} · peak {peakToday}", size: 10, color: "text2" },
+									],
+								},
+								{ type: "column", weight: 1, justify: "center", gap: 6, margin: { start: 12 }, children: [statRow(1), statRow(2), statRow(3), statRow(4)] },
+							],
 						},
 					],
 				},
 			},
 			{
-				// 2x1: game · updated time · refresh on top; CCU + delta left, servers and avg session stacked right.
-				name: "small",
-				minWidth: 0,
-				minHeight: 0,
+				// 2x2: the CCU, then a 2x2 grid of the stats at the bottom.
+				name: "grid",
+				minWidth: 100,
+				minHeight: 115,
 				refresh: "topEnd",
-				description: "{game}: {ccu:grouped} playing {delta}, {serversLabel}, {status}",
 				root: {
 					type: "column",
-					justify: "center",
-					padding: { start: 12, top: 4, end: 6, bottom: 6 },
+					padding: { start: 12, top: 4, end: 6, bottom: 10 },
 					children: [
+						header({ icon: 20, nameColor: "text2", status: false }),
 						{
 							type: "row",
-							align: "center",
+							align: "baseline",
+							margin: { top: 4 },
 							children: [
-								{ type: "text", text: "{game}", size: 12, color: "text2", weight: 1 },
-								{ type: "text", text: "{status}", size: 10, color: "text2", margin: { start: 6 } },
-								{ type: "icon", name: "refresh", size: 16, padding: 4, color: "text2" },
+								...ccu(22, 12),
+								{ type: "text", text: "· {serversLabel}", size: 10, color: "text2", margin: { start: 4 }, weight: 1, showIf: "servers" },
 							],
 						},
-						{
-							type: "row",
-							align: "center",
-							padding: { end: 6 },
-							children: [
-								{ type: "text", text: "{ccu}", size: 22, fontWeight: "medium", color: "text" },
-								{
-									type: "text",
-									text: "{delta}",
-									size: 12,
-									fontWeight: "bold",
-									color: "delta",
-									margin: { start: 4 },
-									showIf: "delta",
-								},
-								{
-									type: "column",
-									weight: 1,
-									align: "end",
-									margin: { start: 8 },
-									children: [
-										{ type: "text", text: "{serversLabel}", size: 11, color: "text", align: "end" },
-										{
-											type: "text",
-											text: "avg {lastHour.avgSessionSeconds} (1 h)",
-											size: 11,
-											color: "text2",
-											align: "end",
-										},
-									],
-								},
-							],
-						},
+						{ type: "spacer", weight: 1 },
+						{ type: "row", align: "start", gap: 6, padding: { end: 6 }, margin: { bottom: 7 }, children: [cell(1), cell(2)] },
+						{ type: "row", align: "start", gap: 6, padding: { end: 6 }, children: [cell(3), cell(4)] },
 					],
 				},
 			},
+			// 2x1: three stats; under 72 dp of height only two fit.
+			small("small", 100, 72, [1, 2, 3]),
+			small("tiny", 0, 0, [1, 2]),
 		],
 		loading: message("Loading…", true),
 		unreachable: message("Can't reach {backend|the backend}", true),

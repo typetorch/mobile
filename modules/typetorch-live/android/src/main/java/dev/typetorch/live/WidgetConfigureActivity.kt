@@ -10,7 +10,8 @@ import android.widget.ListView
 import android.widget.SimpleAdapter
 
 /**
- * Picks the game of a widget: lists the backends saved by setBackends. Started by the launcher when the widget is
+ * Picks the game of a widget: lists the backends saved by setBackends (the stats it shows are picked in the app,
+ * Settings → Widgets). Started by the launcher when the widget is
  * placed (and on reconfigure), or by the widget's own "Tap to pick a game". Dialog theme, dark in dark mode.
  */
 class WidgetConfigureActivity : Activity() {
@@ -70,6 +71,8 @@ class WidgetConfigureActivity : Activity() {
   private fun pick(b: Backend) {
     try {
       Store.setWidgetBackend(this, widgetId, b.id)
+      // A new widget gets the default stat slots (the app's, else the built-in ones); a reconfigure keeps its own.
+      if (!Store.hasWidgetSlots(this, widgetId)) Store.setWidgetSlots(this, widgetId, Store.defaultSlots(this))
       // The configure activity owns the first draw (the launcher sends no update for it).
       WidgetUpdater.refresh(this, intArrayOf(widgetId), null, true)
       setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))

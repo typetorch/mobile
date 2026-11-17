@@ -1,15 +1,18 @@
 /**
  * One ad campaign (Ads Manager, BETA): delivery status and reasons, budget (with a pending decrease), schedule,
- * objective, targeting, creatives; and its edits (PATCH /campaigns/{id}): pause / resume, cancel, budget, name,
+ * objective, targeting, creatives (as images; the API has no per-creative reporting, so CTR points to Ads Manager, and
+ * a creative that is also a homepage thumbnail shows that thumbnail's play-through); and its edits (PATCH /campaigns/{id}): pause / resume, cancel, budget, name,
  * schedule (before it starts), add creatives, video, automatic ad-credit reload. Anything that can spend money or is
  * permanent asks first.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Image } from "expo-image";
 import { useState } from "react";
 import { View } from "react-native";
 
 import type { OpenCloud } from "@/api/opencloud";
 import { Badge, Button, Card, Chips, confirm, ErrorState, Field, KV, notify, Section, Skeleton, Txt } from "@/components/ui";
+import { CtrNote, ThumbStatLine, useCreativeImages, useCreativeThumbnailStats } from "@/features/project/servers/creative-stats";
 import { fmtTime } from "@/lib/format";
 import { useTheme } from "@/theme";
 
@@ -59,9 +62,74 @@ export function CampaignDetail({ id, cloud, universeId, canWrite }: { id: string
 				<KV label="Billing account" value={c.billingAccountId ?? "–"} mono />
 				<KV label="Created" value={`${fmtTime(c.createTime)} UTC${c.creator?.userId ? ` by user ${c.creator.userId}` : ""}${c.creator?.groupId ? ` (group ${c.creator.groupId})` : ""}`} />
 			</Card>
+			<CampaignCreatives c={c} cloud={cloud} universeId={universeId} />
 			{canWrite && c.status !== "CANCELLED" ? <CampaignEdits c={c} cloud={cloud} universeId={universeId} pending={update.isPending} save={(b) => update.mutateAsync(b).then(() => true, () => false)} /> : null}
 			{!canWrite ? <Txt variant="small">Read only: add ad.campaign:write to pause, resume or change the budget.</Txt> : null}
 		</>
+	);
+}
+
+/**
+ * The campaign's creatives as images, with their saved-creative name and moderation state (first page of the ads
+ * account's creatives) and, when one is also a homepage thumbnail of the advertised experience, its play-through.
+ */
+function CampaignCreatives({ c, cloud, universeId }: { c: Campaign; cloud: OpenCloud; universeId: number }) {
+	const p = useTheme();
+	const ids = c.creativeAssetIds ?? [];
+	const target = Number(c.targetUniverseId) || universeId;
+	const images = useCreativeImages(ids);
+	const groupId = c.creator?.groupId && /^\d+$/.test(c.creator.groupId) ? Number(c.creator.groupId) : undefined;
+	const saved = useQuery({
+		queryKey: ["oc", "ads", "creatives", target, "names", groupId ?? "me"],
+		enabled: ids.length > 0,
+		staleTime: 300_000,
+		queryFn: () => listCreatives(cloud, { universeId: target, groupId }),
+		retry: false,
+	});
+	const stats = useCreativeThumbnailStats(target, ids);
+	return (
+		<Section title={`Creatives (${ids.length})`}>
+			{!ids.length ? <Txt variant="muted">{c.video?.source === "PREVIEW_VIDEO" ? "This campaign runs the experience's preview video." : "No creatives on this campaign."}</Txt> : null}
+			{ids.map((id) => {
+				const url = images.data?.[Number(id)];
+				const info = saved.data?.creatives?.find((x) => x.assetId === id);
+				const stat = stats.byAsset.get(id);
+				return (
+					<Card key={id} style={{ gap: 8 }}>
+						<View style={{ flexDirection: "row", gap: 10 }}>
+							{url ? (
+								<Image source={{ uri: url }} style={{ width: 128, height: 72, borderRadius: 6 }} contentFit="cover" />
+							) : (
+								<View style={{ width: 128, height: 72, borderRadius: 6, backgroundColor: p.muted }} />
+							)}
+							<View style={{ flex: 1, gap: 4 }}>
+								<Txt style={{ fontWeight: "600" }} numberOfLines={2}>
+									{info?.assetName || `Asset ${id}`}
+								</Txt>
+								<Txt variant="small" selectable>
+									{id}
+									{info?.width && info.height ? ` · ${info.width}×${info.height}` : ""}
+								</Txt>
+								{info?.moderationStatus ? <Badge label={label(info.moderationStatus)} tone={info.moderationStatus === "APPROVED" ? "good" : info.moderationStatus === "REJECTED" ? "critical" : "brand"} /> : null}
+							</View>
+						</View>
+						{stat ? <ThumbStatLine stat={stat} /> : null}
+					</Card>
+				);
+			})}
+			{ids.length ? <CtrNote /> : null}
+			{stats.can && ids.length ? (
+				stats.error ? (
+					<CloudError error={stats.error} what="Homepage thumbnail stats" />
+				) : stats.loading ? (
+					<Txt variant="small">Loading homepage thumbnail stats…</Txt>
+				) : stats.unknown ? (
+					<Button title="Match creatives with homepage thumbnail stats" icon="images-outline" small variant="ghost" onPress={stats.request} style={{ alignSelf: "flex-start" }} />
+				) : stats.requested && !stats.matched ? (
+					<Txt variant="small">None of these creatives has homepage thumbnail stats in the last 28 days.</Txt>
+				) : null
+			) : null}
+		</Section>
 	);
 }
 

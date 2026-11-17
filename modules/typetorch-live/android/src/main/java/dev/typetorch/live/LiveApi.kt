@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
 internal sealed class FetchResult {
   class Ok(val data: LiveData) : FetchResult()
@@ -15,19 +16,24 @@ internal sealed class FetchResult {
   class Failed(val reason: String) : FetchResult()
 }
 
-/** `GET {url}/v1/mobile/live?minutes=N`. Blocking: call it on a worker thread only. Never throws. */
+/**
+ * `GET {url}/v1/mobile/live?minutes=N[&metrics=a,b,c]` (docs/WIDGET_STATS.md: an older backend ignores `metrics`).
+ * Blocking: call it on a worker thread only. Never throws.
+ */
 internal object LiveApi {
   private const val TIMEOUT_MS = 10_000
   private const val MAX_BYTES = 2 * 1024 * 1024
 
-  fun fetch(baseUrl: String, token: String, minutes: Int): FetchResult {
+  fun fetch(baseUrl: String, token: String, minutes: Int, metrics: List<String> = emptyList()): FetchResult {
     var conn: HttpURLConnection? = null
     try {
       val base = baseUrl.trim().trimEnd('/')
       if (!base.startsWith("https://", ignoreCase = true) && !base.startsWith("http://", ignoreCase = true)) {
         return FetchResult.Failed("bad url")
       }
-      val url = URL("$base/v1/mobile/live?minutes=${minutes.coerceIn(1, 360)}")
+      val ids = metrics.filter { it.isNotBlank() }.distinct().take(12)
+      val query = if (ids.isEmpty()) "" else "&metrics=" + ids.joinToString(",") { URLEncoder.encode(it, "UTF-8") }
+      val url = URL("$base/v1/mobile/live?minutes=${minutes.coerceIn(1, 360)}$query")
       val c = url.openConnection() as HttpURLConnection
       conn = c
       c.connectTimeout = TIMEOUT_MS

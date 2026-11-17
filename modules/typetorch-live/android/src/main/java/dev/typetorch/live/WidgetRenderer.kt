@@ -3,167 +3,35 @@ package dev.typetorch.live
 import android.content.Context
 import android.content.res.Configuration
 import android.graphics.Bitmap
+import android.graphics.BitmapShader
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
 import android.text.Layout
+import android.text.SpannableString
+import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
+import android.text.style.ForegroundColorSpan
 import androidx.core.content.ContextCompat
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.roundToLong
 import kotlin.math.sqrt
-
-/**
- * The values a widget spec's texts can show (docs/WIDGET_SPEC.md, bindings), and the `{name:format|fallback}` template
- * filler. Numbers are kept as Double, texts as String; null = unknown.
- */
-internal class WidgetValues(private val map: Map<String, Any?>, val series: List<Point>) {
-
-  /** True when [key] has a value ("series": the chart has points). */
-  fun has(key: String): Boolean {
-    if (key == "series") return series.isNotEmpty()
-    val v = map[key] ?: return false
-    return !(v is String && v.isBlank())
-  }
-
-  fun num(key: String): Double? = when (val v = map[key]) {
-    is Double -> v
-    is Number -> v.toDouble()
-    is String -> v.toDoubleOrNull()
-    else -> null
-  }
-
-  /** [t] with every `{name}`, `{name:format}` and `{name|fallback}` filled; `{{` / `}}` are literal braces. */
-  fun template(t: String): String {
-    if (t.indexOf('{') < 0 && t.indexOf('}') < 0) return t
-    val sb = StringBuilder(t.length + 16)
-    var i = 0
-    while (i < t.length) {
-      val ch = t[i]
-      if (ch == '{') {
-        if (i + 1 < t.length && t[i + 1] == '{') {
-          sb.append('{')
-          i += 2
-          continue
-        }
-        val end = t.indexOf('}', i + 1)
-        if (end < 0) {
-          sb.append(t, i, t.length)
-          break
-        }
-        sb.append(resolve(t.substring(i + 1, end)))
-        i = end + 1
-        continue
-      }
-      if (ch == '}' && i + 1 < t.length && t[i + 1] == '}') {
-        sb.append('}')
-        i += 2
-        continue
-      }
-      sb.append(ch)
-      i++
-    }
-    return sb.toString()
-  }
-
-  private fun resolve(expr: String): String {
-    val bar = expr.indexOf('|')
-    val head = (if (bar >= 0) expr.substring(0, bar) else expr).trim()
-    val fallback = if (bar >= 0) expr.substring(bar + 1) else null
-    val colon = head.indexOf(':')
-    val key = if (colon >= 0) head.substring(0, colon).trim() else head
-    val fmt = if (colon >= 0) head.substring(colon + 1).trim() else (DEFAULT_FORMAT[key] ?: "raw")
-    if (!has(key) && fallback != null) return fallback
-    return format(fmt, map[key])
-  }
-
-  private fun format(fmt: String, v: Any?): String {
-    val d: Double? = when (v) {
-      is Number -> v.toDouble()
-      is String -> v.toDoubleOrNull()
-      else -> null
-    }
-    val i: Int? = d?.takeIf { !it.isNaN() && !it.isInfinite() }?.roundToLong()
-      ?.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong())?.toInt()
-    return when (fmt) {
-      "count" -> Fmt.count(i)
-      "grouped" -> Fmt.grouped(i)
-      "delta" -> Fmt.delta(i) ?: ""
-      "duration" -> Fmt.duration(d)
-      "hours" -> Fmt.hours(d)
-      else -> when (v) {
-        null -> ""
-        is String -> v
-        is Double -> if (!v.isNaN() && !v.isInfinite() && v % 1.0 == 0.0) v.toLong().toString() else v.toString()
-        else -> v.toString()
-      }
-    }
-  }
-
-  companion object {
-    private val DEFAULT_FORMAT = mapOf(
-      "ccu" to "count",
-      "delta" to "delta",
-      "servers" to "grouped",
-      "peakToday" to "grouped",
-      "lastHour.avgSessionSeconds" to "duration",
-      "lastHour.medianSessionSeconds" to "duration",
-      "lastHour.sessionsEnded" to "grouped",
-      "lastHour.playtimeHours" to "hours",
-    )
-
-    /** The values of one widget: [b] null when no backend; [snap] the cache; the status wording from [spec]. */
-    fun of(ctx: Context, spec: WidgetSpec, b: Backend?, snap: Snapshot?, refreshing: Boolean): WidgetValues {
-      val data = snap?.data
-      val m = HashMap<String, Any?>()
-      m["backend"] = b?.name?.takeIf { it.isNotBlank() }
-      m["game"] = data?.gameName?.takeIf { it.isNotBlank() } ?: b?.name?.takeIf { it.isNotBlank() }
-      m["ccu"] = data?.ccu?.toDouble()
-      m["delta"] = data?.delta?.toDouble()
-      val servers = data?.servers
-      m["servers"] = servers?.toDouble()
-      m["serversLabel"] = servers?.let { Fmt.grouped(it) + if (it == 1) " server" else " servers" }
-      m["peakToday"] = data?.peakToday?.toDouble()
-      val lh = data?.lastHour
-      m["lastHour.avgSessionSeconds"] = lh?.avgSessionSeconds
-      m["lastHour.medianSessionSeconds"] = lh?.medianSessionSeconds
-      m["lastHour.sessionsEnded"] = lh?.sessionsEnded?.toDouble()
-      m["lastHour.playtimeHours"] = lh?.playtimeHours
-      val okAt = snap?.okAt ?: 0L
-      m["updated"] = if (okAt > 0L) Fmt.clock(ctx, okAt).takeIf { it.isNotEmpty() } else null
-      // A widget isn't redrawn every second, so a relative "3 min ago" would go wrong: the clock time of the data.
-      val state = when {
-        refreshing -> "refreshing"
-        snap == null || okAt <= 0L -> ""
-        snap.stale -> "offline"
-        else -> "fresh"
-      }
-      m["state"] = state
-      val partial = WidgetValues(m, data?.series.orEmpty())
-      m["status"] = when (state) {
-        "refreshing" -> WidgetSpecs.string(spec, "refreshing")
-        "offline" -> partial.template(WidgetSpecs.string(spec, "offline"))
-        "fresh" -> m["updated"]
-        else -> null
-      }
-      return WidgetValues(m, data?.series.orEmpty())
-    }
-  }
-}
 
 /** A drawn widget: the bitmap and the text TalkBack reads. */
 internal class Rendered(val bitmap: Bitmap, val description: String)
 
 /**
  * Draws a [SizeLayout] into one bitmap at the widget's size: a small flex layout (column / row / stack with weights,
- * gaps, padding, margins, alignment), texts with StaticLayout, the CCU line ([Chart]) and vector icons. Everything is
+ * gaps, padding, margins, alignment), texts with StaticLayout (coloured runs: units, deltas), the CCU line ([Chart]),
+ * vector icons and pictures ([WidgetImages], from the disk only). Everything is
  * measured in px at the bitmap's scale (the screen density unless the pixel budget caps it), so text stays crisp.
  * Throws on a broken spec; [WidgetUpdater] catches and falls back to the built-in default.
  */
@@ -294,9 +162,22 @@ internal object WidgetRenderer {
     else -> Layout.Alignment.ALIGN_NORMAL
   }
 
+  /** The filled template; coloured runs (units, deltas) become ForegroundColorSpans in their token's colour. */
+  private fun richText(r: Pass, n: Node): CharSequence {
+    val rich = r.values.rich(n.text)
+    if (rich.spans.isEmpty() || rich.text.isEmpty()) return rich.text
+    val out = SpannableString(rich.text)
+    for (sp in rich.spans) {
+      val start = sp.start.coerceIn(0, rich.text.length)
+      val end = sp.end.coerceIn(start, rich.text.length)
+      if (end > start) out.setSpan(ForegroundColorSpan(color(r, sp.color, "text")), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+    }
+    return out
+  }
+
   /** The text laid out at [exactW] px, or at its own width up to [maxW]. Null when empty or no room. */
   private fun textLayout(r: Pass, n: Node, maxW: Float, exactW: Float?): StaticLayout? {
-    val str = r.values.template(n.text)
+    val str = richText(r, n)
     if (str.isEmpty()) return null
     val paint = textPaint(r, n)
     // Round, not truncate: box widths come back from float sums (100 - 0.00001 must stay 100, or "214" ellipsizes).
@@ -336,7 +217,7 @@ internal object WidgetRenderer {
           Sz(l.width.toFloat(), l.height.toFloat())
         }
       }
-      "icon" -> {
+      "icon", "image" -> {
         val d = n.size * s
         Sz(min(d, cMaxW), min(d, cMaxH))
       }
@@ -457,6 +338,7 @@ internal object WidgetRenderer {
       when (n.type) {
         "text" -> drawText(r, c, n, cx, cy, cw)
         "icon" -> drawIcon(r, c, n, cx, cy, cw, ch)
+        "image" -> drawImage(r, c, n, cx, cy, cw, ch)
         "chart" -> drawChart(r, c, n, cx, cy, cw, ch)
         "divider" -> {
           val p = Paint()
@@ -504,6 +386,37 @@ internal object WidgetRenderer {
     d.setBounds(left, top, left + px, top + px)
     d.setTint(color(r, n.color, "text2"))
     d.draw(c)
+  }
+
+  /**
+   * A picture by URL (the binding [Node.bind], e.g. the game's icon), centre-cropped into a [Node.size] square (or the
+   * element's width x height) with rounded corners; the placeholder colour while it isn't downloaded yet.
+   */
+  private fun drawImage(r: Pass, c: Canvas, n: Node, x: Float, y: Float, w: Float, h: Float) {
+    val dw = if (n.width != null) w else min(n.size * r.s, w)
+    val dh = if (n.height != null) h else min(n.size * r.s, h)
+    val wPx = dw.roundToInt()
+    val hPx = dh.roundToInt()
+    if (wPx < 1 || hPx < 1) return
+    val left = (x + (w - dw) / 2f).roundToInt().toFloat()
+    val top = (y + (h - dh) / 2f).roundToInt().toFloat()
+    val rect = RectF(left, top, left + wPx, top + hPx)
+    val rad = (n.radius * r.s).coerceAtMost(min(wPx, hPx) / 2f)
+    val url = n.bind?.let { r.values.str(it) }
+    val bmp = url?.let { WidgetImages.load(r.ctx, it, wPx, hPx) }
+    val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    if (bmp != null) {
+      val shader = BitmapShader(bmp, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+      val m = Matrix()
+      m.setTranslate(left, top)
+      shader.setLocalMatrix(m)
+      p.shader = shader
+    } else {
+      val ph = n.placeholder ?: return
+      p.color = color(r, ph, "divider")
+      if (p.color == 0) return
+    }
+    if (rad > 0f) c.drawRoundRect(rect, rad, rad, p) else c.drawRect(rect, p)
   }
 
   private fun drawChart(r: Pass, c: Canvas, n: Node, x: Float, y: Float, w: Float, h: Float) {

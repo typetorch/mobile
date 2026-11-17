@@ -5,10 +5,14 @@ import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * JS API (docs/PUSH_WATCH_WIDGETS.md, section 3):
- *   setBackends(list), startWatch(id), stopWatch(id), watching(), refreshWidgets(), setWidgetSpec(json)
+ *   setBackends(list), startWatch(id), stopWatch(id), watching(), refreshWidgets(), setWidgetSpec(json),
+ *   widgetsJson(), setWidgetConfig(id, { backendId?, slots? }), defaultSlotsJson(), setDefaultSlots(slots)
+ *   (docs/WIDGET_STATS.md)
  * Synchronous functions (they run on the JS thread); nothing here touches the network.
  */
 class TypeTorchLiveModule : Module() {
@@ -90,6 +94,55 @@ class TypeTorchLiveModule : Module() {
       }
       Unit
     }
+
+    // The placed widgets as JSON: [{ "id": 12, "backendId": "…" ("" before a game is picked), "slots": ["dau", …] }].
+    // A JSON string keeps the bridge to plain types; index.ts parses it (widgets()).
+    Function("widgetsJson") {
+      val ctx = context
+      val arr = JSONArray()
+      for (id in WidgetUpdater.widgetIds(ctx)) {
+        arr.put(
+          JSONObject()
+            .put("id", id)
+            .put("backendId", Store.widgetBackend(ctx, id) ?: "")
+            .put("slots", JSONArray(Store.widgetSlots(ctx, id))),
+        )
+      }
+      arr.toString()
+    }
+
+    // Changes a placed widget: its game (a backend from setBackends) and/or its stat slots (metric ids, up to 4; an
+    // invalid id becomes an empty slot). False for an unknown widget or backend. Draws nothing: refreshWidgets() after.
+    Function("setWidgetConfig") { id: Int, config: Map<String, Any?> ->
+      setWidgetConfig(context, id, config)
+    }
+
+    // The slots a newly placed widget gets, as a JSON array.
+    Function("defaultSlotsJson") {
+      JSONArray(Store.defaultSlots(context)).toString()
+    }
+
+    // The slots a newly placed widget gets (the configure activity copies them). Draws nothing.
+    Function("setDefaultSlots") { slots: List<String> ->
+      Store.setDefaultSlots(context, slots)
+      Unit
+    }
+  }
+
+  private fun setWidgetConfig(ctx: Context, id: Int, config: Map<String, Any?>): Boolean {
+    val known = WidgetUpdater.widgetIds(ctx).contains(id) || Store.widgetBackend(ctx, id) != null
+    if (!known) return false
+    val backendId = (config["backendId"] as? String)?.trim().orEmpty()
+    if (backendId.isNotEmpty() && Store.backend(ctx, backendId) == null) return false
+    // A JS array arrives as a List (an Array, defensively, too).
+    val slots: List<*>? = when (val s = config["slots"]) {
+      is List<*> -> s
+      is Array<*> -> s.toList()
+      else -> null
+    }
+    if (backendId.isNotEmpty()) Store.setWidgetBackend(ctx, id, backendId)
+    if (slots != null) Store.setWidgetSlots(ctx, id, Store.sanitizeSlots(slots))
+    return true
   }
 
   private fun str(v: Any?): String = when (v) {

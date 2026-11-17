@@ -26,6 +26,24 @@ type NativeTypeTorchLive = {
 	watching(): string[];
 	refreshWidgets(): void;
 	setWidgetSpec(json: string): void;
+	// Added with the widget stats (docs/WIDGET_STATS.md); missing in older builds of the module.
+	widgetsJson?(): string;
+	setWidgetConfig?(id: number, config: { backendId?: string; slots?: string[] }): boolean;
+	defaultSlotsJson?(): string;
+	setDefaultSlots?(slots: string[]): void;
+};
+
+/** The stat slots new widgets get until the app sets others (the same as Store.BUILT_IN_SLOTS natively). */
+export const BUILT_IN_SLOTS: readonly string[] = ["session:1h", "dau", "d1", "revenue:72h"];
+
+/** A home-screen widget as the native side keeps it (docs/WIDGET_STATS.md). */
+export type LiveWidget = {
+	/** The launcher's widget id. */
+	id: number;
+	/** The backend (account id) it shows; "" until a game is picked. */
+	backendId: string;
+	/** Metric ids of its stat slots (up to 4; "" = empty), e.g. ["session:1h", "dau", "d1", "revenue:72h"]. */
+	slots: string[];
 };
 
 const native: NativeTypeTorchLive | null =
@@ -124,5 +142,69 @@ export function setWidgetSpec(json: string): boolean {
 	} catch (e) {
 		warn("setWidgetSpec", e);
 		return false;
+	}
+}
+
+/** The home-screen widgets placed now, with their game and stat slots ([] without the native module). */
+export function widgets(): LiveWidget[] {
+	if (!native?.widgetsJson) return [];
+	try {
+		const parsed: unknown = JSON.parse(native.widgetsJson());
+		if (!Array.isArray(parsed)) return [];
+		return parsed.flatMap((w): LiveWidget[] => {
+			if (!w || typeof w !== "object") return [];
+			const o = w as { id?: unknown; backendId?: unknown; slots?: unknown };
+			if (typeof o.id !== "number") return [];
+			return [
+				{
+					id: o.id,
+					backendId: typeof o.backendId === "string" ? o.backendId : "",
+					slots: Array.isArray(o.slots) ? o.slots.map((x) => (typeof x === "string" ? x : "")) : [],
+				},
+			];
+		});
+	} catch (e) {
+		warn("widgets", e);
+		return [];
+	}
+}
+
+/**
+ * Changes a placed widget: its game (a backend id from setBackends) and/or its stat slots (metric ids, up to 4; an
+ * invalid id becomes an empty slot). False for an unknown widget or backend, or without the native module. Draws
+ * nothing: call refreshWidgets() after (it fetches the new metrics).
+ */
+export function setWidgetConfig(id: number, config: { backendId?: string; slots?: string[] }): boolean {
+	if (!native?.setWidgetConfig) return false;
+	try {
+		const arg: { backendId?: string; slots?: string[] } = {};
+		if (config.backendId) arg.backendId = String(config.backendId);
+		if (config.slots) arg.slots = config.slots.slice(0, 4).map((x) => String(x ?? ""));
+		return native.setWidgetConfig(Math.trunc(id), arg) === true;
+	} catch (e) {
+		warn("setWidgetConfig", e);
+		return false;
+	}
+}
+
+/** The stat slots a newly placed widget gets (BUILT_IN_SLOTS until setDefaultSlots, or without the native module). */
+export function defaultSlots(): string[] {
+	if (!native?.defaultSlotsJson) return [...BUILT_IN_SLOTS];
+	try {
+		const parsed: unknown = JSON.parse(native.defaultSlotsJson());
+		return Array.isArray(parsed) ? parsed.map((x) => (typeof x === "string" ? x : "")) : [...BUILT_IN_SLOTS];
+	} catch (e) {
+		warn("defaultSlots", e);
+		return [...BUILT_IN_SLOTS];
+	}
+}
+
+/** The stat slots a newly placed widget gets (saved natively; the built-in default until set). */
+export function setDefaultSlots(slots: string[]): void {
+	if (!native?.setDefaultSlots) return;
+	try {
+		native.setDefaultSlots(slots.slice(0, 4).map((x) => String(x ?? "")));
+	} catch (e) {
+		warn("setDefaultSlots", e);
 	}
 }

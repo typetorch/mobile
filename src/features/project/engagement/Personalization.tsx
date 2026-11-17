@@ -7,6 +7,7 @@
  */
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
+import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, View } from "react-native";
 
@@ -133,6 +134,17 @@ export function Personalization({ universeId, cloud, canWrite }: { universeId: n
 
 	return (
 		<>
+			<Card style={{ gap: 6 }}>
+				<Txt style={{ fontWeight: "600" }}>Thumbnail performance</Txt>
+				<Txt variant="small">Impressions, play-through (qualified plays per impression, the closest thing to CTR the API has), plays and session time per thumbnail, with the active config's thumbnails marked. Needs universe.analytics:read.</Txt>
+				<Button
+					title="Open thumbnail gallery"
+					icon="images-outline"
+					small
+					onPress={() => router.push(`/project/${universeId}?tab=analytics&group=thumbnails&view=gallery`)}
+					style={{ alignSelf: "flex-start" }}
+				/>
+			</Card>
 			<Section
 				title={`Homepage thumbnail pool${pool.data ? ` (${thumbs.length}${pool.hasNextPage ? "+" : ""})` : ""}`}
 				right={canWrite ? <Button title="Upload" icon="cloud-upload-outline" small loading={upload.isPending} onPress={onUpload} /> : undefined}
@@ -238,7 +250,7 @@ export function Personalization({ universeId, cloud, canWrite }: { universeId: n
 					<Txt variant="muted">{status === "Active" ? "No active personalization: the homepage shows the main thumbnail." : "No past configs."}</Txt>
 				)}
 				{configs.hasNextPage ? <Button title="Load more" small loading={configs.isFetchingNextPage} onPress={() => configs.fetchNextPage()} style={{ alignSelf: "center" }} /> : null}
-				<Txt variant="small">Roblox doesn't expose per-thumbnail click numbers to API keys; the configs show what's served and when.</Txt>
+				<Txt variant="small">The configs show what's served and when; per-thumbnail impressions and play-through are in the thumbnail gallery above (Analytics).</Txt>
 			</Section>
 		</>
 	);
