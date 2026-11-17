@@ -41,7 +41,15 @@
         }
       ],
       "expo-secure-store",
-      "./plugins/with-expo-gl-keep-rules.js"
+      "./plugins/with-expo-gl-keep-rules.js",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#fb7a32",
+          "defaultChannel": "milestones"
+        }
+      ]
     ],
     "experiments": {
       "reactCompiler": true

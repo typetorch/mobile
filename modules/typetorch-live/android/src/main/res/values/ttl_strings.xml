@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="ttl_channel_name">Live watch</string>
+  <string name="ttl_channel_description">Ongoing live numbers of the games you watch</string>
+  <string name="ttl_action_stop">Stop</string>
+  <string name="ttl_action_open">Open</string>
+  <string name="ttl_placeholder_title">TypeTorch live watch</string>
+  <string name="ttl_label_avg">Avg session, last hour</string>
+  <string name="ttl_label_median">Median · sessions ended</string>
+  <string name="ttl_label_servers">Servers · peak today</string>
+  <string name="ttl_label_played">Played, last hour</string>
+  <string name="ttl_signed_out">Signed out: open TypeTorch</string>
+  <string name="ttl_offline">offline, retrying</string>
+  <string name="ttl_loading">Loading…</string>
+
+  <string name="ttl_widget_label">TypeTorch live</string>
+  <string name="ttl_widget_description">A game\'s live players, the last 6 hours and its last-hour sessions</string>
+  <string name="ttl_widget_pick">Tap to pick a game</string>
+  <string name="ttl_widget_sign_in">Open TypeTorch to sign in</string>
+  <string name="ttl_widget_refreshing">refreshing…</string>
+  <string name="ttl_widget_refresh">Refresh</string>
+  <string name="ttl_preview_name">The Prison</string>
+  <string name="ttl_preview_ccu">214</string>
+  <string name="ttl_preview_delta">▲12</string>
+  <string name="ttl_preview_time">12:04</string>
+
+  <string name="ttl_configure_title">Pick a game</string>
+  <string name="ttl_configure_empty">No games yet. Open TypeTorch and sign in to a backend first.</string>
+  <string name="ttl_configure_open">Open TypeTorch</string>
+</resources>

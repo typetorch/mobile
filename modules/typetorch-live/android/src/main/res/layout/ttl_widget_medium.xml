@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Medium widget (4x2 and up): adds the 6-hour line, servers and the last hour's avg session and playtime. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@android:id/background"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:background="@drawable/ttl_widget_bg"
+  android:clipToOutline="true"
+  android:orientation="vertical"
+  android:paddingStart="14dp"
+  android:paddingTop="8dp"
+  android:paddingEnd="8dp"
+  android:paddingBottom="10dp">
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <TextView
+      android:id="@+id/ttl_w_name"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:ellipsize="end"
+      android:fontFamily="sans-serif-medium"
+      android:singleLine="true"
+      android:textColor="@color/ttl_widget_text"
+      android:textSize="13sp" />
+
+    <TextView
+      android:id="@+id/ttl_w_updated"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="6dp"
+      android:singleLine="true"
+      android:textColor="@color/ttl_widget_text2"
+      android:textSize="11sp" />
+
+    <ImageView
+      android:id="@+id/ttl_w_refresh"
+      android:layout_width="28dp"
+      android:layout_height="28dp"
+      android:contentDescription="@string/ttl_widget_refresh"
+      android:padding="5dp"
+      android:src="@drawable/ttl_ic_refresh" />
+  </LinearLayout>
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:baselineAligned="true"
+    android:orientation="horizontal"
+    android:paddingEnd="6dp">
+
+    <TextView
+      android:id="@+id/ttl_w_ccu"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:fontFamily="sans-serif-medium"
+      android:singleLine="true"
+      android:textColor="@color/ttl_widget_text"
+      android:textSize="26sp" />
+
+    <TextView
+      android:id="@+id/ttl_w_delta"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="6dp"
+      android:singleLine="true"
+      android:textSize="13sp"
+      android:textStyle="bold" />
+
+    <TextView
+      android:id="@+id/ttl_w_servers"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="6dp"
+      android:layout_weight="1"
+      android:ellipsize="end"
+      android:gravity="end"
+      android:singleLine="true"
+      android:textColor="@color/ttl_widget_text2"
+      android:textSize="12sp" />
+  </LinearLayout>
+
+  <ImageView
+    android:id="@+id/ttl_w_chart"
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginEnd="6dp"
+    android:layout_marginBottom="4dp"
+    android:layout_weight="1"
+    android:importantForAccessibility="no"
+    android:scaleType="fitXY" />
+
+  <TextView
+    android:id="@+id/ttl_w_footer"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:ellipsize="end"
+    android:paddingEnd="6dp"
+    android:singleLine="true"
+    android:textColor="@color/ttl_widget_text2"
+    android:textSize="11sp" />
+</LinearLayout>

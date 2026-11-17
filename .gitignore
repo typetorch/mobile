@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# Firebase (docs/FIREBASE_SETUP.md): EAS builds take it from the GOOGLE_SERVICES_JSON file variable
+google-services.json

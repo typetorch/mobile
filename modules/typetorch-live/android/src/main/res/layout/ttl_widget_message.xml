@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Widget states without numbers: pick a game, sign in, loading, can't reach. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:id="@android:id/background"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:background="@drawable/ttl_widget_bg"
+  android:clipToOutline="true"
+  android:padding="8dp">
+
+  <TextView
+    android:id="@+id/ttl_w_message"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:layout_marginEnd="20dp"
+    android:layout_marginStart="20dp"
+    android:ellipsize="end"
+    android:gravity="center"
+    android:maxLines="2"
+    android:text="@string/ttl_loading"
+    android:textColor="@color/ttl_widget_text"
+    android:textSize="13sp" />
+
+  <ImageView
+    android:id="@+id/ttl_w_refresh"
+    android:layout_width="24dp"
+    android:layout_height="24dp"
+    android:layout_gravity="top|end"
+    android:contentDescription="@string/ttl_widget_refresh"
+    android:padding="3dp"
+    android:src="@drawable/ttl_ic_refresh"
+    android:visibility="gone" />
+</FrameLayout>

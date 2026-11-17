@@ -2,6 +2,7 @@
  * The TypeTorch dashboard's shared pieces: the backend header, the signed-out notice, the page menu, and the home
  * (Overview) body that both /tt/<id> and the project's TypeTorch tab show.
  */
+import { WatchButton } from "@/features/live/WatchButton";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { Switch, View } from "react-native";
@@ -174,7 +175,7 @@ export function TTHome({ backendId, poll = true, compare }: { backendId: string;
 	return (
 		<View style={{ gap: 12 }}>
 			<SignedOutNotice account={account} />
-			<Section title="Live">
+			<Section title="Live" right={<WatchButton backendId={backendId} />}>
 				{fleet.error ? (
 					<ErrorState error={fleet.error} onRetry={() => fleet.refetch()} />
 				) : (

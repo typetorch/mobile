@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="ttl_up">#FF4CC27A</color>
+  <color name="ttl_down">#FFF06A6A</color>
+  <color name="ttl_widget_bg">#F21E1E22</color>
+  <color name="ttl_widget_text">#FFECECEE</color>
+  <color name="ttl_widget_text2">#FFA8A8AD</color>
+</resources>

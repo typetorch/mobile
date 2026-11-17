@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <color name="ttl_brand">#FFFB7A32</color>
+  <color name="ttl_up">#FF2E9D57</color>
+  <color name="ttl_down">#FFD64545</color>
+  <color name="ttl_widget_bg">#F7FFFFFF</color>
+  <color name="ttl_widget_text">#FF1B1B1F</color>
+  <color name="ttl_widget_text2">#FF5F6368</color>
+</resources>

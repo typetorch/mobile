@@ -319,6 +319,13 @@ export function createApi(options: ApiOptions) {
 		backfillIdentities: (pageToken?: string, signal?: AbortSignal) => post<BackfillResult>("/v1/identity/backfill", pageToken ? { pageToken } : {}, signal),
 		/** A pid's UserId and its Roblox name, display name and headshot (the backend asks Roblox and caches the answer). */
 		playerProfile: (pid: string, signal?: AbortSignal) => get<PlayerProfile>(`/v1/identity/${encodeURIComponent(pid)}/profile`, signal),
+		/** Live CCU, servers, today's peak, the last `minutes` per minute and the last hour's sessions (docs/PUSH_WATCH_WIDGETS.md). */
+		mobileLive: (minutes = 30, signal?: AbortSignal) => get<MobileLive>(`/v1/mobile/live${qs({ minutes })}`, signal),
+		/** Registers this phone's Expo push token for this mobile token (one registration per token; a refresh needs a new one). */
+		pushRegister: (token: string, milestones: boolean, signal?: AbortSignal) => post<{ ok: true; milestones: boolean }>("/v1/mobile/push", { token, milestones }, signal),
+		pushUnregister: (signal?: AbortSignal) => request<{ ok: true }>("/v1/mobile/push", { method: "DELETE", ...(signal ? { signal } : {}) }),
+		/** One test push to this phone (409 not_registered when it has no registration). */
+		pushTest: (signal?: AbortSignal) => post<{ ok: true; ticket?: { status: string; message?: string } }>("/v1/mobile/push/test", {}, signal),
 		/** The game's name, live players and icon for the sidebar card. */
 		place: (signal?: AbortSignal) => get<PlaceCardInfo>("/v1/place", signal),
 		/** Game pass and developer product names, prices and icons (at most 50 ids in all; the backend asks Roblox). */
@@ -517,4 +524,16 @@ export interface ErrorParams {
 }
 
 export type Api = ReturnType<typeof createApi>;
+
+/** GET /v1/mobile/live (docs/PUSH_WATCH_WIDGETS.md). */
+export interface MobileLive {
+	at: string;
+	game: { name: string; universeId: number | null };
+	ccu: number;
+	servers: number;
+	delta: number | null;
+	peakToday: number | null;
+	series: { t: number; ccu: number }[];
+	lastHour: { at: string; avgSessionSeconds: number | null; medianSessionSeconds: number | null; sessionsEnded: number; playtimeHours: number } | null;
+}
 

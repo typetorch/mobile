@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- One resizable provider: small at 2x1, medium from 4x2 (the provider picks the layout by size). -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+  android:configure="dev.typetorch.live.WidgetConfigureActivity"
+  android:description="@string/ttl_widget_description"
+  android:initialLayout="@layout/ttl_widget_message"
+  android:minWidth="110dp"
+  android:minHeight="40dp"
+  android:minResizeWidth="110dp"
+  android:minResizeHeight="40dp"
+  android:previewLayout="@layout/ttl_widget_preview"
+  android:resizeMode="horizontal|vertical"
+  android:targetCellWidth="2"
+  android:targetCellHeight="1"
+  android:updatePeriodMillis="1800000"
+  android:widgetCategory="home_screen"
+  android:widgetFeatures="reconfigurable" />

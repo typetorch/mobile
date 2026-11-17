@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!-- Widget configure activity: a small dialog, light by day. -->
+  <style name="TypeTorchLive.Configure" parent="@android:style/Theme.DeviceDefault.Light.Dialog">
+    <item name="android:windowCloseOnTouchOutside">true</item>
+  </style>
+</resources>

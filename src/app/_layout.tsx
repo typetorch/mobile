@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { HttpError } from "@/api/http";
+import { LiveSync } from "@/features/live/LiveSync";
 import { installCrashGuard } from "@/lib/crash-guard";
 import { AccountsProvider, useAccounts } from "@/store/accounts";
 import { ThemeProvider, useTheme } from "@/theme";
@@ -54,6 +55,7 @@ function Navigation() {
 	return (
 		<NavThemeProvider value={navTheme}>
 			<StatusBar style={p.scheme === "dark" ? "light" : "dark"} />
+			<LiveSync />
 			<Stack
 				screenOptions={{
 					headerStyle: { backgroundColor: p.background },

@@ -1,0 +1,54 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+  <!-- Android 14+: required for foregroundServiceType="specialUse" (a normal permission, granted at install). -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+  <!-- Android 13+: runtime permission, requested by the app's JS before startWatch. -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+  <application>
+
+    <!-- Live watch: one ongoing notification per watched game, polls /v1/mobile/live every 30 s. -->
+    <service
+      android:name="dev.typetorch.live.WatchService"
+      android:exported="false"
+      android:foregroundServiceType="specialUse">
+      <property
+        android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+        android:value="Live game stats watch: started by the user for one of their own Roblox games, shows its live player count in an ongoing notification (polled every 30 s) until the user taps Stop." />
+    </service>
+
+    <!-- Stop action and the swipe-away (delete intent) of the watch notifications. -->
+    <receiver
+      android:name="dev.typetorch.live.WatchActionReceiver"
+      android:exported="false" />
+
+    <!-- Home-screen widget (small 2x1, medium 4x2 and up). -->
+    <receiver
+      android:name="dev.typetorch.live.TypeTorchWidgetProvider"
+      android:exported="false"
+      android:label="@string/ttl_widget_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/ttl_widget_info" />
+    </receiver>
+
+    <!-- Widget configure activity: picks the game. Exported so the launcher (widget host) can start it. -->
+    <activity
+      android:name="dev.typetorch.live.WidgetConfigureActivity"
+      android:exported="true"
+      android:excludeFromRecents="true"
+      android:taskAffinity=""
+      android:label="@string/ttl_configure_title"
+      android:theme="@style/TypeTorchLive.Configure">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+      </intent-filter>
+    </activity>
+
+  </application>
+</manifest>

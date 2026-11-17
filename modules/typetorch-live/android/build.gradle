@@ -1,0 +1,29 @@
+// Local Expo module (autolinked from mobile/modules/). Same shape as the SDK 58 modules in node_modules (expo-clipboard):
+// expo-module-gradle-plugin applies kotlin-android, compileSdk/minSdk from the app, and expo-modules-core (compileOnly).
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'dev.typetorch'
+version = '0.1.0'
+
+expoModule {
+  // An app-local module, never published as an AAR.
+  canBePublished false
+}
+
+android {
+  namespace "dev.typetorch.live"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+    consumerProguardFiles("proguard-rules.pro")
+  }
+}
+
+dependencies {
+  // Already in every Expo app: expo-modules-core exposes it as an `api` dependency at this exact version.
+  // Declared here so this module's own resources link against androidx.core's (TextAppearance.Compat.Notification*).
+  implementation "androidx.core:core-ktx:1.17.0"
+}

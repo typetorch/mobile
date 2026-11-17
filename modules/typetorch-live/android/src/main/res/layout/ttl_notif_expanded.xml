@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Expanded watch notification: big CCU, delta, game, status, the 30-minute line, then four rows. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="wrap_content"
+  android:orientation="vertical">
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:baselineAligned="true"
+    android:orientation="horizontal">
+
+    <TextView
+      android:id="@+id/ttl_n_big"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:singleLine="true"
+      android:textAppearance="@style/TextAppearance.Compat.Notification.Title"
+      android:textSize="28sp"
+      android:textStyle="bold" />
+
+    <TextView
+      android:id="@+id/ttl_n_delta"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="6dp"
+      android:singleLine="true"
+      android:textAppearance="@style/TextAppearance.Compat.Notification"
+      android:textStyle="bold" />
+
+    <TextView
+      android:id="@+id/ttl_n_game"
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="10dp"
+      android:layout_weight="1"
+      android:ellipsize="end"
+      android:gravity="end"
+      android:singleLine="true"
+      android:textAppearance="@style/TextAppearance.Compat.Notification" />
+  </LinearLayout>
+
+  <TextView
+    android:id="@+id/ttl_n_status"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:ellipsize="end"
+    android:singleLine="true"
+    android:textAppearance="@style/TextAppearance.Compat.Notification"
+    android:textSize="12sp"
+    android:visibility="gone" />
+
+  <ImageView
+    android:id="@+id/ttl_n_chart"
+    android:layout_width="match_parent"
+    android:layout_height="56dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginBottom="4dp"
+    android:importantForAccessibility="no"
+    android:scaleType="fitXY" />
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="2dp"
+    android:orientation="horizontal">
+
+    <TextView
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:ellipsize="end"
+      android:singleLine="true"
+      android:text="@string/ttl_label_avg"
+      android:textAppearance="@style/TextAppearance.Compat.Notification" />
+
+    <TextView
+      android:id="@+id/ttl_n_avg"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="8dp"
+      android:singleLine="true"
+      android:textAppearance="@style/TextAppearance.Compat.Notification.Title" />
+  </LinearLayout>
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="2dp"
+    android:orientation="horizontal">
+
+    <TextView
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:ellipsize="end"
+      android:singleLine="true"
+      android:text="@string/ttl_label_median"
+      android:textAppearance="@style/TextAppearance.Compat.Notification" />
+
+    <TextView
+      android:id="@+id/ttl_n_median"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="8dp"
+      android:singleLine="true"
+      android:textAppearance="@style/TextAppearance.Compat.Notification.Title" />
+  </LinearLayout>
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="2dp"
+    android:orientation="horizontal">
+
+    <TextView
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:ellipsize="end"
+      android:singleLine="true"
+      android:text="@string/ttl_label_servers"
+      android:textAppearance="@style/TextAppearance.Compat.Notification" />
+
+    <TextView
+      android:id="@+id/ttl_n_servers"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="8dp"
+      android:singleLine="true"
+      android:textAppearance="@style/TextAppearance.Compat.Notification.Title" />
+  </LinearLayout>
+
+  <LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="2dp"
+    android:orientation="horizontal">
+
+    <TextView
+      android:layout_width="0dp"
+      android:layout_height="wrap_content"
+      android:layout_weight="1"
+      android:ellipsize="end"
+      android:singleLine="true"
+      android:text="@string/ttl_label_played"
+      android:textAppearance="@style/TextAppearance.Compat.Notification" />
+
+    <TextView
+      android:id="@+id/ttl_n_played"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="8dp"
+      android:singleLine="true"
+      android:textAppearance="@style/TextAppearance.Compat.Notification.Title" />
+  </LinearLayout>
+</LinearLayout>

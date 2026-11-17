@@ -5,6 +5,7 @@ import { View } from "react-native";
 
 import { scopeList } from "@/api/opencloud";
 import { getUser, userByName } from "@/api/roblox-public";
+import { NotificationsSection } from "@/features/notifications/NotificationsSection";
 import { Badge, Button, Card, confirm, ErrorState, Field, Icon, KV, List, Row, Screen, Section, Segmented, Txt } from "@/components/ui";
 import { AppUpdatesCard } from "@/features/app-updates";
 import { FEATURES, missingScopes } from "@/lib/features";
@@ -191,6 +192,10 @@ export default function SettingsScreen() {
 					</List>
 				</Section>
 			) : null}
+
+			<Section title="Notifications">
+				<NotificationsSection />
+			</Section>
 
 			<Section title="Appearance">
 				<Segmented<Appearance>
