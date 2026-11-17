@@ -40,7 +40,8 @@
           }
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "./plugins/with-expo-gl-keep-rules.js"
     ],
     "experiments": {
       "reactCompiler": true
