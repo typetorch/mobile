@@ -11,7 +11,7 @@ up and where) therefore ships as an **OTA update** (`eas update`, JS only), not 
 | Sent to native | `src/features/live/LiveSync.tsx`: `setWidgetSpec(WIDGET_SPEC_JSON)`, then `refreshWidgets()` |
 | JS API | `modules/typetorch-live/index.ts`: `setWidgetSpec(json: string): boolean`; the stat slots: `widgets()`, `setWidgetConfig()`, `defaultSlots()`, `setDefaultSlots()` (docs/WIDGET_STATS.md) |
 | Parser, built-in default | `modules/typetorch-live/android/.../WidgetSpec.kt` (`DEFAULT_JSON`) |
-| Renderer | `.../WidgetRenderer.kt` (layout, text, chart, icons, pictures) |
+| Renderer | `.../WidgetRenderer.kt` (layout, text, chart, icons, pictures), `.../Chart.kt` (the CCU line), `.../Svg.kt` (the `svg` element) |
 | Bindings, rich text | `.../WidgetValues.kt` (templates, slots, paths), `.../Units.kt` (unit formats, deltas, the metric catalog) |
 | Pictures | `.../WidgetImages.kt` (download, disk cache, decode) |
 | Widget plumbing | `.../WidgetUpdater.kt` (state, sizes, bitmaps, taps, the metrics to fetch), `res/layout{,-night}/ttl_widget_canvas.xml` |
@@ -49,6 +49,10 @@ up and where) therefore ships as an **OTA update** (`eas update`, JS only), not 
   "strings": {                          // optional wording of the `status` binding
     "refreshing": "refreshing…",
     "offline": "offline · {updated}"
+  },
+  "format": {                           // optional number formats
+    "ratioDecimals": 2                  // decimals of ratios shown as % (retention: 34.21%) and of their change in
+                                        // points (▲1.10); 0..4, default 2. The `short` format stays rounded (34%).
   },
   "layouts": {
     "data":        [ /* size layouts */ ],   // required: the numbers
@@ -101,11 +105,90 @@ Every element takes these (all optional):
 | `column`, `row` | `children`, `gap` (dp), `align` (cross axis: `start`, `center`, `end`, `stretch`, rows also `baseline`; default column `stretch`, row `center`), `justify` (main axis when no child has a weight: `start`, `center`, `end`, `spaceBetween`) |
 | `stack` | `children` drawn on top of each other, each placed by its `gravity` |
 | `text` | `text` (template, below), `size` (sp, default 12), `fontWeight` (`normal`, `medium`, `semibold`, `bold` or 100..900), `color` (default `text`; `delta` = up/down colour by the delta's sign), `align` (`start`, `center`, `end`), `maxLines` (default 1), `ellipsis` (default true). An empty result hides the element. |
-| `chart` | the CCU line: `bind: "series"`, `minutes` (1..360, default 360), `color` (default `brand`), `fill` (`true`: the line colour fading down, a colour, or `false`), `stroke` (dp, default 2), `dot` (newest point, default true). Without a `height` it takes `weight: 1`. |
+| `chart` | the CCU line: `bind: "series"`, `minutes` (1..360, default 360), `color` (default `brand`), `fill` (`true`: the line colour fading down, a colour, or `false`), `stroke` (dp, default 2), `dot` (newest point, default true), `zero` (the value axis from 0 to a round top: 1, 2, 2.5, 5 x 10ⁿ; `false`: fitted to the low and high values; default true), `bucket` (minutes averaged into one point, 0..60, 0/1 = every point; default 5), `smooth` (a curve through the points; default true), `labels` (the top, middle and bottom values on the left with light grid lines, in `text2`; default true). Without a `height` it takes `weight: 1`. |
 | `spacer` | `size` (dp along the parent's axis) or a `weight` |
 | `divider` | a line across the parent: `color` (default `divider`), `thickness` (dp, default 1) |
 | `icon` | `name`: `flame`, `refresh`, `people`, `server`, `clock`; `size` (dp, default 16), `color` (default `text2`) |
 | `image` | a picture by URL: `bind` (the binding holding the URL, default `game.iconUrl`), `size` (dp, a square, default 22; `width` / `height` override), `radius` (corner radius in dp, default 6), `placeholder` (the colour drawn while the picture is missing, default `divider`; `null` draws nothing). Centre-cropped, scaled to the drawn size. |
+| `svg` | inline SVG drawn into the element's box: `svg` (the markup, a template; below), `fit` (`fill`: the viewBox stretched to the box, the default; `contain`: uniform, centred, all of it; `cover`: uniform, centred, cropped). Without a `height` it takes `weight: 1`. An older APK skips the element. |
+
+### The `svg` element
+
+```jsonc
+{ "type": "svg", "height": 60, "fit": "fill",
+  "svg": "<svg viewBox='0 0 {w} {h}'><path d='{chart.area:w,h}' fill='url(#g)'/><path d='{chart.path:w,h}' fill='none' stroke='var(--brand)' stroke-width='2'/><defs><linearGradient id='g' x2='0' y2='1'><stop offset='0' stop-color='var(--brand)' stop-opacity='.35'/><stop offset='1' stop-color='var(--brand)' stop-opacity='0'/></linearGradient></defs></svg>" }
+```
+
+**The template.** `svg` is filled at every draw like a text (`{name}`, `{name:format}`, `{name|fallback}`, `{{` / `}}`),
+with every value XML-escaped (a game named `A & B` can't break the markup), plus these names:
+
+| Name | Value |
+|---|---|
+| `{w}`, `{h}` | the element's box in dp (2 decimals at most), so `viewBox='0 0 {w} {h}'` makes one unit one dp. Also replaced inside other placeholders: `{chart.path:{w},{h}}` |
+| `{chart.path:W,H,minutes,bucket,zero,smooth}` | the CCU line as SVG path data (`M`, `L`, `Q`) in a W x H box: x by time from 0 (oldest) to W (newest), y from 0 (axis top) to H (axis bottom). The same window, buckets, axis and smoothing as the `chart` element. Empty without points |
+| `{chart.area:…}` | the same line closed down to H (a fill under the line) |
+| `{chart.max:…}`, `{chart.mid:…}`, `{chart.min:…}` | the axis values as labels (`260`, `1.2K`): with `zero` the round top, half of it and 0 |
+| `{chart.lastX:…}`, `{chart.lastY:…}` | the newest point in the W x H box (for a dot: `<circle cx='{chart.lastX:w,h}' cy='{chart.lastY:w,h}' r='3'/>`) |
+
+All arguments are optional, by position: W and H a number, `w` / `h` or empty (the element's box); `minutes` 1..360
+(default 360); `bucket` 0..60 (default 5); `zero` and `smooth` `1` / `0` (also `true` / `false`; default 1). So
+`{chart.path}` is the 6-hour line, 5-minute buckets, zero-based and smooth, in the whole box; `{chart.path:w,h,60,1,0,0}`
+the last hour, every point, fitted, straight. The path touches the box's edges: inset it with a `transform` or a smaller
+W / H when the stroke must not be cut. A missing value is empty (`{chart.max|—}` shows `—`).
+
+Slot values are plain text in SVG (no unit colours); colour units with tspans and these bindings:
+
+| Binding | Value (`18m 40s` / `34.21%` / `R$2,140` / `1,830`) |
+|---|---|
+| `slot.N.number` | the value without its unit: `18m 40s` (a duration keeps its units), `34.21`, `2,140`, `1,830`; `—` when missing |
+| `slot.N.unit` | the unit: empty, `%`, `R$`, empty (a unit's own spaces kept: ` h`) |
+| `slot.N.unitBefore`, `slot.N.unitAfter` | the unit when it goes before the number (`R$`) / after it (`%`, ` h`), else empty |
+| `slot.N.unitToken` | the unit's colour token: `unitTime`, `unitPercent`, `unitRobux`; empty for counts |
+
+```xml
+<text x="0" y="14" font-size="13" fill="var(--text)"><tspan fill="var(--{slot.1.unitToken})">{slot.1.unitBefore}</tspan>{slot.1.number}<tspan fill="var(--{slot.1.unitToken})">{slot.1.unitAfter}</tspan></text>
+```
+
+(`var(--)`, an empty token, is ignored: the tspan keeps the text's colour.)
+
+**What is drawn** (SVG 1.1, a subset; anything else is skipped, never an error):
+
+- `svg` (root: `viewBox`, mapped by `fit`; without one, user units are dp from the box's top left), `g`, `a`, nested
+  `svg` (moved to its x / y; its own viewBox is ignored), `use` (`href="#id"`, x, y; `symbol` too), `defs`.
+- `transform` on any element: `translate`, `scale`, `rotate` (with a centre), `skewX`, `skewY`, `matrix`.
+- Shapes: `rect` (x, y, width, height, rx, ry), `circle`, `ellipse`, `line`, `polyline`, `polygon`, `path` (`d`, every
+  command, via androidx.core PathParser). Lengths: numbers, `px`, `pt`, `em`, `%` (of the viewBox).
+- Paint: `fill`, `stroke`, `stroke-width`, `stroke-linecap`, `stroke-linejoin`, `stroke-miterlimit`,
+  `stroke-dasharray`, `stroke-dashoffset`, `fill-rule`, `opacity` (a group's in a layer), `fill-opacity`,
+  `stroke-opacity`, `color` / `currentColor`, `display="none"`, `visibility`; as attributes or in a `style`
+  attribute (no `<style>` sheets, no classes). Inherited as in SVG; the default fill is black.
+- Colours: `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa` (CSS order: alpha last, unlike the spec's `#AARRGGBB`), `rgb()`,
+  `rgba()`, a few names (`black`, `white`, `red`, `gray`, …, `transparent`), `none`, the spec's tokens as
+  `var(--text)` / `var(--brand, #f80)` (day or night, like everything else) or a bare token name, and `url(#id)` (with
+  a fallback colour after it).
+- `linearGradient` (x1, y1, x2, y2) and `radialGradient` (cx, cy, r; no focal point): `stop` (offset, stop-color,
+  stop-opacity), `gradientUnits` (objectBoundingBox, the default, or userSpaceOnUse), `gradientTransform`,
+  `spreadMethod`, stops from another gradient by `href`.
+- `clipPath` (its rect / circle / ellipse / line / polygon / path children, `clipPathUnits`) through `clip-path` on
+  shapes, groups, texts and images.
+- `text` and `tspan`: x, y, dx, dy (the first of a list), `font-size` (in viewBox units; the system font scale doesn't
+  apply), `font-weight` (100..900, `bold`, …), `font-style`, `font-family` (only `monospace` / `serif` / the default
+  sans), `text-anchor` (start, middle, end; per chunk: a tspan with its own x or y starts one), `dominant-baseline`
+  (`middle` / `central` / `hanging`), fill, stroke, opacity; tspans inherit and flow; white space as a browser shows it.
+  The texts are added to the widget's TalkBack description.
+- `image`: `href` (or `xlink:href`; an `https://` / `http://` URL, e.g. `{game.iconUrl}`), x, y, width, height,
+  `preserveAspectRatio` (all alignments, meet / slice, none), `clip-path` (a rounded icon: a `clipPath` with a `rect`
+  with `rx`; drawn with smooth edges). Same disk cache as the `image` element (section Pictures); nothing is drawn
+  until it is downloaded.
+
+Not drawn: `<style>`, classes, CSS selectors, `mask`, `pattern`, `filter`, `marker`, `foreignObject`, `textPath`,
+per-glyph positions, `letter-spacing`, text decoration, gradient focal points, `vector-effect`, `data:` images,
+DOCTYPE / entities (the whole svg is skipped), animation.
+
+**Robustness.** Broken markup draws what was read before the error; an element that fails is skipped. At most 64,000
+template characters (a longer one is dropped when the spec is read: the element draws nothing), 200,000 after filling,
+2,000 elements and text runs, 32 levels, 4,000 drawn elements (with `use`). Problems go to logcat once each
+(`adb logcat -s TypeTorchLive`, `svg: …`).
 
 ### Bindings (text templates)
 
@@ -133,13 +216,14 @@ what follows the last `:` when that is a format's name (metric ids hold `:` too:
 | `slot.N` (N = 1..4) | | the slot's metric id (`dau`, `revenue:72h`); missing when the slot is empty, so `showIf: "slot.3"` hides an empty slot's elements |
 | `slot.N.label` | | `DAU`, `Session 1h` (the backend's label, else the app's built-in one) |
 | `slot.N.value` | `unit` | `18m 40s`, `34.2%`, `R$2,140`, `1,830` (rich: units coloured) |
-| `slot.N.delta` | `delta` | `▲6%`, `▼14%`, ratios in points (`▲1.1`), `±0%`; coloured `up` / `down` (`text2` for ±0); missing when the backend has no `prev` |
+| `slot.N.delta` | `delta` | `▲6%`, `▼14%`, ratios in points (`▲1.10`, `format.ratioDecimals`), `±0%`; coloured `up` / `down` (`text2` for ±0); missing when the backend has no `prev` |
+| `slot.N.number`, `slot.N.unit`, `slot.N.unitBefore`, `slot.N.unitAfter`, `slot.N.unitToken` | | the parts of `slot.N.value` for the `svg` element's tspans (section The `svg` element) |
 | any other name | | a path into the live answer: `metrics.mau.value`, `metrics.revenue:72h.delta`, `game.universeId`, `lastHour.at`, … (dots between keys, array items by index) |
 
 Formats: `count` (214, 1.2K, 1.5M), `grouped` (1,240), `delta` (▲12), `duration` (45 s, 18 m 40 s, 2 h 5 m), `hours`
-(1,240 h, 4.5 h, 35 m), `raw`; rich (units coloured, below): `seconds` (45s, 18m 40s, 2h 5m), `percent` (0.342 →
-34.2%), `robux` (R$2,140); for metric values `unit` (the default: by the metric's unit), `short` (34%, R$2.1K, 1.8K) and
-`plain` (`unit` without colours, e.g. for `description`).
+(1,240 h, 4.5 h, 35 m), `raw`; rich (units coloured, below): `seconds` (45s, 18m 40s, 2h 5m), `percent` (0.3421 →
+34.21%, `format.ratioDecimals` decimals), `robux` (R$2,140); for metric values `unit` (the default: by the metric's
+unit), `short` (34%, R$2.1K, 1.8K) and `plain` (`unit` without colours, e.g. for `description`).
 
 ### Stat slots and metrics
 
@@ -166,7 +250,8 @@ tokens to the text colour in `tokens`.
 
 ### Pictures
 
-`image` elements are downloaded by the widget's background refresh (never while drawing, never on the main thread), kept
+`image` elements (and the svg element's `<image>` URLs, up to 8, as filled with the answer's values: a slot binding
+in an `href` isn't known there) are downloaded by the widget's background refresh (never while drawing, never on the main thread), kept
 in the app's cache dir (`cache/ttl_widget_images/`, keyed by the URL's hash) and fetched again after 24 hours; a failed
 download keeps the old copy and is retried after 10 minutes at the earliest. Drawing reads the disk only: until the
 picture is there the `placeholder` shows. Pictures unused for 30 days are deleted. No token is sent with them.
@@ -272,3 +357,5 @@ pasted between the `"""` marks, and check that the JSON holds no `$`, which a Ko
 - A picture is downloaded right after the fetch that learnt its URL and shows in that refresh's final drawing (if both
   finish inside the refresh's 25 s), else at the next refresh; the live watch's redraws never download.
 - Four slots at most, and the backend answers at most 12 metric ids per fetch (the union over a backend's widgets).
+- The `svg` element draws a subset of SVG (section The `svg` element) and is parsed at every draw; keep it to a few
+  hundred elements. Its look can differ from a browser's in details: font metrics, hairline anti-aliasing.

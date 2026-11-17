@@ -31,7 +31,7 @@ internal class Rendered(val bitmap: Bitmap, val description: String)
 /**
  * Draws a [SizeLayout] into one bitmap at the widget's size: a small flex layout (column / row / stack with weights,
  * gaps, padding, margins, alignment), texts with StaticLayout (coloured runs: units, deltas), the CCU line ([Chart]),
- * vector icons and pictures ([WidgetImages], from the disk only). Everything is
+ * vector icons, pictures ([WidgetImages], from the disk only) and inline SVG ([Svg]). Everything is
  * measured in px at the bitmap's scale (the screen density unless the pixel budget caps it), so text stays crisp.
  * Throws on a broken spec; [WidgetUpdater] catches and falls back to the built-in default.
  */
@@ -73,6 +73,7 @@ internal object WidgetRenderer {
     val hPx = (hDp * s).roundToInt().coerceAtLeast(1)
     val bmp = Bitmap.createBitmap(wPx, hPx, Bitmap.Config.ARGB_8888)
     try {
+      Units.ratioDecimals = spec.ratioDecimals
       val c = Canvas(bmp)
       val fontScale = ctx.resources.configuration.fontScale.takeIf { it > 0f }?.coerceIn(0.8f, 1.3f) ?: 1f
       val r = Pass(ctx, s, fontScale, WidgetSpecs.palette(spec, night), values, ArrayList())
@@ -221,7 +222,7 @@ internal object WidgetRenderer {
         val d = n.size * s
         Sz(min(d, cMaxW), min(d, cMaxH))
       }
-      "chart" -> Sz(cMaxW, 0f)
+      "chart", "svg" -> Sz(cMaxW, 0f)
       "spacer" -> if (rowParent) Sz(n.size * s, 0f) else Sz(0f, n.size * s)
       "divider" -> if (rowParent) Sz(n.thickness * s, 0f) else Sz(cMaxW, n.thickness * s)
       "column" -> measureLinear(r, n, cMaxW, cMaxH, vertical = true)
@@ -340,6 +341,7 @@ internal object WidgetRenderer {
         "icon" -> drawIcon(r, c, n, cx, cy, cw, ch)
         "image" -> drawImage(r, c, n, cx, cy, cw, ch)
         "chart" -> drawChart(r, c, n, cx, cy, cw, ch)
+        "svg" -> Svg.draw(r.ctx, c, n.svg, n.fit, r.values, r.palette, cx, cy, cw, ch, r.s, r.texts)
         "divider" -> {
           val p = Paint()
           p.style = Paint.Style.FILL
@@ -420,10 +422,8 @@ internal object WidgetRenderer {
   }
 
   private fun drawChart(r: Pass, c: Canvas, n: Node, x: Float, y: Float, w: Float, h: Float) {
-    val all = r.values.series
-    if (all.isEmpty()) return
-    val cutoff = all.last().t - n.minutes * 60_000L
-    val points = all.filter { it.t >= cutoff }
+    // Averaged per bucket (a per-minute line is mostly noise at small player counts); each at its newest time.
+    val points = Chart.window(r.values.series, n.minutes, n.bucket)
     if (points.isEmpty()) return
     val line = color(r, n.color, "brand")
     val fill = when (val f = n.fill) {
@@ -431,7 +431,8 @@ internal object WidgetRenderer {
       "auto" -> (line and 0x00FFFFFF) or 0x55000000
       else -> color(r, f, "brand")
     }
-    Chart.drawInto(c, points, x, y, w, h, r.s, line, fill, n.dot, n.stroke)
+    val labelColor = color(r, "text2", "text2")
+    Chart.drawInto(c, points, x, y, w, h, r.s, line, fill, n.dot, n.stroke, Chart.Options(n.zero, n.smooth, n.labels, labelColor, r.fontScale))
   }
 
   private fun drawLinear(r: Pass, c: Canvas, n: Node, x: Float, y: Float, w: Float, h: Float, vertical: Boolean) {

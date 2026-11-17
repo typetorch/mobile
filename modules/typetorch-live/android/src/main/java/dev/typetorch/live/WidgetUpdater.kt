@@ -145,12 +145,20 @@ internal object WidgetUpdater {
       val spec = WidgetSpecs.stored(app) ?: WidgetSpecs.default
       // The built-in spec's too: it draws whenever the sent one fails.
       val binds = WidgetSpecs.imageBinds(spec) + (if (spec !== WidgetSpecs.default) WidgetSpecs.imageBinds(WidgetSpecs.default) else emptySet())
-      if (binds.isEmpty()) return
+      // The svg elements' <image href> pictures (only the sent spec's: the built-in one has no svg).
+      val svgs = WidgetSpecs.svgTemplates(spec)
+      if (binds.isEmpty() && svgs.isEmpty()) return
       val values = WidgetValues.of(app, spec, b, snap, false, emptyList())
       for (bind in binds) {
         val url = values.str(bind) ?: continue
         if (WidgetImages.isWebUrl(url)) WidgetImages.ensure(app, url)
       }
+      val urls = LinkedHashSet<String>()
+      for (t in svgs) {
+        if (urls.size >= 8) break
+        urls.addAll(Svg.imageUrls(t, values))
+      }
+      for (url in urls.take(8)) WidgetImages.ensure(app, url)
     } catch (t: Throwable) {
       Log.w("widget images failed", t)
     }

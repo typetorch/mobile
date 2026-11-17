@@ -129,6 +129,39 @@ internal object WidgetImages {
     }
   }
 
+  /**
+   * [url]'s whole picture from the disk (not cropped: the svg element places it by its preserveAspectRatio), decoded
+   * at about [wPx] x [hPx] or more, at most [MAX_DECODE_PX] across; null when it isn't downloaded yet or doesn't
+   * decode. Any thread; no network. The bitmap is shared (memory cache): draw it, never recycle it.
+   */
+  fun loadWhole(ctx: Context, url: String, wPx: Int, hPx: Int): Bitmap? {
+    if (!isWebUrl(url)) return null
+    return try {
+      val f = file(ctx, url)
+      if (!f.exists()) return null
+      val bounds = BitmapFactory.Options()
+      bounds.inJustDecodeBounds = true
+      BitmapFactory.decodeFile(f.absolutePath, bounds)
+      val bw = bounds.outWidth
+      val bh = bounds.outHeight
+      if (bw <= 0 || bh <= 0) return null
+      val tw = wPx.coerceAtLeast(1)
+      val th = hPx.coerceAtLeast(1)
+      var sample = 1
+      while (sample < 1024 && ((bw / (sample * 2) >= tw && bh / (sample * 2) >= th) || max(bw, bh) / sample > MAX_DECODE_PX)) sample *= 2
+      val key = "$url|whole|$sample|${f.lastModified()}"
+      memory.get(key)?.let { return it }
+      val opts = BitmapFactory.Options()
+      opts.inSampleSize = sample
+      val src = BitmapFactory.decodeFile(f.absolutePath, opts) ?: return null
+      memory.put(key, src)
+      src
+    } catch (t: Throwable) {
+      Log.w("widget image load failed", t)
+      null
+    }
+  }
+
   private fun decodable(bytes: ByteArray): Boolean = try {
     val o = BitmapFactory.Options()
     o.inJustDecodeBounds = true

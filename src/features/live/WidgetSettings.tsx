@@ -12,6 +12,7 @@ import { useAccounts } from "@/store/accounts";
 import { space, useTheme } from "@/theme";
 import * as Live from "@modules/typetorch-live";
 
+import { WIDGET_WARNINGS } from "./widgets";
 import {
 	clampWindow,
 	fourSlots,
@@ -259,6 +260,16 @@ export function WidgetSettings() {
 				<SlotList slots={defaults} onChange={setDefault} />
 				{widgets.length ? <Button title="Use these on every widget" small icon="copy-outline" onPress={applyDefaultsToAll} style={{ alignSelf: "flex-start" }} /> : null}
 			</Section>
+
+			{__DEV__ && WIDGET_WARNINGS.length ? (
+				<Section title={`Widget HTML: ${WIDGET_WARNINGS.length} warning(s) (dev)`}>
+					{WIDGET_WARNINGS.map((w, i) => (
+						<Txt key={i} variant="small" selectable>
+							{w}
+						</Txt>
+					))}
+				</Section>
+			) : null}
 
 			<Txt variant="small">
 				The 2×1 size shows the first three stats, 2×2 and 4×2 all four. ▲/▼ compare with the period before. Widgets refresh about every 30 minutes; tap a

@@ -36,12 +36,18 @@ internal object Units {
     }
   }
 
-  /** 0.342 → 34.2% (short: 34%). */
+  /** Decimals of a ratio shown as a percent and of its change in points (the spec's `format.ratioDecimals`, set by the renderer). */
+  @Volatile var ratioDecimals: Int = 2
+
+  /** 0.3421 → 34.21% (the spec's decimals; short and 100% and up: rounded, 34%). */
   fun percent(ratio: Double, short: Boolean): List<Seg> {
     val p = ratio * 100.0
-    val text = if (short || abs(p) >= 100) p.roundToLong().toString() else oneDecimal(p)
+    val text = if (short || abs(p) >= 100) p.roundToLong().toString() else fixed(p, ratioDecimals)
     return listOf(Seg(text), Seg("%", PERCENT))
   }
+
+  private fun fixed(v: Double, decimals: Int): String =
+    if (decimals <= 0) v.roundToLong().toString() else String.format(US, "%.${decimals.coerceAtMost(4)}f", v)
 
   /** R$2,140 (short: R$2.1K). */
   fun robux(n: Double, short: Boolean): List<Seg> {
@@ -80,8 +86,8 @@ internal object Units {
     if (v == null || prev == null || v.isNaN() || prev.isNaN() || v.isInfinite() || prev.isInfinite()) return null
     if (unit == "ratio") {
       val d = (v - prev) * 100.0
-      val text = oneDecimal(abs(d))
-      if (text == "0") return Seg("±0", "text2")
+      val text = fixed(abs(d), ratioDecimals)
+      if (text.all { it == '0' || it == '.' }) return Seg("±0", "text2")
       return if (d > 0) Seg("▲$text", "up") else Seg("▼$text", "down")
     }
     if (prev == 0.0) return if (v == 0.0) Seg("±0%", "text2") else null

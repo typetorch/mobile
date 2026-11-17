@@ -13,6 +13,30 @@ internal class Rich(val text: String, val spans: List<Span>) {
 /** A metric's numbers as a binding value: formatted by [unit] unless the template names another format. */
 internal class MetricCell(val value: Double?, val prev: Double?, val unit: String?)
 
+/**
+ * A part of a metric's value formatted by its unit (`{slot.1.number}`, `{slot.1.unit}`, ...), for markup that colours
+ * the unit itself (the svg element's tspans). Formatted when read, so the spec's `format.ratioDecimals` applies.
+ */
+internal class PartCell(val cell: MetricCell, val part: String) {
+  fun text(): String {
+    val segs = Units.value(cell.unit, cell.value, false)
+    val units = segs.filter { it.color != null && it.text.isNotEmpty() }
+    // A duration (18m 40s) has a unit after each number: the number part is the whole text, the unit part empty.
+    val one = units.size == 1
+    val unitAt = if (one) segs.indexOf(units[0]) else -1
+    val firstNumber = segs.indexOfFirst { it.color == null && it.text.isNotBlank() && it.text != "-" }
+    val before = one && firstNumber >= 0 && unitAt < firstNumber
+    return when (part) {
+      "number" -> if (one) segs.filter { it.color == null }.joinToString("") { it.text } else segs.joinToString("") { it.text }
+      "unit" -> if (one) units[0].text else ""
+      "unitBefore" -> if (before) units[0].text else ""
+      "unitAfter" -> if (one && !before) units[0].text else ""
+      "unitToken" -> units.firstOrNull()?.color ?: ""
+      else -> ""
+    }
+  }
+}
+
 /** A metric's change against the period before (`{slot.1.delta}`, `{metrics.dau.delta}`). */
 internal class DeltaCell(val cell: MetricCell) {
   val seg: Seg? by lazy { Units.delta(cell.unit, cell.value, cell.prev) }
@@ -34,7 +58,10 @@ internal class WidgetValues(
 
   /** A binding's value: the built-in ones, else a path into the live answer. */
   fun lookup(key: String): Any? {
-    if (map.containsKey(key)) return map[key]
+    if (map.containsKey(key)) {
+      val v = map[key]
+      return if (v is PartCell) v.text() else v
+    }
     return path(key)
   }
 
@@ -102,6 +129,64 @@ internal class WidgetValues(
       i++
     }
     return Rich(sb.toString(), spans)
+  }
+
+  /**
+   * [t] filled for markup (the svg element): every value XML-escaped, literal text left as it is. [own] answers the
+   * names it knows first ({w}, {chart.path:…}: unescaped, "" = missing so a `|fallback` shows); null = not its name.
+   */
+  fun markup(t: String, own: (String) -> String?): String {
+    if (t.indexOf('{') < 0 && t.indexOf('}') < 0) return t
+    val sb = StringBuilder(t.length + 256)
+    var i = 0
+    while (i < t.length) {
+      val ch = t[i]
+      if (ch == '{') {
+        if (i + 1 < t.length && t[i + 1] == '{') {
+          sb.append('{')
+          i += 2
+          continue
+        }
+        val end = t.indexOf('}', i + 1)
+        if (end < 0) {
+          sb.append(t, i, t.length)
+          break
+        }
+        val expr = t.substring(i + 1, end)
+        val bar = expr.indexOf('|')
+        val head = (if (bar >= 0) expr.substring(0, bar) else expr).trim()
+        val mine = own(head)
+        if (mine != null) {
+          val fallback = if (bar >= 0) expr.substring(bar + 1) else null
+          if (mine.isEmpty() && fallback != null) escapeXml(fallback, sb) else sb.append(mine)
+        } else {
+          for (seg in resolve(expr)) escapeXml(seg.text, sb)
+        }
+        i = end + 1
+        continue
+      }
+      if (ch == '}' && i + 1 < t.length && t[i + 1] == '}') {
+        sb.append('}')
+        i += 2
+        continue
+      }
+      sb.append(ch)
+      i++
+    }
+    return sb.toString()
+  }
+
+  private fun escapeXml(s: String, sb: StringBuilder) {
+    for (ch in s) {
+      when (ch) {
+        '&' -> sb.append("&amp;")
+        '<' -> sb.append("&lt;")
+        '>' -> sb.append("&gt;")
+        '"' -> sb.append("&quot;")
+        '\'' -> sb.append("&apos;")
+        else -> if (ch >= ' ' || ch == '\n' || ch == '\t') sb.append(ch)
+      }
+    }
   }
 
   private fun resolve(expr: String): List<Seg> {
@@ -238,6 +323,9 @@ internal class WidgetValues(
       "count", "grouped", "delta", "duration", "hours", "raw", "unit", "short", "plain", "seconds", "percent", "robux",
     )
 
+    /** `slot.N.number` etc.: the parts of a slot's value (see [PartCell]). */
+    private val PARTS = listOf("number", "unit", "unitBefore", "unitAfter", "unitToken")
+
     private val DEFAULT_FORMAT = mapOf(
       "ccu" to "count",
       "delta" to "delta",
@@ -287,6 +375,7 @@ internal class WidgetValues(
         m["slot.$n.label"] = metric?.label ?: Units.label(id)
         m["slot.$n.value"] = cell
         m["slot.$n.delta"] = DeltaCell(cell)
+        for (part in PARTS) m["slot.$n.$part"] = PartCell(cell, part)
       }
       val okAt = snap?.okAt ?: 0L
       m["updated"] = if (okAt > 0L) Fmt.clock(ctx, okAt).takeIf { it.isNotEmpty() } else null
