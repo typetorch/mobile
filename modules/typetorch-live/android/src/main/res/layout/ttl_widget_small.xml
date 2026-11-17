@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Small widget (2x1): game, CCU, delta, updated time, refresh. Only RemoteViews-safe views. -->
+<!-- Small widget (2x1): game · updated time · refresh, then CCU + delta beside servers and the last hour's avg session.
+     Only RemoteViews-safe views. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
   android:id="@android:id/background"
   android:layout_width="match_parent"
@@ -9,7 +10,7 @@
   android:gravity="center_vertical"
   android:orientation="vertical"
   android:paddingStart="12dp"
-  android:paddingTop="6dp"
+  android:paddingTop="4dp"
   android:paddingEnd="6dp"
   android:paddingBottom="6dp">
 
@@ -29,19 +30,28 @@
       android:textColor="@color/ttl_widget_text2"
       android:textSize="12sp" />
 
+    <TextView
+      android:id="@+id/ttl_w_updated"
+      android:layout_width="wrap_content"
+      android:layout_height="wrap_content"
+      android:layout_marginStart="6dp"
+      android:singleLine="true"
+      android:textColor="@color/ttl_widget_text2"
+      android:textSize="10sp" />
+
     <ImageView
       android:id="@+id/ttl_w_refresh"
       android:layout_width="24dp"
       android:layout_height="24dp"
       android:contentDescription="@string/ttl_widget_refresh"
-      android:padding="3dp"
+      android:padding="4dp"
       android:src="@drawable/ttl_ic_refresh" />
   </LinearLayout>
 
   <LinearLayout
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:baselineAligned="true"
+    android:gravity="center_vertical"
     android:orientation="horizontal"
     android:paddingEnd="6dp">
 
@@ -63,16 +73,31 @@
       android:textSize="12sp"
       android:textStyle="bold" />
 
-    <TextView
-      android:id="@+id/ttl_w_updated"
+    <LinearLayout
       android:layout_width="0dp"
       android:layout_height="wrap_content"
-      android:layout_marginStart="6dp"
+      android:layout_marginStart="8dp"
       android:layout_weight="1"
-      android:ellipsize="end"
       android:gravity="end"
-      android:singleLine="true"
-      android:textColor="@color/ttl_widget_text2"
-      android:textSize="11sp" />
+      android:orientation="vertical">
+
+      <TextView
+        android:id="@+id/ttl_w_servers"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:textColor="@color/ttl_widget_text"
+        android:textSize="11sp" />
+
+      <TextView
+        android:id="@+id/ttl_w_avg"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:textColor="@color/ttl_widget_text2"
+        android:textSize="11sp" />
+    </LinearLayout>
   </LinearLayout>
 </LinearLayout>

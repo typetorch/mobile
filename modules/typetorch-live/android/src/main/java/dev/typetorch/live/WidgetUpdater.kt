@@ -167,6 +167,10 @@ internal object WidgetUpdater {
   ): RemoteViews {
     val v = RemoteViews(ctx.packageName, R.layout.ttl_widget_small)
     fillCommon(ctx, v, b, snap, data, refreshing)
+    // Beside the CCU: servers and the last hour's average session (what the medium size spreads out).
+    val servers = data.servers
+    v.setTextViewText(R.id.ttl_w_servers, if (servers == null) "" else Fmt.grouped(servers) + if (servers == 1) " server" else " servers")
+    v.setTextViewText(R.id.ttl_w_avg, "avg " + Fmt.duration(data.lastHour?.avgSessionSeconds) + " (1 h)")
     v.setOnClickPendingIntent(android.R.id.background, open)
     v.setOnClickPendingIntent(R.id.ttl_w_refresh, refresh)
     return v
