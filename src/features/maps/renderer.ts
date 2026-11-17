@@ -329,6 +329,8 @@ export class MapRenderer {
 	private readonly raycaster = new THREE.Raycaster();
 	private options: SceneOptions = { mode: "3d", offset: [0, 0, 0], band: null, decorative: false, markers: false, textures: true };
 	private disposed = false;
+	/** Not drawing (the screen is hidden, the app is in the background, the view is about to go): see pause(). */
+	private paused = false;
 	private frame = 0;
 	private readonly canvas: ReturnType<typeof adaptContext>;
 	/** The view's size in layout units (touch points), and the drawing buffer's in pixels. */
@@ -768,11 +770,39 @@ export class MapRenderer {
 		this.render();
 	}
 
+	/**
+	 * Stops drawing and waits for the GL thread to finish what it was given. expo-gl tears a GLView down on the UI thread
+	 * (its surface goes: a remount, leaving the screen) by locking the context and joining the GL thread; if a frame is
+	 * still being swapped (which needs the UI thread) or a blocking call is waiting at that moment, the UI, JS and GL
+	 * threads wait on each other for good: a frozen, blank app with no way back. Call it before the view can go away.
+	 */
+	pause(): void {
+		if (this.frame) cancelAnimationFrame(this.frame);
+		this.frame = 0;
+		this.paused = true;
+		this.drain();
+	}
+
+	resume(): void {
+		if (!this.paused || this.disposed) return;
+		this.paused = false;
+		this.render();
+	}
+
+	/** One blocking call: returns once the GL thread has run everything queued before it (the last swap included). */
+	private drain(): void {
+		try {
+			this.gl.getError();
+		} catch {
+			// the context is gone already: nothing is queued on it
+		}
+	}
+
 	render(): void {
-		if (this.disposed || this.frame) return;
+		if (this.disposed || this.paused || this.frame) return;
 		this.frame = requestAnimationFrame(() => {
 			this.frame = 0;
-			if (this.disposed) return;
+			if (this.disposed || this.paused) return;
 			// The surface follows the view's size a moment after its layout: keep the viewport on the real buffer.
 			if (this.gl.drawingBufferWidth !== this.canvas.width || this.gl.drawingBufferHeight !== this.canvas.height) {
 				this.canvas.width = Math.max(1, this.gl.drawingBufferWidth);
@@ -784,7 +814,7 @@ export class MapRenderer {
 				this.gl.endFrameEXP();
 				this.onFrame?.();
 			} catch (error) {
-				this.disposed = true;
+				this.paused = true;
 				this.onError?.(error instanceof Error ? error : new Error(String(error)));
 			}
 		});
@@ -910,8 +940,9 @@ export class MapRenderer {
 	}
 
 	dispose(): void {
+		if (this.disposed) return;
+		this.pause();
 		this.disposed = true;
-		cancelAnimationFrame(this.frame);
 		this.geometry = null;
 		this.layers = [];
 		this.loader.dispose();
@@ -927,5 +958,7 @@ export class MapRenderer {
 		this.outlineMaterial.dispose();
 		this.grid?.dispose();
 		this.renderer.dispose();
+		// the deletions above are queued GL work too: let it run before the view (and its GL thread) can go
+		this.drain();
 	}
 }

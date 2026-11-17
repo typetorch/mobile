@@ -20,8 +20,8 @@
  */
 import { GLView, type ExpoWebGLRenderingContext } from "expo-gl";
 import { useIsFocused } from "expo-router";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { PanResponder, Pressable, StyleSheet, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { AppState, PanResponder, Pressable, StyleSheet, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Txt } from "@/components/ui";
@@ -68,6 +68,9 @@ export interface MapSceneProps {
 	/** Drawn over the map, under the hint and Fit (the Player view's recorded UI, taps, caption). */
 	children?: ReactNode;
 }
+
+/** How long a layout must hold before the GLView is made: longer for a remount than for the first one. */
+const prevSettled = (laid: { width: number; height: number } | null) => (laid ? 400 : 250);
 
 const NO_OFFSET: Vec3 = [0, 0, 0];
 const NO_LAYERS: MapLayer[] = [];
@@ -130,6 +133,9 @@ function MapSceneView({
 	const [laid, setLaid] = useState<{ width: number; height: number } | null>(null);
 	const focused = useIsFocused();
 	const [cursor, setCursor] = useState<{ x: number; z: number } | null>(null);
+	/** The size the GLView was made at (its drawing buffer), and the timer that waits for the layout to settle. */
+	const laidRef = useRef<{ width: number; height: number } | null>(null);
+	const settle = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const latest = useRef({ onPick, mode, onRenderer, onTap });
 	latest.current = { onPick, mode, onRenderer, onTap };
 	const apiRef = useRef(api);
@@ -153,14 +159,29 @@ function MapSceneView({
 		}
 	};
 
-	useEffect(
+	// A layout effect: the renderer stops and the GL thread drains in the same commit that removes the view, before the
+	// UI thread tears the GLView down (renderer.ts pause()).
+	useLayoutEffect(
 		() => () => {
+			if (settle.current) clearTimeout(settle.current);
 			latest.current.onRenderer?.(null);
 			renderer.current?.dispose();
 			renderer.current = null;
 		},
 		[],
 	);
+
+	// Hidden under another screen or in the background: no frames, and nothing in flight if the surface goes meanwhile
+	// (Android detaches a covered screen's views, which destroys the GL surface).
+	const [active, setActive] = useState(AppState.currentState === "active");
+	useEffect(() => {
+		const sub = AppState.addEventListener("change", (state) => setActive(state === "active"));
+		return () => sub.remove();
+	}, []);
+	useLayoutEffect(() => {
+		if (focused && active) renderer.current?.resume();
+		else renderer.current?.pause();
+	}, [focused, active, ready]);
 
 	useEffect(() => {
 		if (!ready || !focused) return;
@@ -263,17 +284,29 @@ function MapSceneView({
 				onLayout={(e) => {
 					const { width, height } = e.nativeEvent.layout;
 					size.current = { width, height };
-					const next = { width: Math.round(width), height: Math.round(height) };
-					if (next.width < 1 || next.height < 1) return;
-					if (laid && laid.width === next.width && laid.height === next.height) {
-						renderer.current?.setViewSize(width, height);
-						return;
-					}
-					// A new size: the drawing buffer can't follow (expo-gl), so the GLView below remounts with a new context.
-					if (renderer.current) latest.current.onRenderer?.(null);
-					renderer.current?.dispose();
-					renderer.current = null;
-					setLaid(next);
+					// The TextureView stretches its fixed drawing buffer to the view, and the cameras take the view's aspect,
+					// so a new size draws right at once (a little softer or sharper) without a new GL context.
+					renderer.current?.setViewSize(width, height);
+					if (Math.round(width) < 1 || Math.round(height) < 1) return;
+					// The GLView is made (or remade at a new buffer size) only once the layout has settled: a screen's first
+					// layouts move while its data loads, and each GL context torn down mid-draw risks the freeze in renderer.ts.
+					if (settle.current) clearTimeout(settle.current);
+					settle.current = setTimeout(() => {
+						settle.current = null;
+						const next = { width: Math.round(size.current.width), height: Math.round(size.current.height) };
+						const prev = laidRef.current;
+						if (prev) {
+							const area = (next.width * next.height) / (prev.width * prev.height);
+							if (area > 0.5 && area < 2) return;
+							// Much bigger or smaller (the Maps screen's Bigger / Smaller, a rotation): a new buffer. Stop and drain
+							// first, then the GLView remounts with a new context.
+							if (renderer.current) latest.current.onRenderer?.(null);
+							renderer.current?.dispose();
+							renderer.current = null;
+						}
+						laidRef.current = next;
+						setLaid(next);
+					}, prevSettled(laidRef.current));
 				}}
 				{...responder.panHandlers}
 			>
