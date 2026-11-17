@@ -39,14 +39,14 @@ Goal: widget changes ship over OTA, written almost like the HTML mockups. Two pa
 
 ## The HTML subset (app)
 
-Built (2026-11-18). The app's widget is `src/features/live/widgets/default.html.ts` (one exported template string),
+Built (2026-11-18). The app's widget is `src/features/live/widgets/default-widget.ts` (one exported template string),
 compiled by `src/features/live/widgets/compile.ts` (no dependencies) into the spec that LiveSync sends. The compiler
 never throws: anything it can't map is left out and reported as a warning (`line N: …`), listed in the dev console and
 in Settings → Widgets in dev builds.
 
 | File | What |
 |---|---|
-| `src/features/live/widgets/default.html.ts` | the widget (all size classes and states) |
+| `src/features/live/widgets/default-widget.ts` | the widget (all size classes and states) |
 | `src/features/live/widgets/compile.ts` | `compileWidgetHtml(html) → { spec, warnings }` |
 | `src/features/live/widgets/index.ts` | compiled once: `WIDGET_SPEC`, `WIDGET_SPEC_JSON` (sent by LiveSync), `WIDGET_WARNINGS` |
 | `src/features/live/widget-spec.ts` | the spec's TypeScript types (incl. `svg`, the chart options, `format`) |
@@ -139,12 +139,12 @@ elements, over 200,000 characters, nesting over 24).
 
 ## Editing the widget
 
-1. Edit `src/features/live/widgets/default.html.ts` (the HTML above, in a template string).
+1. Edit `src/features/live/widgets/default-widget.ts` (the HTML above, in a template string).
 2. Preview on the desktop: `timeout 60 bun scripts/widgets/preview.ts`, open `docs/widgets-preview.html` in a browser
    (`--watch` rebuilds on save; reload the page). It draws every size class (4x2, 4x1, 2x2, 2x1 and two other 2x1
    heights, plus a custom size) and the message states, by day and by night, with three samples (growing, falling,
    sparse: offline, two slots, no icon, no line), and shows the warnings and the compiled spec. The page has its own
-   editor for quick tries (kept in the browser's storage; paste the result back into `default.html.ts`). It's an
+   editor for quick tries (kept in the browser's storage; paste the result back into `default-widget.ts`). It's an
    approximation of the Android drawing (fonts and line heights differ slightly).
 3. Check: `timeout 60 bun scripts/widgets/check.ts`: no warnings, and the structure against
    `scripts/widgets/reference.json` (the spec the HTML was ported from). After an intended design change, accept it with

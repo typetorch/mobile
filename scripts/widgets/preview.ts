@@ -1,7 +1,7 @@
 /**
  * Builds docs/widgets-preview.html: one self-contained page (no CDN, no server) that compiles the widget HTML with the
  * app's compiler and draws it with sample data at the launcher's size classes, by day and by night. The page has an
- * editor: changes there redraw at once (kept in the browser's storage); copy them back into default.html.ts.
+ * editor: changes there redraw at once (kept in the browser's storage); copy them back into default-widget.ts.
  *
  * Run: `timeout 60 bun scripts/widgets/preview.ts`, then open docs/widgets-preview.html.
  *   --watch   rebuild when a bundled file changes (reload the page after); stop with Ctrl+C
@@ -146,10 +146,10 @@ function page(js: string): string {
 			<span style="flex:1"></span>
 			<button id="copy" type="button">Copy HTML</button>
 			<button id="copyJson" type="button">Copy spec JSON</button>
-			<button id="reset" type="button">Reset to default.html.ts</button>
+			<button id="reset" type="button">Reset to default-widget.ts</button>
 		</div>
 		<textarea id="source" spellcheck="false" aria-label="Widget HTML"></textarea>
-		<p class="hint">Edits redraw at once. To ship one, paste it into src/features/live/widgets/default.html.ts (docs/WIDGET_HTML.md).</p>
+		<p class="hint">Edits redraw at once. To ship one, paste it into src/features/live/widgets/default-widget.ts (docs/WIDGET_HTML.md).</p>
 		<div id="warnings" class="warn"></div>
 		<details><summary>Compiled spec (what the app sends)</summary><pre id="json"></pre></details>
 	</aside>

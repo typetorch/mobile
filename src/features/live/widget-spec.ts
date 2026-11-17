@@ -1,6 +1,6 @@
 /**
  * The home-screen widget spec's types (docs/WIDGET_SPEC.md): the JSON the native module draws the widget from as one
- * bitmap. The app's widget itself is authored in HTML (`widgets/default.html.ts`, docs/WIDGET_HTML.md) and compiled to
+ * bitmap. The app's widget itself is authored in HTML (`widgets/default-widget.ts`, docs/WIDGET_HTML.md) and compiled to
  * this spec by `widgets/compile.ts`; LiveSync sends the result (`setWidgetSpec`), so a look change ships as an OTA
  * update (`eas update`) instead of a new APK. The native side keeps a built-in copy (WidgetSpec.kt, DEFAULT_JSON) for the
  * time before the app first sends one and for any spec it can't parse or draw: keep the two the same when you change the

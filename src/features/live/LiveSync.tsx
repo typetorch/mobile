@@ -2,7 +2,7 @@
  * Keeps what runs outside the app in step with the accounts (docs/PUSH_WATCH_WIDGETS.md):
  *  - the native module's backend list (the live watch and the widgets poll with these tokens; a token refresh revokes
  *    the old one at once, so every change of the accounts is handed over), and the widgets redrawn on start and return;
- *  - the widget's look (widgets/default.html.ts compiled to the widget spec, docs/WIDGET_HTML.md), handed over before
+ *  - the widget's look (widgets/default-widget.ts compiled to the widget spec, docs/WIDGET_HTML.md), handed over before
  *    every redraw from here;
  *  - milestone push registrations made again where the mobile token changed;
  *  - a tapped push opens its backend's Fleet page (found by the backend's URL; a cold start reads the last response).

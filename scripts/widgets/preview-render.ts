@@ -6,7 +6,7 @@
  * differ slightly), close enough to tune a design before trying it on a phone.
  */
 import { compileWidgetHtml } from "../../src/features/live/widgets/compile";
-import { DEFAULT_WIDGET_HTML } from "../../src/features/live/widgets/default.html";
+import { DEFAULT_WIDGET_HTML } from "../../src/features/live/widgets/default-widget";
 import type { ChartElement, Fill, SizeLayout, SvgElement, WidgetElement, WidgetSpec, WidgetState } from "../../src/features/live/widget-spec";
 
 // ---------------------------------------------------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 /**
- * Compiles the app's widget HTML (src/features/live/widgets/default.html.ts) and checks it:
+ * Compiles the app's widget HTML (src/features/live/widgets/default-widget.ts) and checks it:
  *  - no compiler warnings;
  *  - the same structure as the reference spec (scripts/widgets/reference.json: the hand-written spec the HTML was ported
  *    from): the same states and size classes, the same elements, bindings and sizes, after filling in the renderer's
@@ -12,7 +12,7 @@
  *   --update  after an intended design change: write the compiled spec as the new reference
  */
 import { compileWidgetHtml } from "../../src/features/live/widgets/compile";
-import { DEFAULT_WIDGET_HTML } from "../../src/features/live/widgets/default.html";
+import { DEFAULT_WIDGET_HTML } from "../../src/features/live/widgets/default-widget";
 
 // Bun's API (run with bun; the app's tsconfig has no node / bun types, so just what is used here).
 declare const Bun: { file(path: string): { text(): Promise<string> }; write(path: string, data: string): Promise<number>; argv: string[] };

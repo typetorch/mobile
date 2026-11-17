@@ -57,10 +57,10 @@ details pre { max-height: 420px; overflow: auto; font-size: 11px; margin: 6px 0 
 			<span style="flex:1"></span>
 			<button id="copy" type="button">Copy HTML</button>
 			<button id="copyJson" type="button">Copy spec JSON</button>
-			<button id="reset" type="button">Reset to default.html.ts</button>
+			<button id="reset" type="button">Reset to default-widget.ts</button>
 		</div>
 		<textarea id="source" spellcheck="false" aria-label="Widget HTML"></textarea>
-		<p class="hint">Edits redraw at once. To ship one, paste it into src/features/live/widgets/default.html.ts (docs/WIDGET_HTML.md).</p>
+		<p class="hint">Edits redraw at once. To ship one, paste it into src/features/live/widgets/default-widget.ts (docs/WIDGET_HTML.md).</p>
 		<div id="warnings" class="warn"></div>
 		<details><summary>Compiled spec (what the app sends)</summary><pre id="json"></pre></details>
 	</aside>
@@ -80,7 +80,7 @@ exports.mount = mount;
  * differ slightly), close enough to tune a design before trying it on a phone.
  */
 const compile_1 = require("src/features/live/widgets/compile.ts");
-const default_html_1 = require("src/features/live/widgets/default.html.ts");
+const default_html_1 = require("src/features/live/widgets/default-widget.ts");
 const u = (t, c) => ({ t, c });
 const p = (t) => ({ t });
 function wave(from, to, wobble, seed) {
@@ -2023,7 +2023,7 @@ function compileWidgetHtml(html) {
 }
 
 },
-"src/features/live/widgets/default.html.ts": function (module, exports, require) {
+"src/features/live/widgets/default-widget.ts": function (module, exports, require) {
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DEFAULT_WIDGET_HTML = void 0;
@@ -2313,7 +2313,7 @@ exports.DEFAULT_WIDGET_HTML = `
 "use strict";
 /**
  * The home-screen widget spec's types (docs/WIDGET_SPEC.md): the JSON the native module draws the widget from as one
- * bitmap. The app's widget itself is authored in HTML (`widgets/default.html.ts`, docs/WIDGET_HTML.md) and compiled to
+ * bitmap. The app's widget itself is authored in HTML (`widgets/default-widget.ts`, docs/WIDGET_HTML.md) and compiled to
  * this spec by `widgets/compile.ts`; LiveSync sends the result (`setWidgetSpec`), so a look change ships as an OTA
  * update (`eas update`) instead of a new APK. The native side keeps a built-in copy (WidgetSpec.kt, DEFAULT_JSON) for the
  * time before the app first sends one and for any spec it can't parse or draw: keep the two the same when you change the
