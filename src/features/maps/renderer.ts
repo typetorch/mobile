@@ -335,6 +335,8 @@ export class MapRenderer {
 	private viewSize = { width: 1, height: 1 };
 	/** Called after each drawn frame (the scene's overlay: the cursor read-out). */
 	onFrame: (() => void) | null = null;
+	/** A frame that threw (outside React, so nothing else would catch it): drawing stops and the scene shows it. */
+	onError: ((error: Error) => void) | null = null;
 
 	constructor(
 		private readonly gl: ExpoWebGLRenderingContext,
@@ -777,9 +779,14 @@ export class MapRenderer {
 				this.canvas.height = Math.max(1, this.gl.drawingBufferHeight);
 				this.renderer.setSize(this.canvas.width, this.canvas.height, false);
 			}
-			this.renderer.render(this.scene, this.camera);
-			this.gl.endFrameEXP();
-			this.onFrame?.();
+			try {
+				this.renderer.render(this.scene, this.camera);
+				this.gl.endFrameEXP();
+				this.onFrame?.();
+			} catch (error) {
+				this.disposed = true;
+				this.onError?.(error instanceof Error ? error : new Error(String(error)));
+			}
 		});
 	}
 

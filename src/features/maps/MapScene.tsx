@@ -23,6 +23,7 @@ import { useIsFocused } from "expo-router";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { PanResponder, Pressable, StyleSheet, View, type GestureResponderEvent, type StyleProp, type ViewStyle } from "react-native";
 
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Txt } from "@/components/ui";
 import { useBackend } from "@/store/accounts";
 import { radius, useTheme } from "@/theme";
@@ -88,7 +89,16 @@ function centre(points: TouchPoint[]): { x: number; y: number; distance: number 
 	return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, distance: Math.hypot(a.x - b.x, a.y - b.y) };
 }
 
-export function MapScene({
+/** The scene in its own error boundary: a map that fails shows why, and the page around it keeps working. */
+export function MapScene(props: MapSceneProps) {
+	return (
+		<ErrorBoundary title="The map crashed" style={props.style as object}>
+			<MapSceneView {...props} />
+		</ErrorBoundary>
+	);
+}
+
+function MapSceneView({
 	backendId,
 	geometry,
 	bounds,
@@ -134,11 +144,12 @@ export function MapScene({
 				return fetchMapImage(current, id, signal);
 			});
 			r.setViewSize(size.current.width, size.current.height);
+			r.onError = (error) => setFailed(`The map could not be drawn (${error.message}).`);
 			renderer.current = r;
 			setReady((n) => n + 1);
 			latest.current.onRenderer?.(r);
 		} catch (error) {
-			setFailed(`The map needs OpenGL ES 3, which didn't start here (${(error as Error).message}).`);
+			setFailed(`The map couldn't start (${(error as Error).message}).`);
 		}
 	};
 
@@ -161,7 +172,12 @@ export function MapScene({
 	}, [ready, focused, geometry, bounds, layers, mode, offset, band, decorative, markers, textures]);
 
 	useEffect(() => {
-		if (ready && focused && focus) renderer.current?.focus(focus.x, focus.y, focus.z);
+		if (!ready || !focused || !focus) return;
+		try {
+			renderer.current?.focus(focus.x, focus.y, focus.z);
+		} catch (error) {
+			setFailed(`The map could not follow that point (${(error as Error).message}).`);
+		}
 	}, [ready, focused, focus?.x, focus?.y, focus?.z]);
 
 	const responder = useMemo(() => {

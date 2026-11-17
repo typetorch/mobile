@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Pressable, View } from "react-native";
 
 import type { Api } from "@/api/backend";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Button, EmptyState, Icon, Screen } from "@/components/ui";
 import { useAccounts, useBackend, type BackendAccount } from "@/store/accounts";
 import { useTheme } from "@/theme";
@@ -204,7 +205,10 @@ export function TTScreen({
 					}}
 				/>
 				{notice ? <SignedOutNotice account={account} /> : null}
-				{children({ account, api, backendId })}
+				{/* A crash in the page stays in the page: the header (menu, picker, home) still works. */}
+				<ErrorBoundary title="This page crashed" style={scroll ? undefined : { flex: 1 }}>
+					{children({ account, api, backendId })}
+				</ErrorBoundary>
 			</Screen>
 		</ViewLinkProvider>
 	);

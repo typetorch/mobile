@@ -1,9 +1,10 @@
 import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavThemeProvider } from "expo-router";
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavThemeProvider, type ErrorBoundaryProps } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import * as Updates from "expo-updates";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { AppState, Platform } from "react-native";
+import { AppState, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -75,6 +76,33 @@ function Themed() {
 		<ThemeProvider appearance={prefs.appearance}>
 			<Navigation />
 		</ThemeProvider>
+	);
+}
+
+/**
+ * The last line of defence: an error that escaped every page's own boundary. Without it a release build shows a bare
+ * background with no way out. The app's providers are gone here, so plain colours and components.
+ */
+export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+	const button = (label: string, onPress: () => void) => (
+		<Pressable onPress={onPress} style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8, backgroundColor: "#fb7a32" }}>
+			<Text style={{ color: "#fff", fontWeight: "600" }}>{label}</Text>
+		</Pressable>
+	);
+	return (
+		<ScrollView style={{ flex: 1, backgroundColor: "#0a0a0a" }} contentContainerStyle={{ padding: 24, paddingTop: 72, gap: 12 }}>
+			<Text style={{ color: "#fafafa", fontSize: 20, fontWeight: "700" }}>TypeTorch crashed</Text>
+			<Text selectable style={{ color: "#d4d4d4" }}>
+				{error.message}
+			</Text>
+			<Text selectable style={{ color: "#8a8a8a", fontFamily: "monospace", fontSize: 10 }}>
+				{(error.stack ?? "").split("\n").slice(0, 12).join("\n")}
+			</Text>
+			<View style={{ flexDirection: "row", gap: 10 }}>
+				{button("Try again", () => void retry())}
+				{button("Restart app", () => void Updates.reloadAsync().catch(() => retry()))}
+			</View>
+		</ScrollView>
 	);
 }
 
