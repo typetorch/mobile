@@ -425,7 +425,33 @@ export const WIDGET_SPEC: WidgetSpec = {
 					],
 				},
 			},
-			// 2x1: three stats; under 72 dp of height only two fit.
+			{
+				// 4x1 (wide and short): the CCU left, the 6-hour line in the middle, the stats right.
+				name: "wide",
+				minWidth: 240,
+				minHeight: 60,
+				refresh: "topEnd",
+				root: {
+					type: "column",
+					padding: { start: 12, top: 4, end: 6, bottom: 8 },
+					children: [
+						header({ icon: 18, nameColor: "text2", status: true }),
+						{
+							type: "row",
+							weight: 1,
+							align: "center",
+							padding: { end: 6 },
+							children: [
+								{ type: "row", align: "baseline", children: ccu(24, 12) },
+								{ type: "chart", bind: "series", minutes: 360, color: "brand", fill: true, weight: 1, height: 34, margin: { start: 10, end: 10 } },
+								{ type: "column", weight: 0.9, align: "end", gap: 1, children: [shortLine(1), shortLine(2), shortLine(3), shortLine(4)] },
+							],
+						},
+					],
+				},
+			},
+			// 2x1: four stats when it's tall enough, three from 72 dp, two below that.
+			small("small4", 100, 90, [1, 2, 3, 4]),
 			small("small", 100, 72, [1, 2, 3]),
 			small("tiny", 0, 0, [1, 2]),
 		],
