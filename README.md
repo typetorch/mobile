@@ -1,6 +1,7 @@
 # TypeTorch mobile
 
-One app for all your Roblox experiences. Expo (React Native), Android first, runs in Expo Go.
+One app for all your Roblox experiences. Expo (React Native), Android first. Most of it runs in Expo Go; the widgets, the live watch and push need the APK
+(the local native module `modules/typetorch-live` and Firebase).
 
 Part of TypeTorch. Read `../TypeTorch.md` (hub) and `../plans/07-web-mobile.md` (this repo's plan).
 
@@ -57,11 +58,11 @@ npx tsc --noEmit        # type check
 
 APK: `eas build -p android --profile preview` (internal distribution, `buildType: apk`); store build: `--profile production`.
 
-Only Expo Go modules are used (expo-router, @tanstack/react-query, expo-secure-store, expo-web-browser, expo-crypto,
+The screens use only Expo Go modules (expo-router, @tanstack/react-query, expo-secure-store, expo-web-browser, expo-crypto,
 expo-linking, expo-clipboard, expo-image, expo-device, react-native-svg, @expo/vector-icons, react-native-gesture-handler,
 react-native-reanimated, expo-file-system, expo-sharing, @react-native-async-storage/async-storage, and the pure-JS
-@dagrejs/dagre). No config plugin needs a
-dev client (`expo-secure-store`'s plugin only sets iOS Face ID text).
+@dagrejs/dagre). The APK adds the local module `modules/typetorch-live` (widgets, live watch; docs/PUSH_WATCH_WIDGETS.md)
+with androidx.javascriptengine (docs/WIDGET_PROGRAM.md) and expo-notifications; in Expo Go those parts are hidden.
 
 **Browser sign-in in Expo Go**: the redirect is `exp://…/--/auth`, which a backend accepts only with
 `TYPETORCH_MOBILE_DEV_REDIRECTS=on`. Without it, use "Use the admin token" (shown first in Expo Go). The built APK uses

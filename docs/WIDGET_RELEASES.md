@@ -1,20 +1,24 @@
 # Release garden widgets (agreed 2026-11-18)
 
 A GitHub-style grid of days: green = prod-channel releases, blue = dev-channel releases, darker = fewer, a day with both
-split diagonally (green top-left, blue bottom-right), today outlined. 4×2: the last 60 days (5 rows × 12); 2×2: the last
-30 (5 × 6); wider/smaller sizes as fits. Counts (prod, dev) and "last prod 2 d ago". Mockups:
+split diagonally (green top-left, blue bottom-right), today outlined. GitHub order (7 rows per week, a week top to bottom, today bottom right); the
+number of weeks per size is in docs/WIDGET_HTML.md "The release garden" (e.g. 4×2: 14 weeks, 2×2: 11). Counts (prod, dev) and "last prod 2 d ago". Mockups:
 `/tmp/claude-1000/-home-phasenull-projects-TypeTorch/e405e7e5-0a6b-4ef4-af03-8946c7b4ba9d/scratchpad/widget/garden.html`
 (per game) and `garden-all.html` (all games, tappable game filter).
 
-## 1. Backend: metric `releases` on `GET /v1/mobile/live?metrics=releases`
+## 1. Backend: `releases` on `GET /v1/mobile/live`
+
+Sent as the top-level `releases` of every answer (what the widgets read, docs/WIDGET_HTML.md) and as the metric
+`releases` when asked (`metrics=releases`), same shape:
 
 ```jsonc
 "releases": {
-  "value": 54, "prev": null, "unit": "count", "label": "Releases",   // value = prod releases in the 60 days
-  "prod": 54, "dev": 155, "prod30": 27, "dev30": 83,                   // counts over 60 and over the last 30 days
-  "lastProd": "2 d ago",            // "today", "1 d ago", "12 d ago"; null when none in 60 days
+  "value": 54, "prev": null, "unit": "count", "label": "Releases",   // value = prod releases in the 182 days
+  "prod": 54, "dev": 155, "prod30": 27, "dev30": 83,                   // counts over the 182 days and the last 30
+  "lastProd": "2 d ago",            // "today", "1 d ago", "12 d ago"; null when none in the 182 days
   "lastProdLabel": "#142 · v0.9.3",  // the last prod release's seq and version as the dashboard shows them; null
-  "days": [                          // exactly 60, oldest first, UTC days, the last one is today
+  "days": [                          // 182 (26 weeks; older backends 60), oldest first, UTC days, the last one is today;
+                                     // days before the game's deploy history began: bg / tri "rnone"
     { "date": "2026-09-20", "p": 0, "d": 2, "bg": "rb2", "tri": "rnone" }
   ]
 }
@@ -34,7 +38,7 @@ minutes like the other metrics.
   when `!slot.1` and the stats variant when `slot.1`. Cells are drawn with the `svg` element: per cell a `rect` with
   `fill="var(--{metrics.releases.days.N.bg})"` and a top-left/bottom-right split `polygon` with
   `fill="var(--{metrics.releases.days.N.tri})"`; tokens `r0`, `rg1`–`rg3`, `rb1`–`rb3`, `rnone` (transparent) in the
-  widget tokens (day and night). Today (index 59) outlined.
+  widget tokens (day and night). Today (the last index, 181) outlined.
 - (`{a:b}` in a template is "binding a, format b", so binding names must not contain `:`; that's why the metric id is
   `releases`, not `releases:60d`.)
 
