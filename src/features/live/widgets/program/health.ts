@@ -77,3 +77,62 @@ export function mergeHealth(inputs: [string, Json | undefined][], now: number): 
 		todayRing: high || criticalNow ? "bad" : open > 0 ? "warn" : "rnone",
 	};
 }
+
+/**
+ * The error trend of one game, last hour against the hour before: "▲4×" when errors1h ≥ 1 and ≥ 2 × errorsPrev1h (just
+ * "▲" when the hour before had none), "▲38%" for a smaller rise over 10%, "▼61%" for a fall over 10%, "" within ±10%.
+ * [dir]: 1 up (red), -1 down (green), 0 none.
+ */
+export function errorTrend(errors: number, prev: number): { text: string; dir: number } {
+	if (errors >= 1 && errors >= 2 * prev) {
+		if (prev <= 0) return { text: "▲", dir: 1 };
+		const f = errors / prev;
+		const shown = f >= 10 ? String(Math.round(f)) : String(Math.round(f * 10) / 10);
+		return { text: `▲${shown}×`, dir: 1 };
+	}
+	if (prev <= 0) return { text: "", dir: 0 };
+	const change = (errors - prev) / prev;
+	if (change > 0.1) return { text: `▲${Math.round(change * 100)}%`, dir: 1 };
+	if (change < -0.1) return { text: `▼${Math.round(-change * 100)}%`, dir: -1 };
+	return { text: "", dir: 0 };
+}
+
+/**
+ * A per-game widget's health (the Stats widgets' health line): the answer's own `health` with what the widget HTML can't
+ * compute itself (no conditionals in templates; colours only as token names in an svg, or as pairs of elements with
+ * opposite flags). Null when the answer has no health (an older backend: the widget hides the health parts).
+ *  - `on`: "1" (the widget shows the health parts only with it, so the native path without the program hides them);
+ *  - `errorsTrend` ("▲4×", "▲38%", "▼61%", ""), `errorsArrow` (its arrow only), `errorsUp` / `errorsDown` ("1" / "");
+ *  - tokens: `errorsTone` (`bad` when up, else `text`), `trendTone` (`bad` up, `up` down), `serversTone` (`text2` when
+ *    every server is ok, else `warn`), `alertsTone` (`warn` when an alert is open, else `text2`);
+ *  - `serversAllOk`, `hasAlertsOpen` ("1" / ""), like the all-games merge. No servers counts as all ok.
+ * The alert list isn't passed on (it stays in the release widget).
+ */
+export function gameHealth(h: Json | undefined): JsonObject | null {
+	if (!isObj(h)) return null;
+	const errors = whole(h.errors1h);
+	const prev = whole(h.errorsPrev1h);
+	const servers = whole(h.servers);
+	const serversOk = whole(h.serversOk);
+	const open = whole(h.alertsOpen);
+	const trend = errorTrend(errors, prev);
+	const allOk = serversOk >= servers;
+	return {
+		on: "1",
+		errors1h: errors,
+		errorsPrev1h: prev,
+		errorsTrend: trend.text,
+		errorsArrow: trend.text.slice(0, 1),
+		errorsUp: trend.dir > 0 ? "1" : "",
+		errorsDown: trend.dir < 0 ? "1" : "",
+		errorsTone: trend.dir > 0 ? "bad" : "text",
+		trendTone: trend.dir > 0 ? "bad" : "up",
+		servers,
+		serversOk,
+		serversAllOk: allOk ? "1" : "",
+		serversTone: allOk ? "text2" : "warn",
+		alertsOpen: open,
+		hasAlertsOpen: open > 0 ? "1" : "",
+		alertsTone: open > 0 ? "warn" : "text2",
+	};
+}

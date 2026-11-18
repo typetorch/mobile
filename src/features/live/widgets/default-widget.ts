@@ -134,6 +134,48 @@ function counts30(size: number): string {
 			</div>`;
 }
 
+/**
+ * The Stats widgets' health (docs/WIDGET_HTML.md "Health on the Stats widgets"): the program's per-game `health`
+ * (program/health.ts gameHealth; `health.on` only from the program, so the native path without it hides these). An
+ * `<svg>` text, one element however many colours: each part's colour is a token name the program picked
+ * (`errorsTone`, `trendTone`, `serversTone`, `alertsTone`), which only an svg fill can take from a binding.
+ */
+const H = "health";
+const ERR = `<tspan font-weight='700' fill='var(--{${H}.errorsTone|text})'>{${H}.errors1h:count}</tspan>`;
+const trend = (size: number, arrowOnly = false) =>
+	`<tspan font-size='${size}' font-weight='700' fill='var(--{${H}.trendTone|text2})'>{${H}.${arrowOnly ? "errorsArrow" : "errorsTrend"}}</tspan>`;
+const SRV = `<tspan fill='var(--{${H}.serversTone|text2})'><tspan font-weight='700'>{${H}.serversOk}/{${H}.servers}</tspan> srv</tspan>`;
+const ALERTS = `<tspan font-weight='700' fill='var(--{${H}.alertsTone|text2})'>{${H}.alertsOpen}</tspan><tspan fill='var(--text2)'> alerts</tspan>`;
+const ERR_LABEL = (label: string) => `<tspan fill='var(--text2)'> ${label}</tspan>`;
+
+/** 4x2: a divider, then "143▲4× err 1h   5/6 srv   2 alerts" in one line. */
+const HEALTH_LINE = `<svg viewBox="0 0 {w} {h}" style="height: 19px; margin-top: 4px" data-show-if="${H}.on"><line x1='0' y1='0.5' x2='{w}' y2='0.5' stroke='var(--divider)' stroke-width='1'/><text x='0' y='15' font-size='10.5' fill='var(--text)'>${ERR}${trend(9)}${ERR_LABEL("err 1h")}<tspan dx='9'>${SRV}</tspan><tspan dx='9'>${ALERTS}</tspan></text></svg>`;
+
+/** 4x1: three lines under the CCU (errors, servers, alerts), in the height left under it (a short widget shows the first). */
+const HEALTH_LINES = `<svg viewBox="0 0 {w} {h}" style="width: 76px; flex: 1; margin-top: 2px" data-show-if="${H}.on"><text font-size='10' fill='var(--text)'><tspan x='0' y='10'>${ERR}${trend(8.5)}${ERR_LABEL("err")}</tspan><tspan x='0' y='22'>${SRV}</tspan><tspan x='0' y='34'>${ALERTS}</tspan></text></svg>`;
+
+/** 2x1: "143▲ err · 5/6 srv" (the arrow only), a full-width line right-aligned over the stats. */
+const HEALTH_SHORT = `<svg viewBox="0 0 {w} {h}" style="height: 13px; margin-right: 6px" data-show-if="${H}.on"><text x='{w}' y='10' font-size='9.5' text-anchor='end' fill='var(--text)'>${ERR}${trend(8, true)}${ERR_LABEL("err ·")} ${SRV}</text></svg>`;
+
+/** 2x2: three pills (errors with the trend, servers, open alerts); native texts, each colour a pair of elements. */
+const HEALTH_PILLS = `<div style="display: flex; align-items: center; gap: 4px; margin-top: 3px" data-show-if="${H}.on">
+				<div style="display: flex; align-items: baseline; padding: 1px 7px; background: var(--chip); border-radius: 9px">
+					<span style="font-size: 10px; font-weight: 700; color: var(--bad)" data-show-if="${H}.errorsUp">{${H}.errors1h:count}</span>
+					<span style="font-size: 10px; font-weight: 700; color: var(--text)" data-show-if="!${H}.errorsUp">{${H}.errors1h:count}</span>
+					<span style="margin-left: 2px; font-size: 8px; font-weight: 700; color: var(--bad)" data-show-if="${H}.errorsUp">{${H}.errorsTrend}</span>
+					<span style="margin-left: 2px; font-size: 8px; font-weight: 700; color: var(--up)" data-show-if="${H}.errorsDown">{${H}.errorsTrend}</span>
+				</div>
+				<div style="padding: 1px 7px; background: var(--chip); border-radius: 9px">
+					<span style="font-size: 10px; color: var(--text2)" data-show-if="${H}.serversAllOk">{${H}.serversOk}/{${H}.servers}</span>
+					<span style="font-size: 10px; color: var(--warn)" data-show-if="!${H}.serversAllOk">{${H}.serversOk}/{${H}.servers}</span>
+				</div>
+				<div style="display: flex; align-items: baseline; padding: 1px 7px; background: var(--chip); border-radius: 9px">
+					<span style="font-size: 10px; font-weight: 700; color: var(--warn)" data-show-if="${H}.hasAlertsOpen">{${H}.alertsOpen}</span>
+					<span style="font-size: 10px; font-weight: 700; color: var(--text2)" data-show-if="!${H}.hasAlertsOpen">{${H}.alertsOpen}</span>
+					<span style="margin-left: 2px; font-size: 10px; color: var(--text2)">al</span>
+				</div>
+			</div>`;
+
 export const DEFAULT_WIDGET_HTML = `
 <!-- Colours: the tokens (var(--name) anywhere below), per system mode. #rrggbbaa: the last pair is the alpha.
      r0, rg1–rg3, rb1–rb3, rnone: the release garden's days (none, prod 1 / 2–3 / 4+, dev 1 / 2–3 / 4+, transparent);
@@ -166,7 +208,8 @@ export const DEFAULT_WIDGET_HTML = `
 			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{status}</span>
 			<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)"></tt-icon>
 		</div>
-		<div style="display: flex; flex: 1; align-items: stretch; margin-top: 4px; padding-right: 8px" data-show-if="slot.1">
+		<div style="flex: 1; margin-top: 4px; padding-right: 8px" data-show-if="slot.1">
+		<div style="display: flex; flex: 1; align-items: stretch">
 			<div style="flex: 1">
 				<div style="display: flex; align-items: baseline">
 					<span style="font-size: 34px; font-weight: 600; color: var(--text)">{ccu}</span>
@@ -182,28 +225,30 @@ export const DEFAULT_WIDGET_HTML = `
 				</div>
 				<span style="font-size: 10px; color: var(--text2)">last 6 h · {serversLabel|no servers} · peak {peakToday}</span>
 			</div>
-			<div style="flex: 1; justify-content: center; gap: 6px; margin-left: 12px">
+			<div style="flex: 1.15; justify-content: center; gap: 6px; margin-left: 12px">
 				<div style="display: flex; align-items: baseline" data-show-if="slot.1">
 					<span style="flex: 1; font-size: 10.5px; color: var(--text2)">{slot.1.label}</span>
-					<span style="margin-left: 8px; font-size: 12px; font-weight: 600; color: var(--text)">{slot.1.value}</span>
-					<span style="margin-left: 4px; font-size: 9.5px; font-weight: 700" data-show-if="slot.1.delta">{slot.1.delta}</span>
+					<span style="width: 34px; margin-left: 2px; font-size: 9.5px; font-weight: 700; text-align: right" data-show-if="slot.1.delta">{slot.1.delta}</span>
+					<span style="margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--text)">{slot.1.value}</span>
 				</div>
 				<div style="display: flex; align-items: baseline" data-show-if="slot.2">
 					<span style="flex: 1; font-size: 10.5px; color: var(--text2)">{slot.2.label}</span>
-					<span style="margin-left: 8px; font-size: 12px; font-weight: 600; color: var(--text)">{slot.2.value}</span>
-					<span style="margin-left: 4px; font-size: 9.5px; font-weight: 700" data-show-if="slot.2.delta">{slot.2.delta}</span>
+					<span style="width: 34px; margin-left: 2px; font-size: 9.5px; font-weight: 700; text-align: right" data-show-if="slot.2.delta">{slot.2.delta}</span>
+					<span style="margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--text)">{slot.2.value}</span>
 				</div>
 				<div style="display: flex; align-items: baseline" data-show-if="slot.3">
 					<span style="flex: 1; font-size: 10.5px; color: var(--text2)">{slot.3.label}</span>
-					<span style="margin-left: 8px; font-size: 12px; font-weight: 600; color: var(--text)">{slot.3.value}</span>
-					<span style="margin-left: 4px; font-size: 9.5px; font-weight: 700" data-show-if="slot.3.delta">{slot.3.delta}</span>
+					<span style="width: 34px; margin-left: 2px; font-size: 9.5px; font-weight: 700; text-align: right" data-show-if="slot.3.delta">{slot.3.delta}</span>
+					<span style="margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--text)">{slot.3.value}</span>
 				</div>
 				<div style="display: flex; align-items: baseline" data-show-if="slot.4">
 					<span style="flex: 1; font-size: 10.5px; color: var(--text2)">{slot.4.label}</span>
-					<span style="margin-left: 8px; font-size: 12px; font-weight: 600; color: var(--text)">{slot.4.value}</span>
-					<span style="margin-left: 4px; font-size: 9.5px; font-weight: 700" data-show-if="slot.4.delta">{slot.4.delta}</span>
+					<span style="width: 34px; margin-left: 2px; font-size: 9.5px; font-weight: 700; text-align: right" data-show-if="slot.4.delta">{slot.4.delta}</span>
+					<span style="margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--text)">{slot.4.value}</span>
 				</div>
 			</div>
+		</div>
+		${HEALTH_LINE}
 		</div>
 		<div style="flex: 1; margin-top: 6px; padding-right: 8px" data-show-if="!slot.1">
 			<div style="flex: 1" data-show-if="!allGames">
@@ -294,8 +339,11 @@ export const DEFAULT_WIDGET_HTML = `
 			<div style="display: flex; align-items: baseline; margin-top: 4px">
 				<span style="font-size: 22px; font-weight: 600; color: var(--text)">{ccu}</span>
 				<span style="margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
-				<span style="flex: 1; margin-left: 4px; font-size: 10px; color: var(--text2)" data-show-if="servers">· {serversLabel}</span>
+				<div style="flex: 1" data-show-if="!${H}.on">
+					<span style="margin-left: 4px; font-size: 10px; color: var(--text2)" data-show-if="servers">· {serversLabel}</span>
+				</div>
 			</div>
+			${HEALTH_PILLS}
 			<div style="flex: 1"></div>
 			<div style="display: flex; align-items: flex-start; gap: 6px; padding-right: 6px; margin-bottom: 7px">
 				<div style="flex: 1" data-show-if="slot.1">
@@ -358,8 +406,9 @@ export const DEFAULT_WIDGET_HTML = `
 					<span style="font-size: 24px; font-weight: 600; color: var(--text)">{ccu}</span>
 					<span style="margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
 				</div>
+				${HEALTH_LINES}
 			</div>
-			<div style="flex: 1.7; margin: 2px 10px 0 10px">
+			<div style="flex: 1.15; margin: 2px 10px 0 10px">
 				<tt-chart minutes="360" bucket="5" labels zero smooth dot fill style="flex: 1; margin-bottom: 1px; color: var(--brand)"></tt-chart>
 				<div style="display: flex; align-items: center; margin-left: 18px; margin-bottom: 2px">
 					<span style="font-size: 9px; color: var(--text2)">6h ago</span>
@@ -369,22 +418,26 @@ export const DEFAULT_WIDGET_HTML = `
 					<span style="font-size: 9px; color: var(--text2)">{updated|now}</span>
 				</div>
 			</div>
-			<div style="justify-content: center; align-items: flex-end; gap: 1px">
+			<div style="flex: 1; justify-content: center; gap: 1px">
 				<div style="display: flex; align-items: baseline" data-show-if="slot.1">
-					<span style="font-size: 10px; color: var(--text2)">{slot.1.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.1.value}</span>
+					<span style="flex: 1; font-size: 10px; color: var(--text2)">{slot.1.label}</span>
+					<span style="width: 30px; margin-left: 2px; font-size: 9px; font-weight: 700; text-align: right" data-show-if="slot.1.delta">{slot.1.delta}</span>
+					<span style="margin-left: 5px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.1.value}</span>
 				</div>
 				<div style="display: flex; align-items: baseline" data-show-if="slot.2">
-					<span style="font-size: 10px; color: var(--text2)">{slot.2.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.2.value}</span>
+					<span style="flex: 1; font-size: 10px; color: var(--text2)">{slot.2.label}</span>
+					<span style="width: 30px; margin-left: 2px; font-size: 9px; font-weight: 700; text-align: right" data-show-if="slot.2.delta">{slot.2.delta}</span>
+					<span style="margin-left: 5px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.2.value}</span>
 				</div>
 				<div style="display: flex; align-items: baseline" data-show-if="slot.3">
-					<span style="font-size: 10px; color: var(--text2)">{slot.3.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.3.value}</span>
+					<span style="flex: 1; font-size: 10px; color: var(--text2)">{slot.3.label}</span>
+					<span style="width: 30px; margin-left: 2px; font-size: 9px; font-weight: 700; text-align: right" data-show-if="slot.3.delta">{slot.3.delta}</span>
+					<span style="margin-left: 5px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.3.value}</span>
 				</div>
 				<div style="display: flex; align-items: baseline" data-show-if="slot.4">
-					<span style="font-size: 10px; color: var(--text2)">{slot.4.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.4.value}</span>
+					<span style="flex: 1; font-size: 10px; color: var(--text2)">{slot.4.label}</span>
+					<span style="width: 30px; margin-left: 2px; font-size: 9px; font-weight: 700; text-align: right" data-show-if="slot.4.delta">{slot.4.delta}</span>
+					<span style="margin-left: 5px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.4.value}</span>
 				</div>
 			</div>
 		</div>
@@ -461,6 +514,7 @@ export const DEFAULT_WIDGET_HTML = `
 		</div>
 		<div style="flex: 1" data-show-if="slot.1">
 			<div style="flex: 1"></div>
+			${HEALTH_SHORT}
 			<div style="display: flex; align-items: center; padding-right: 6px">
 				<span style="font-size: 22px; font-weight: 600; color: var(--text)">{ccu}</span>
 				<span style="margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
@@ -477,9 +531,11 @@ export const DEFAULT_WIDGET_HTML = `
 						<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.3.label}</span>
 						<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.3.value:short}</span>
 					</div>
-					<div style="display: flex; align-items: baseline" data-show-if="slot.4">
-						<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.4.label}</span>
-						<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.4.value:short}</span>
+					<div data-show-if="!${H}.on">
+						<div style="display: flex; align-items: baseline" data-show-if="slot.4">
+							<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.4.label}</span>
+							<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.4.value:short}</span>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -513,6 +569,7 @@ export const DEFAULT_WIDGET_HTML = `
 		</div>
 		<div style="flex: 1" data-show-if="slot.1">
 			<div style="flex: 1"></div>
+			${HEALTH_SHORT}
 			<div style="display: flex; align-items: center; padding-right: 6px">
 				<span style="font-size: 22px; font-weight: 600; color: var(--text)">{ccu}</span>
 				<span style="margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
@@ -525,9 +582,11 @@ export const DEFAULT_WIDGET_HTML = `
 						<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.2.label}</span>
 						<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.2.value:short}</span>
 					</div>
-					<div style="display: flex; align-items: baseline" data-show-if="slot.3">
-						<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.3.label}</span>
-						<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.3.value:short}</span>
+					<div data-show-if="!${H}.on">
+						<div style="display: flex; align-items: baseline" data-show-if="slot.3">
+							<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.3.label}</span>
+							<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.3.value:short}</span>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -547,7 +606,12 @@ export const DEFAULT_WIDGET_HTML = `
 			<img src="{game.iconUrl}" style="width: 18px; height: 18px; border-radius: 6px; background: var(--divider); margin-right: 7px" data-show-if="!allGames">
 			${ALL_GAMES_TITLE}
 			<span style="flex: 1; font-size: 12px; font-weight: 500; color: var(--text2)">{game}</span>
-			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)" data-show-if="slot.1">{status}</span>
+			<div data-show-if="!${H}.on">
+				<span style="margin-left: 6px; font-size: 10px; color: var(--text2)" data-show-if="slot.1">{status}</span>
+			</div>
+			<div data-show-if="slot.1">
+				${HEALTH_SHORT.replace('style="height: 13px; margin-right: 6px"', 'style="width: 84px; height: 13px; margin-left: 6px"')}
+			</div>
 			<div data-show-if="!slot.1">
 				<div style="display: flex; align-items: baseline; margin-left: 6px" data-show-if="${HAS_RELEASES}">
 					<span style="font-size: 12px; font-weight: 700; color: var(--rg3)">{${R}.prod30}</span>

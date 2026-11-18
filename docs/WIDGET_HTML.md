@@ -208,6 +208,27 @@ transparent; `chip` #ececf0 / #2b2b31. The counts use `rg3` / `rb3` as text colo
 The preview's Style menu switches the per-game samples between Stats, Releases and Releases without data; the sample
 "All games" has four games whose chips toggle the pick like the widget.
 
+## Health on the Stats widgets
+
+The per-game Stats variants (`slot.1`) show the game's health from the widget program's `live.health`
+(program/health.ts `gameHealth`, docs/WIDGET_PROGRAM.md): errors in the last hour with the trend against the hour before
+(`errorsTrend`: ▲4× when ≥ 2× and at least 1 error, ▲38% for a rise over 10%, ▼61% for a fall over 10%, nothing within
+±10%; red up, green down), servers ok / total (amber when any isn't ok, else muted) and open alerts (amber when any, else
+muted). No alert list (that stays in the release widget). Everything is behind `health.on`, which only the program sets:
+no health (an older backend) or no program (the native path) hides it, the rest is as before.
+
+| Size class | Health |
+|---|---|
+| medium (4×2) | a divider and one line at the bottom: "143▲4× err 1h  5/6 srv  2 alerts"; the stat rows put the delta left of the value in a 34 dp right-aligned slot |
+| wide (4×1) | three lines under the CCU (err, srv, alerts) in the height left (a short 4×1 shows the first); the stat rows as the 4×2 (30 dp delta slot) |
+| grid (2×2) | three pills under the CCU (errors with the trend, servers, "N al"); the "· N servers" after the CCU hides |
+| small4 / small (2×1) | a right-aligned line over the stats: "143▲ err · 5/6 srv" (the arrow only); the last stat row hides (small4 3 stats, small 2) |
+| tiny (2×1 short) | the same line in the header in place of the status |
+
+The lines are `<svg>` texts: one element whatever the colours, each part's fill a token name the program picked
+(`var(--{health.errorsTone})`, `trendTone`, `serversTone`, `alertsTone`). The 2×2 pills are native texts, so each colour
+is a pair of spans with opposite flags (`errorsUp` / `errorsDown`, `serversAllOk`, `hasAlertsOpen`).
+
 ## Editing the widget
 
 1. Edit `src/features/live/widgets/default-widget.ts` (the HTML above, in a template string).

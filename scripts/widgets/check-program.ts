@@ -309,6 +309,49 @@ function checkReleases(rel: Obj, exp: Expected, what: string): void {
 	);
 }
 
+// Per-game health (the Stats widgets' health line): the answer's own `health` with the trend text, its direction and the
+// colour tokens / flags; no alert list; missing or null health → no live.health (the widget hides the health parts).
+{
+	const w = { id: 2, backendId: "acc-gnome", slots: ["dau"], state: null };
+	const KEY = "/v1/mobile/live?minutes=360&metrics=dau";
+	const hOf = (health: Json | undefined) => {
+		const body: Obj = { ...A_BODY };
+		if (health !== undefined) body.health = health;
+		const live = call("shape", { widget: w, backends, responses: { "acc-gnome": { [KEY]: { ok: true, body, at: NOW - 60000 } } }, now: NOW }).live as Obj;
+		return live;
+	};
+	const pick = (h: Obj) => [h.errorsTrend, h.errorsArrow, h.errorsUp, h.errorsDown, h.errorsTone, h.trendTone];
+	const bad = hOf({ errors1h: 143, errorsPrev1h: 36, servers: 6, serversOk: 5, alertsOpen: 2, alerts: [{ level: "critical", title: "x", at: new Date(NOW).toISOString() }] });
+	eq(
+		bad.health,
+		{
+			on: "1", errors1h: 143, errorsPrev1h: 36, errorsTrend: "▲4×", errorsArrow: "▲", errorsUp: "1", errorsDown: "", errorsTone: "bad", trendTone: "bad",
+			servers: 6, serversOk: 5, serversAllOk: "", serversTone: "warn", alertsOpen: 2, hasAlertsOpen: "1", alertsTone: "warn",
+		},
+		"per-game health: a bad hour (▲4×, 5/6 servers amber, 2 alerts amber, no alert list)",
+	);
+	eq([bad.ccu, bad.metrics, bad.releases], [A_BODY.ccu, A_BODY.metrics, A_BODY.releases], "per-game health: the rest passes through");
+	const calm = hOf({ errors1h: 12, errorsPrev1h: 31, servers: 31, serversOk: 31, alertsOpen: 0, alerts: [] }).health as Obj;
+	eq(pick(calm), ["▼61%", "▼", "", "1", "text", "up"], "per-game health: a fall over 10% → ▼61% green");
+	eq([calm.serversAllOk, calm.serversTone, calm.hasAlertsOpen, calm.alertsTone], ["1", "text2", "", "text2"], "per-game health: all servers ok, no alerts → muted");
+	const t = (errors1h: number, errorsPrev1h: number) => pick(hOf({ errors1h, errorsPrev1h, servers: 0, serversOk: 0, alertsOpen: 0 }).health as Obj);
+	eq(t(50, 25), ["▲2×", "▲", "1", "", "bad", "bad"], "per-game health: exactly 2× → ▲2×");
+	eq(t(45, 18), ["▲2.5×", "▲", "1", "", "bad", "bad"], "per-game health: 2.5× → one decimal");
+	eq(t(300, 12), ["▲25×", "▲", "1", "", "bad", "bad"], "per-game health: ≥ 10× → whole factor");
+	eq(t(5, 0), ["▲", "▲", "1", "", "bad", "bad"], "per-game health: from none → ▲ alone");
+	eq(t(1, 0), ["▲", "▲", "1", "", "bad", "bad"], "per-game health: a single error from none → ▲");
+	eq(t(138, 100), ["▲38%", "▲", "1", "", "bad", "bad"], "per-game health: a rise over 10% → ▲38%");
+	eq(t(110, 100), ["", "", "", "", "text", "up"], "per-game health: +10% → nothing");
+	eq(t(90, 100), ["", "", "", "", "text", "up"], "per-game health: −10% → nothing");
+	eq(t(0, 0), ["", "", "", "", "text", "up"], "per-game health: no errors either hour → nothing");
+	eq(t(0, 4), ["▼100%", "▼", "", "1", "text", "up"], "per-game health: down to none → ▼100%");
+	eq((hOf({ errors1h: 1, errorsPrev1h: 1, servers: 0, serversOk: 0, alertsOpen: 0 }).health as Obj).serversAllOk, "1", "per-game health: no servers → all ok (muted)");
+	eq((hOf({ errors1h: "7", errorsPrev1h: null }).health as Obj).errors1h, 7, "per-game health: lenient numbers, missing fields 0");
+	eq("health" in hOf(null), false, "per-game health: health null → left out");
+	eq("health" in hOf(undefined), false, "per-game health: no health → none");
+	eq(hOf(undefined), A_BODY, "per-game health: no health → the answer as it was");
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // shape: all games, no filter
 

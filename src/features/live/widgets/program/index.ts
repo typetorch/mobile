@@ -4,12 +4,13 @@
  * imports at run time, no I/O.
  *
  *  - per-game widgets: one `/v1/mobile/live` request (360 minutes, the slots' metrics), the answer passed through (the
- *    game's name without emoji);
+ *    game's name without emoji, its `health` with the Stats widgets' trend and colour flags: health.ts gameHealth);
  *  - all-games widgets ("*"): one request per signed-in backend (`releases` + the slots), merged (all-games.ts);
  *  - taps: `action:toggle:<backend id>` picks a game of an all-games widget, or clears the pick when it's picked.
  */
 import { ALL, MAX_REQUESTS, allGames, allRequest } from "./all-games";
 import { answerFor, liveRequest, metricIds } from "./answers";
+import { gameHealth } from "./health";
 import { cleanName, isObj } from "./json";
 import type { Backend, JsonObject, PlanInput, PlanOutput, ShapeInput, ShapeOutput, TapInput, TapOutput, Widget } from "./types";
 
@@ -45,6 +46,16 @@ function withCleanName(live: JsonObject | null): JsonObject | null {
 	return { ...live, game: { ...live.game, name } };
 }
 
+/** The answer with its `health` as the per-game widgets bind it (gameHealth; left out when it isn't an object). */
+function withGameHealth(live: JsonObject | null): JsonObject | null {
+	if (!live || !("health" in live)) return live;
+	const health = gameHealth(live.health);
+	const out: JsonObject = { ...live };
+	if (health) out.health = health;
+	else delete out.health;
+	return out;
+}
+
 export function shape(input: ShapeInput): ShapeOutput {
 	const widget = input.widget;
 	const backends = backendsOf(input.backends);
@@ -54,7 +65,7 @@ export function shape(input: ShapeInput): ShapeOutput {
 	if (widget.backendId === ALL) return allGames(widget, backends, responses, state, now);
 	if (!backends.some((b) => b.id === widget.backendId)) return { live: null, state };
 	const live = answerFor(responses[widget.backendId], liveRequest(widget.backendId, metricIds(widget.slots)));
-	return { live: withCleanName(live), state };
+	return { live: withGameHealth(withCleanName(live)), state };
 }
 
 /**

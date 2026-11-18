@@ -69,6 +69,10 @@ function tap({ widget, action, now }) {
   `{ level, dot, text: "<game> · <title>", age: "4m" }`; `errorsHigh` / `errorsArrow` when errors1h > 0 and ≥ 2 × prev;
   `serversAllOk`, `hasAlertsOpen`; `todayRing`: `bad` (errors high, or a critical alert in the last hour), `warn` (an
   alert open) or `rnone`). No game with health (older backends): no `live.health`.
+  Per-game widgets (`gameHealth`): the answer's own `health` with `on: "1"`, `errorsTrend` ("▲4×" when errors1h ≥ 1 and
+  ≥ 2 × prev, "▲" alone from none; "▲38%" / "▼61%" beyond ±10%; "" else), `errorsArrow`, `errorsUp` / `errorsDown`,
+  the tokens `errorsTone` / `trendTone` / `serversTone` / `alertsTone`, `serversAllOk` (no servers counts as ok),
+  `hasAlertsOpen`; its alert list dropped. No or null health: left out.
 - A check script runs the program in node/bun against recorded answers (fixtures) and compares `live` with today's
   native output for the same input.
 

@@ -7,7 +7,7 @@
  */
 import { compileWidgetHtml } from "../../src/features/live/widgets/compile";
 import { DEFAULT_WIDGET_HTML } from "../../src/features/live/widgets/default-widget";
-import { mergeHealth } from "../../src/features/live/widgets/program/health";
+import { gameHealth, mergeHealth } from "../../src/features/live/widgets/program/health";
 import type { ChartElement, Fill, SizeLayout, SvgElement, WidgetElement, WidgetSpec, WidgetState } from "../../src/features/live/widget-spec";
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -35,7 +35,7 @@ function wave(from: number, to: number, wobble: number, seed: number): number[] 
 
 const SAMPLES: Sample[] = [
 	{
-		label: "The Prison (up, four stats)",
+		label: "The Prison (up, four stats, a calm hour)",
 		deltaUp: true,
 		series: wave(150, 214, 9, 1),
 		values: {
@@ -73,7 +73,7 @@ const SAMPLES: Sample[] = [
 		},
 	},
 	{
-		label: "Zomvival (down)",
+		label: "Zomvival (down, a bad hour: errors ▲4×, 5/6 servers, 2 alerts)",
 		deltaUp: false,
 		series: wave(58, 37, 4, 3),
 		values: {
@@ -251,6 +251,11 @@ function flatten(prefix: string, v: unknown, out: Record<string, Val>) {
 	else if (typeof v === "object") for (const [k, x] of Object.entries(v)) flatten(`${prefix}.${k}`, x, out);
 	else out[prefix] = String(v);
 }
+
+// Per-game health (program/health.ts gameHealth; the Stats widgets): Zomvival a bad hour (▲4×, 5/6 servers, 2 alerts),
+// The Prison a calm one (▼61%, all servers ok, no alerts), the sparse sample none (an older backend: no health parts).
+flatten("health", gameHealth({ errors1h: 12, errorsPrev1h: 31, servers: 31, serversOk: 31, alertsOpen: 0, alerts: [] }), SAMPLES[0].values);
+flatten("health", gameHealth({ errors1h: 143, errorsPrev1h: 36, servers: 6, serversOk: 5, alertsOpen: 2, alerts: [] }), SAMPLES[1].values);
 
 function allGamesValues(pick: number | null, mode: HealthMode = "spike"): Record<string, Val> {
 	const shown = pick === null ? GAMES : [GAMES[pick]];
