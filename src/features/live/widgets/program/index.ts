@@ -50,7 +50,8 @@ export function shape(input: ShapeInput): ShapeOutput {
 	const backends = backendsOf(input.backends);
 	const responses = isObj(input.responses) ? input.responses : {};
 	const state = stateOf(widget);
-	if (widget.backendId === ALL) return allGames(widget, backends, responses, state);
+	const now = typeof input.now === "number" && isFinite(input.now) ? input.now : Date.now();
+	if (widget.backendId === ALL) return allGames(widget, backends, responses, state, now);
 	if (!backends.some((b) => b.id === widget.backendId)) return { live: null, state };
 	const live = answerFor(responses[widget.backendId], liveRequest(widget.backendId, metricIds(widget.slots)));
 	return { live: withCleanName(live), state };

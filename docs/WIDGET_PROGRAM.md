@@ -64,6 +64,11 @@ function tap({ widget, action, now }) {
   game has history**, games[] with picked/alpha and each game's own `prod` / `dev` (all its days) and `lastProd` (the
   4×1 list), the filter as program state (tap `action:toggle:<backend id>`). Game names lose their emoji ("The Prison
   🔊" → "The Prison"; per-game widgets' `game.name` too).
+  Health (`program/health.ts`): each answer's top-level `health` merged over the shown games into `live.health`
+  (errors1h / errorsPrev1h / servers / serversOk / alertsOpen summed; the newest 3 alerts across games as
+  `{ level, dot, text: "<game> · <title>", age: "4m" }`; `errorsHigh` / `errorsArrow` when errors1h > 0 and ≥ 2 × prev;
+  `serversAllOk`, `hasAlertsOpen`; `todayRing`: `bad` (errors high, or a critical alert in the last hour), `warn` (an
+  alert open) or `rnone`). No game with health (older backends): no `live.health`.
 - A check script runs the program in node/bun against recorded answers (fixtures) and compares `live` with today's
   native output for the same input.
 

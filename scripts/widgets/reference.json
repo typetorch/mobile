@@ -17,6 +17,7 @@
             {
               "type": "row",
               "align": "center",
+              "showIf": "!allGames",
               "children": [
                 {
                   "type": "image",
@@ -26,19 +27,7 @@
                   "placeholder": "divider",
                   "margin": {
                     "end": 7
-                  },
-                  "showIf": "!allGames"
-                },
-                {
-                  "type": "text",
-                  "text": "Releases ·",
-                  "size": 12,
-                  "fontWeight": "semibold",
-                  "color": "text",
-                  "margin": {
-                    "end": 4
-                  },
-                  "showIf": "allGames"
+                  }
                 },
                 {
                   "type": "text",
@@ -328,263 +317,130 @@
               "showIf": "!slot.1",
               "children": [
                 {
-                  "type": "row",
-                  "gap": 4,
-                  "align": "center",
-                  "margin": {
-                    "bottom": 3
-                  },
-                  "showIf": "allGames",
+                  "type": "column",
+                  "weight": 1,
+                  "showIf": "!allGames",
                   "children": [
                     {
-                      "type": "column",
-                      "showIf": "games.0.id",
-                      "tap": "action:toggle:{games.0.id}",
+                      "type": "row",
+                      "align": "stretch",
+                      "weight": 1,
+                      "showIf": "releases.prod",
                       "children": [
                         {
-                          "type": "row",
-                          "align": "center",
-                          "padding": {
-                            "end": 9
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 166 82\"><defs><rect id='c' width='10' height='10' rx='2'/><path id='t' d='M9.41,0.59a2,2 0 0 1 0.59,1.41v6a2,2 0 0 1 -2,2h-6a2,2 0 0 1 -1.41,-0.59z'/></defs><g><use href='#c' fill='var(--{releases.days.84.bg|rnone})'/><use href='#t' fill='var(--{releases.days.84.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.85.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.85.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.86.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.86.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.87.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.87.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.88.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.88.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.89.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.89.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.90.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.90.tri|rnone})'/></g><g transform='translate(12)'><use href='#c' fill='var(--{releases.days.91.bg|rnone})'/><use href='#t' fill='var(--{releases.days.91.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.92.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.92.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.93.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.93.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.94.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.94.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.95.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.95.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.96.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.96.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.97.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.97.tri|rnone})'/></g><g transform='translate(24)'><use href='#c' fill='var(--{releases.days.98.bg|rnone})'/><use href='#t' fill='var(--{releases.days.98.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.99.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.99.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.100.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.100.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.101.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.101.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.102.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.102.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.103.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.103.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.104.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.104.tri|rnone})'/></g><g transform='translate(36)'><use href='#c' fill='var(--{releases.days.105.bg|rnone})'/><use href='#t' fill='var(--{releases.days.105.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.106.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.106.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.107.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.107.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.108.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.108.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.109.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.109.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.110.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.110.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.111.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.111.tri|rnone})'/></g><g transform='translate(48)'><use href='#c' fill='var(--{releases.days.112.bg|rnone})'/><use href='#t' fill='var(--{releases.days.112.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.113.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.113.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.114.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.114.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.115.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.115.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.116.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.116.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.117.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.117.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.118.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.118.tri|rnone})'/></g><g transform='translate(60)'><use href='#c' fill='var(--{releases.days.119.bg|rnone})'/><use href='#t' fill='var(--{releases.days.119.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.120.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.120.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.121.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.121.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.122.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.122.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.123.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.123.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.124.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.124.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.125.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.125.tri|rnone})'/></g><g transform='translate(72)'><use href='#c' fill='var(--{releases.days.126.bg|rnone})'/><use href='#t' fill='var(--{releases.days.126.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.127.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.127.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.128.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.128.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.129.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.129.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.130.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.130.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.131.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.131.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.132.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.132.tri|rnone})'/></g><g transform='translate(84)'><use href='#c' fill='var(--{releases.days.133.bg|rnone})'/><use href='#t' fill='var(--{releases.days.133.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.134.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.134.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.135.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.135.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.136.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.136.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.137.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.137.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.138.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.138.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.139.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.139.tri|rnone})'/></g><g transform='translate(96)'><use href='#c' fill='var(--{releases.days.140.bg|rnone})'/><use href='#t' fill='var(--{releases.days.140.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.141.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.141.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.142.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.142.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.143.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.143.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.144.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.144.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.145.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.145.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.146.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.146.tri|rnone})'/></g><g transform='translate(108)'><use href='#c' fill='var(--{releases.days.147.bg|rnone})'/><use href='#t' fill='var(--{releases.days.147.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.148.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.148.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.149.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.149.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.150.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.150.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.151.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.151.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.152.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.152.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.153.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.153.tri|rnone})'/></g><g transform='translate(120)'><use href='#c' fill='var(--{releases.days.154.bg|rnone})'/><use href='#t' fill='var(--{releases.days.154.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.155.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.155.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.156.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.156.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.157.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.157.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.158.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.158.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.159.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.159.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.160.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.160.tri|rnone})'/></g><g transform='translate(132)'><use href='#c' fill='var(--{releases.days.161.bg|rnone})'/><use href='#t' fill='var(--{releases.days.161.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.162.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.162.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.163.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.163.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.164.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.164.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.165.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.165.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.166.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.166.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.167.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.167.tri|rnone})'/></g><g transform='translate(144)'><use href='#c' fill='var(--{releases.days.168.bg|rnone})'/><use href='#t' fill='var(--{releases.days.168.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.169.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.169.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.170.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.170.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.171.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.171.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.172.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.172.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.173.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.173.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.174.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.174.tri|rnone})'/></g><g transform='translate(156)'><use href='#c' fill='var(--{releases.days.175.bg|rnone})'/><use href='#t' fill='var(--{releases.days.175.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.176.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.176.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.177.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.177.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.178.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.178.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.179.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.179.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.180.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.180.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.181.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.181.tri|rnone})'/></g><rect x='156.5' y='72.5' width='9' height='9' rx='1.5' fill='none' stroke='var(--text)' stroke-opacity='0.8' stroke-width='1'/></svg>",
+                          "fit": "contain",
+                          "weight": 1
+                        },
+                        {
+                          "type": "column",
+                          "gap": 2,
+                          "justify": "center",
+                          "margin": {
+                            "start": 12
                           },
-                          "background": {
-                            "color": "chip",
-                            "radius": 16
-                          },
-                          "showIf": "games.0.picked",
                           "children": [
                             {
-                              "type": "svg",
-                              "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.0.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.0.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.0.picked|0}'/></svg>",
-                              "width": 32,
-                              "height": 32
+                              "type": "row",
+                              "align": "baseline",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "text": "{releases.prod}",
+                                  "size": 16,
+                                  "fontWeight": "bold",
+                                  "color": "rg3"
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "prod",
+                                  "size": 11,
+                                  "color": "text2",
+                                  "margin": {
+                                    "start": 4
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "row",
+                              "align": "baseline",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "text": "{releases.dev}",
+                                  "size": 16,
+                                  "fontWeight": "bold",
+                                  "color": "rb3"
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "dev",
+                                  "size": 11,
+                                  "color": "text2",
+                                  "margin": {
+                                    "start": 4
+                                  }
+                                }
+                              ]
                             },
                             {
                               "type": "text",
-                              "text": "{games.0.name}",
-                              "size": 10.5,
-                              "fontWeight": "medium",
-                              "color": "text",
-                              "width": 70
+                              "text": "last prod",
+                              "size": 10,
+                              "color": "text2",
+                              "margin": {
+                                "top": 4
+                              }
+                            },
+                            {
+                              "type": "text",
+                              "text": "{releases.lastProd|none}",
+                              "size": 11.5,
+                              "fontWeight": "semibold",
+                              "color": "text"
+                            },
+                            {
+                              "type": "text",
+                              "text": "{releases.lastProdGame}",
+                              "size": 9.5,
+                              "color": "text2",
+                              "showIf": "releases.lastProdGame"
+                            },
+                            {
+                              "type": "column",
+                              "showIf": "!allGames",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "text": "{releases.lastProdLabel}",
+                                  "size": 9.5,
+                                  "color": "text2",
+                                  "showIf": "releases.lastProdLabel"
+                                }
+                              ]
                             }
                           ]
-                        },
-                        {
-                          "type": "svg",
-                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.0.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.0.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.0.picked|0}'/></svg>",
-                          "width": 32,
-                          "height": 32,
-                          "showIf": "!games.0.picked"
                         }
                       ]
                     },
                     {
-                      "type": "column",
-                      "showIf": "games.1.id",
-                      "tap": "action:toggle:{games.1.id}",
+                      "type": "stack",
+                      "weight": 1,
+                      "showIf": "!releases.prod",
                       "children": [
                         {
-                          "type": "row",
+                          "type": "text",
+                          "text": "Loading releases…",
+                          "size": 11,
+                          "color": "text2",
                           "align": "center",
-                          "padding": {
-                            "end": 9
+                          "margin": {
+                            "start": 8,
+                            "end": 8
                           },
-                          "background": {
-                            "color": "chip",
-                            "radius": 16
-                          },
-                          "showIf": "games.1.picked",
-                          "children": [
-                            {
-                              "type": "svg",
-                              "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.1.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.1.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.1.picked|0}'/></svg>",
-                              "width": 32,
-                              "height": 32
-                            },
-                            {
-                              "type": "text",
-                              "text": "{games.1.name}",
-                              "size": 10.5,
-                              "fontWeight": "medium",
-                              "color": "text",
-                              "width": 70
-                            }
-                          ]
-                        },
-                        {
-                          "type": "svg",
-                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.1.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.1.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.1.picked|0}'/></svg>",
-                          "width": 32,
-                          "height": 32,
-                          "showIf": "!games.1.picked"
-                        }
-                      ]
-                    },
-                    {
-                      "type": "column",
-                      "showIf": "games.2.id",
-                      "tap": "action:toggle:{games.2.id}",
-                      "children": [
-                        {
-                          "type": "row",
-                          "align": "center",
-                          "padding": {
-                            "end": 9
-                          },
-                          "background": {
-                            "color": "chip",
-                            "radius": 16
-                          },
-                          "showIf": "games.2.picked",
-                          "children": [
-                            {
-                              "type": "svg",
-                              "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.2.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.2.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.2.picked|0}'/></svg>",
-                              "width": 32,
-                              "height": 32
-                            },
-                            {
-                              "type": "text",
-                              "text": "{games.2.name}",
-                              "size": 10.5,
-                              "fontWeight": "medium",
-                              "color": "text",
-                              "width": 70
-                            }
-                          ]
-                        },
-                        {
-                          "type": "svg",
-                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.2.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.2.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.2.picked|0}'/></svg>",
-                          "width": 32,
-                          "height": 32,
-                          "showIf": "!games.2.picked"
-                        }
-                      ]
-                    },
-                    {
-                      "type": "column",
-                      "showIf": "games.3.id",
-                      "tap": "action:toggle:{games.3.id}",
-                      "children": [
-                        {
-                          "type": "row",
-                          "align": "center",
-                          "padding": {
-                            "end": 9
-                          },
-                          "background": {
-                            "color": "chip",
-                            "radius": 16
-                          },
-                          "showIf": "games.3.picked",
-                          "children": [
-                            {
-                              "type": "svg",
-                              "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.3.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.3.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.3.picked|0}'/></svg>",
-                              "width": 32,
-                              "height": 32
-                            },
-                            {
-                              "type": "text",
-                              "text": "{games.3.name}",
-                              "size": 10.5,
-                              "fontWeight": "medium",
-                              "color": "text",
-                              "width": 70
-                            }
-                          ]
-                        },
-                        {
-                          "type": "svg",
-                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.3.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.3.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.3.picked|0}'/></svg>",
-                          "width": 32,
-                          "height": 32,
-                          "showIf": "!games.3.picked"
-                        }
-                      ]
-                    },
-                    {
-                      "type": "column",
-                      "showIf": "games.4.id",
-                      "tap": "action:toggle:{games.4.id}",
-                      "children": [
-                        {
-                          "type": "row",
-                          "align": "center",
-                          "padding": {
-                            "end": 9
-                          },
-                          "background": {
-                            "color": "chip",
-                            "radius": 16
-                          },
-                          "showIf": "games.4.picked",
-                          "children": [
-                            {
-                              "type": "svg",
-                              "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.4.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.4.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.4.picked|0}'/></svg>",
-                              "width": 32,
-                              "height": 32
-                            },
-                            {
-                              "type": "text",
-                              "text": "{games.4.name}",
-                              "size": 10.5,
-                              "fontWeight": "medium",
-                              "color": "text",
-                              "width": 70
-                            }
-                          ]
-                        },
-                        {
-                          "type": "svg",
-                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.4.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.4.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.4.picked|0}'/></svg>",
-                          "width": 32,
-                          "height": 32,
-                          "showIf": "!games.4.picked"
-                        }
-                      ]
-                    },
-                    {
-                      "type": "column",
-                      "showIf": "games.5.id",
-                      "tap": "action:toggle:{games.5.id}",
-                      "children": [
-                        {
-                          "type": "row",
-                          "align": "center",
-                          "padding": {
-                            "end": 9
-                          },
-                          "background": {
-                            "color": "chip",
-                            "radius": 16
-                          },
-                          "showIf": "games.5.picked",
-                          "children": [
-                            {
-                              "type": "svg",
-                              "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.5.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.5.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.5.picked|0}'/></svg>",
-                              "width": 32,
-                              "height": 32
-                            },
-                            {
-                              "type": "text",
-                              "text": "{games.5.name}",
-                              "size": 10.5,
-                              "fontWeight": "medium",
-                              "color": "text",
-                              "width": 70
-                            }
-                          ]
-                        },
-                        {
-                          "type": "svg",
-                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.5.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.5.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.5.picked|0}'/></svg>",
-                          "width": 32,
-                          "height": 32,
-                          "showIf": "!games.5.picked"
+                          "gravity": "center"
                         }
                       ]
                     }
@@ -592,32 +448,368 @@
                 },
                 {
                   "type": "row",
-                  "align": "stretch",
+                  "align": "center",
                   "weight": 1,
-                  "showIf": "releases.prod",
+                  "padding": {
+                    "end": 4
+                  },
+                  "margin": {
+                    "top": 2
+                  },
+                  "showIf": "allGames",
                   "children": [
                     {
                       "type": "svg",
-                      "svg": "<svg viewBox=\"0 0 166 82\"><defs><rect id='c' width='10' height='10' rx='2'/><path id='t' d='M9.41,0.59a2,2 0 0 1 0.59,1.41v6a2,2 0 0 1 -2,2h-6a2,2 0 0 1 -1.41,-0.59z'/></defs><g><use href='#c' fill='var(--{releases.days.84.bg|rnone})'/><use href='#t' fill='var(--{releases.days.84.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.85.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.85.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.86.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.86.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.87.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.87.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.88.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.88.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.89.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.89.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.90.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.90.tri|rnone})'/></g><g transform='translate(12)'><use href='#c' fill='var(--{releases.days.91.bg|rnone})'/><use href='#t' fill='var(--{releases.days.91.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.92.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.92.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.93.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.93.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.94.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.94.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.95.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.95.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.96.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.96.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.97.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.97.tri|rnone})'/></g><g transform='translate(24)'><use href='#c' fill='var(--{releases.days.98.bg|rnone})'/><use href='#t' fill='var(--{releases.days.98.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.99.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.99.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.100.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.100.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.101.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.101.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.102.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.102.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.103.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.103.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.104.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.104.tri|rnone})'/></g><g transform='translate(36)'><use href='#c' fill='var(--{releases.days.105.bg|rnone})'/><use href='#t' fill='var(--{releases.days.105.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.106.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.106.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.107.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.107.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.108.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.108.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.109.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.109.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.110.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.110.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.111.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.111.tri|rnone})'/></g><g transform='translate(48)'><use href='#c' fill='var(--{releases.days.112.bg|rnone})'/><use href='#t' fill='var(--{releases.days.112.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.113.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.113.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.114.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.114.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.115.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.115.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.116.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.116.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.117.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.117.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.118.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.118.tri|rnone})'/></g><g transform='translate(60)'><use href='#c' fill='var(--{releases.days.119.bg|rnone})'/><use href='#t' fill='var(--{releases.days.119.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.120.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.120.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.121.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.121.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.122.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.122.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.123.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.123.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.124.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.124.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.125.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.125.tri|rnone})'/></g><g transform='translate(72)'><use href='#c' fill='var(--{releases.days.126.bg|rnone})'/><use href='#t' fill='var(--{releases.days.126.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.127.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.127.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.128.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.128.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.129.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.129.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.130.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.130.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.131.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.131.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.132.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.132.tri|rnone})'/></g><g transform='translate(84)'><use href='#c' fill='var(--{releases.days.133.bg|rnone})'/><use href='#t' fill='var(--{releases.days.133.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.134.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.134.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.135.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.135.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.136.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.136.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.137.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.137.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.138.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.138.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.139.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.139.tri|rnone})'/></g><g transform='translate(96)'><use href='#c' fill='var(--{releases.days.140.bg|rnone})'/><use href='#t' fill='var(--{releases.days.140.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.141.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.141.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.142.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.142.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.143.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.143.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.144.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.144.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.145.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.145.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.146.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.146.tri|rnone})'/></g><g transform='translate(108)'><use href='#c' fill='var(--{releases.days.147.bg|rnone})'/><use href='#t' fill='var(--{releases.days.147.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.148.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.148.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.149.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.149.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.150.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.150.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.151.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.151.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.152.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.152.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.153.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.153.tri|rnone})'/></g><g transform='translate(120)'><use href='#c' fill='var(--{releases.days.154.bg|rnone})'/><use href='#t' fill='var(--{releases.days.154.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.155.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.155.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.156.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.156.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.157.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.157.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.158.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.158.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.159.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.159.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.160.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.160.tri|rnone})'/></g><g transform='translate(132)'><use href='#c' fill='var(--{releases.days.161.bg|rnone})'/><use href='#t' fill='var(--{releases.days.161.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.162.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.162.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.163.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.163.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.164.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.164.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.165.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.165.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.166.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.166.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.167.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.167.tri|rnone})'/></g><g transform='translate(144)'><use href='#c' fill='var(--{releases.days.168.bg|rnone})'/><use href='#t' fill='var(--{releases.days.168.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.169.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.169.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.170.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.170.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.171.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.171.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.172.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.172.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.173.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.173.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.174.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.174.tri|rnone})'/></g><g transform='translate(156)'><use href='#c' fill='var(--{releases.days.175.bg|rnone})'/><use href='#t' fill='var(--{releases.days.175.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.176.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.176.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.177.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.177.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.178.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.178.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.179.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.179.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.180.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.180.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.181.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.181.tri|rnone})'/></g><rect x='156.5' y='72.5' width='9' height='9' rx='1.5' fill='none' stroke='var(--text)' stroke-opacity='0.8' stroke-width='1'/></svg>",
+                      "svg": "<svg viewBox=\"0 0 94 82\"><defs><rect id='c' width='10' height='10' rx='2'/><path id='t' d='M9.41,0.59a2,2 0 0 1 0.59,1.41v6a2,2 0 0 1 -2,2h-6a2,2 0 0 1 -1.41,-0.59z'/></defs><g><use href='#c' fill='var(--{releases.days.126.bg|rnone})'/><use href='#t' fill='var(--{releases.days.126.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.127.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.127.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.128.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.128.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.129.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.129.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.130.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.130.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.131.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.131.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.132.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.132.tri|rnone})'/></g><g transform='translate(12)'><use href='#c' fill='var(--{releases.days.133.bg|rnone})'/><use href='#t' fill='var(--{releases.days.133.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.134.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.134.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.135.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.135.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.136.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.136.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.137.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.137.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.138.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.138.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.139.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.139.tri|rnone})'/></g><g transform='translate(24)'><use href='#c' fill='var(--{releases.days.140.bg|rnone})'/><use href='#t' fill='var(--{releases.days.140.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.141.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.141.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.142.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.142.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.143.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.143.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.144.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.144.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.145.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.145.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.146.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.146.tri|rnone})'/></g><g transform='translate(36)'><use href='#c' fill='var(--{releases.days.147.bg|rnone})'/><use href='#t' fill='var(--{releases.days.147.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.148.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.148.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.149.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.149.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.150.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.150.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.151.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.151.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.152.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.152.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.153.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.153.tri|rnone})'/></g><g transform='translate(48)'><use href='#c' fill='var(--{releases.days.154.bg|rnone})'/><use href='#t' fill='var(--{releases.days.154.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.155.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.155.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.156.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.156.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.157.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.157.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.158.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.158.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.159.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.159.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.160.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.160.tri|rnone})'/></g><g transform='translate(60)'><use href='#c' fill='var(--{releases.days.161.bg|rnone})'/><use href='#t' fill='var(--{releases.days.161.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.162.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.162.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.163.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.163.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.164.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.164.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.165.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.165.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.166.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.166.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.167.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.167.tri|rnone})'/></g><g transform='translate(72)'><use href='#c' fill='var(--{releases.days.168.bg|rnone})'/><use href='#t' fill='var(--{releases.days.168.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.169.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.169.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.170.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.170.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.171.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.171.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.172.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.172.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.173.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.173.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.174.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.174.tri|rnone})'/></g><g transform='translate(84)'><use href='#c' fill='var(--{releases.days.175.bg|rnone})'/><use href='#t' fill='var(--{releases.days.175.tri|rnone})'/><use href='#c' y='12' fill='var(--{releases.days.176.bg|rnone})'/><use href='#t' y='12' fill='var(--{releases.days.176.tri|rnone})'/><use href='#c' y='24' fill='var(--{releases.days.177.bg|rnone})'/><use href='#t' y='24' fill='var(--{releases.days.177.tri|rnone})'/><use href='#c' y='36' fill='var(--{releases.days.178.bg|rnone})'/><use href='#t' y='36' fill='var(--{releases.days.178.tri|rnone})'/><use href='#c' y='48' fill='var(--{releases.days.179.bg|rnone})'/><use href='#t' y='48' fill='var(--{releases.days.179.tri|rnone})'/><use href='#c' y='60' fill='var(--{releases.days.180.bg|rnone})'/><use href='#t' y='60' fill='var(--{releases.days.180.tri|rnone})'/><use href='#c' y='72' fill='var(--{releases.days.181.bg|rnone})'/><use href='#t' y='72' fill='var(--{releases.days.181.tri|rnone})'/></g><rect x='84.5' y='72.5' width='9' height='9' rx='1.5' fill='none' stroke='var(--text)' stroke-opacity='0.8' stroke-width='1'/><rect x='85' y='73' width='8' height='8' rx='2' fill='none' stroke='var(--{health.todayRing|rnone})' stroke-width='2'/></svg>",
                       "fit": "contain",
-                      "weight": 1
+                      "width": 132,
+                      "height": 114,
+                      "showIf": "releases.prod"
                     },
                     {
                       "type": "column",
-                      "gap": 2,
-                      "justify": "center",
+                      "weight": 1,
                       "margin": {
                         "start": 12
                       },
+                      "alignSelf": "stretch",
                       "children": [
+                        {
+                          "type": "row",
+                          "align": "center",
+                          "children": [
+                            {
+                              "type": "row",
+                              "align": "center",
+                              "weight": 1,
+                              "children": [
+                                {
+                                  "type": "column",
+                                  "showIf": "games.0.id",
+                                  "tap": "action:toggle:{games.0.id}",
+                                  "children": [
+                                    {
+                                      "type": "svg",
+                                      "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.0.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.0.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.0.picked|0}'/></svg>",
+                                      "width": 28,
+                                      "height": 28
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "column",
+                                  "showIf": "games.1.id",
+                                  "tap": "action:toggle:{games.1.id}",
+                                  "children": [
+                                    {
+                                      "type": "svg",
+                                      "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.1.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.1.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.1.picked|0}'/></svg>",
+                                      "width": 28,
+                                      "height": 28
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "column",
+                                  "showIf": "games.2.id",
+                                  "tap": "action:toggle:{games.2.id}",
+                                  "children": [
+                                    {
+                                      "type": "svg",
+                                      "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.2.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.2.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.2.picked|0}'/></svg>",
+                                      "width": 28,
+                                      "height": 28
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "column",
+                                  "showIf": "games.3.id",
+                                  "tap": "action:toggle:{games.3.id}",
+                                  "children": [
+                                    {
+                                      "type": "svg",
+                                      "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.3.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.3.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.3.picked|0}'/></svg>",
+                                      "width": 28,
+                                      "height": 28
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "column",
+                                  "showIf": "games.4.id",
+                                  "tap": "action:toggle:{games.4.id}",
+                                  "children": [
+                                    {
+                                      "type": "svg",
+                                      "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.4.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.4.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.4.picked|0}'/></svg>",
+                                      "width": 28,
+                                      "height": 28
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "column",
+                                  "showIf": "games.5.id",
+                                  "tap": "action:toggle:{games.5.id}",
+                                  "children": [
+                                    {
+                                      "type": "svg",
+                                      "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.5.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.5.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.5.picked|0}'/></svg>",
+                                      "width": 28,
+                                      "height": 28
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "icon",
+                              "name": "refresh",
+                              "size": 15,
+                              "color": "text2",
+                              "padding": 4,
+                              "tap": "refresh"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "column",
+                          "gap": 5,
+                          "margin": {
+                            "top": 6
+                          },
+                          "showIf": "health.todayRing",
+                          "children": [
+                            {
+                              "type": "row",
+                              "align": "baseline",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "text": "{health.errors1h}{health.errorsArrow}",
+                                  "size": 11,
+                                  "fontWeight": "bold",
+                                  "color": "bad",
+                                  "showIf": "health.errorsHigh"
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "{health.errors1h}",
+                                  "size": 11,
+                                  "fontWeight": "bold",
+                                  "color": "text",
+                                  "showIf": "!health.errorsHigh"
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "err 1h",
+                                  "size": 11,
+                                  "color": "text2",
+                                  "margin": {
+                                    "start": 3
+                                  }
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "{health.serversOk}",
+                                  "size": 11,
+                                  "fontWeight": "bold",
+                                  "color": "up",
+                                  "margin": {
+                                    "start": 10
+                                  },
+                                  "showIf": "health.serversAllOk"
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "{health.serversOk}",
+                                  "size": 11,
+                                  "fontWeight": "bold",
+                                  "color": "warn",
+                                  "margin": {
+                                    "start": 10
+                                  },
+                                  "showIf": "!health.serversAllOk"
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "/{health.servers} srv",
+                                  "size": 11,
+                                  "color": "text2"
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "{health.alertsOpen}",
+                                  "size": 11,
+                                  "fontWeight": "bold",
+                                  "color": "warn",
+                                  "margin": {
+                                    "start": 10
+                                  },
+                                  "showIf": "health.hasAlertsOpen"
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "{health.alertsOpen}",
+                                  "size": 11,
+                                  "fontWeight": "bold",
+                                  "color": "text",
+                                  "margin": {
+                                    "start": 10
+                                  },
+                                  "showIf": "!health.hasAlertsOpen"
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "alerts",
+                                  "size": 11,
+                                  "color": "text2",
+                                  "margin": {
+                                    "start": 3
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "row",
+                              "align": "center",
+                              "showIf": "health.alerts.0.text",
+                              "children": [
+                                {
+                                  "type": "svg",
+                                  "svg": "<svg viewBox=\"0 0 8 8\"><circle cx='4' cy='4' r='4' fill='var(--{health.alerts.0.dot|text2})'/></svg>",
+                                  "width": 8,
+                                  "height": 8,
+                                  "margin": {
+                                    "end": 6
+                                  }
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "{health.alerts.0.text}",
+                                  "size": 10.5,
+                                  "color": "text",
+                                  "weight": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "{health.alerts.0.age}",
+                                  "size": 10,
+                                  "color": "text2",
+                                  "margin": {
+                                    "start": 6
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "row",
+                              "align": "center",
+                              "showIf": "health.alerts.1.text",
+                              "children": [
+                                {
+                                  "type": "svg",
+                                  "svg": "<svg viewBox=\"0 0 8 8\"><circle cx='4' cy='4' r='4' fill='var(--{health.alerts.1.dot|text2})'/></svg>",
+                                  "width": 8,
+                                  "height": 8,
+                                  "margin": {
+                                    "end": 6
+                                  }
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "{health.alerts.1.text}",
+                                  "size": 10.5,
+                                  "color": "text",
+                                  "weight": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "{health.alerts.1.age}",
+                                  "size": 10,
+                                  "color": "text2",
+                                  "margin": {
+                                    "start": 6
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "row",
+                              "align": "center",
+                              "showIf": "health.alerts.2.text",
+                              "children": [
+                                {
+                                  "type": "svg",
+                                  "svg": "<svg viewBox=\"0 0 8 8\"><circle cx='4' cy='4' r='4' fill='var(--{health.alerts.2.dot|text2})'/></svg>",
+                                  "width": 8,
+                                  "height": 8,
+                                  "margin": {
+                                    "end": 6
+                                  }
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "{health.alerts.2.text}",
+                                  "size": 10.5,
+                                  "color": "text",
+                                  "weight": 1
+                                },
+                                {
+                                  "type": "text",
+                                  "text": "{health.alerts.2.age}",
+                                  "size": 10,
+                                  "color": "text2",
+                                  "margin": {
+                                    "start": 6
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "text": "No alerts in 24 h",
+                              "size": 10.5,
+                              "color": "text2",
+                              "showIf": "!health.alerts.0.text"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "column",
+                          "margin": {
+                            "top": 6
+                          },
+                          "showIf": "!health.todayRing",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "last prod {releases.lastProd|none}",
+                              "size": 10.5,
+                              "color": "text2"
+                            },
+                            {
+                              "type": "text",
+                              "text": "{releases.lastProdGame}",
+                              "size": 10,
+                              "color": "text2",
+                              "showIf": "releases.lastProdGame"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "spacer",
+                          "weight": 1
+                        },
                         {
                           "type": "row",
                           "align": "baseline",
                           "children": [
                             {
                               "type": "text",
-                              "text": "{releases.prod}",
-                              "size": 16,
+                              "text": "{releases.prod|0}",
+                              "size": 13,
                               "fontWeight": "bold",
                               "color": "rg3"
                             },
@@ -629,19 +821,16 @@
                               "margin": {
                                 "start": 4
                               }
-                            }
-                          ]
-                        },
-                        {
-                          "type": "row",
-                          "align": "baseline",
-                          "children": [
+                            },
                             {
                               "type": "text",
-                              "text": "{releases.dev}",
-                              "size": 16,
+                              "text": "{releases.dev|0}",
+                              "size": 13,
                               "fontWeight": "bold",
-                              "color": "rb3"
+                              "color": "rb3",
+                              "margin": {
+                                "start": 10
+                              }
                             },
                             {
                               "type": "text",
@@ -653,63 +842,8 @@
                               }
                             }
                           ]
-                        },
-                        {
-                          "type": "text",
-                          "text": "last prod",
-                          "size": 10,
-                          "color": "text2",
-                          "margin": {
-                            "top": 4
-                          }
-                        },
-                        {
-                          "type": "text",
-                          "text": "{releases.lastProd|none}",
-                          "size": 11.5,
-                          "fontWeight": "semibold",
-                          "color": "text"
-                        },
-                        {
-                          "type": "text",
-                          "text": "{releases.lastProdGame}",
-                          "size": 9.5,
-                          "color": "text2",
-                          "showIf": "releases.lastProdGame"
-                        },
-                        {
-                          "type": "column",
-                          "showIf": "!allGames",
-                          "children": [
-                            {
-                              "type": "text",
-                              "text": "{releases.lastProdLabel}",
-                              "size": 9.5,
-                              "color": "text2",
-                              "showIf": "releases.lastProdLabel"
-                            }
-                          ]
                         }
                       ]
-                    }
-                  ]
-                },
-                {
-                  "type": "stack",
-                  "weight": 1,
-                  "showIf": "!releases.prod",
-                  "children": [
-                    {
-                      "type": "text",
-                      "text": "Loading releases…",
-                      "size": 11,
-                      "color": "text2",
-                      "align": "center",
-                      "margin": {
-                        "start": 8,
-                        "end": 8
-                      },
-                      "gravity": "center"
                     }
                   ]
                 }
@@ -2849,7 +2983,9 @@
       "rb2": "#FF4A8FE0",
       "rb3": "#FF1D5CB3",
       "rnone": "#00000000",
-      "chip": "#FFECECF0"
+      "chip": "#FFECECF0",
+      "bad": "#FFD64545",
+      "warn": "#FFC77C12"
     },
     "night": {
       "bg": "#FF1C1C20",
@@ -2870,7 +3006,9 @@
       "rb2": "#FF3A7FD0",
       "rb3": "#FF5AA9FF",
       "rnone": "#00000000",
-      "chip": "#FF2B2B31"
+      "chip": "#FF2B2B31",
+      "bad": "#FFEF6B6B",
+      "warn": "#FFF0A03A"
     }
   },
   "strings": {

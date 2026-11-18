@@ -4,6 +4,7 @@
  */
 import { answerFor, liveRequest, metricIds } from "./answers";
 import { cleanName, isObj, metric, metrics, num, rounded, text, webUrl } from "./json";
+import { mergeHealth } from "./health";
 import { mergeReleases } from "./releases";
 import type { Backend, Json, JsonObject, Responses, Widget } from "./types";
 
@@ -116,6 +117,7 @@ export function allGames(
 	backends: Backend[],
 	responses: Responses,
 	state: JsonObject,
+	now: number = Date.now(),
 ): { live: JsonObject | null; state: JsonObject } {
 	const filterId = typeof state.filter === "string" && state.filter ? state.filter : null;
 	const datas: Record<string, JsonObject> = {};
@@ -185,5 +187,11 @@ export function allGames(
 	if (picked) live.filter = picked.id;
 	// The top-level `releases` too (what the widget HTML reads).
 	if (releases) live.releases = releases;
+	// Health merged over the shown games (absent when none has it: an older backend).
+	const health = mergeHealth(
+		scope.filter((b) => has(b.id)).map((b): [string, Json | undefined] => [gameName(datas[b.id], b), datas[b.id].health]),
+		now,
+	);
+	if (health) live.health = health;
 	return { live, state: nextState };
 }

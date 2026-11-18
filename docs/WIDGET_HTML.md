@@ -175,6 +175,15 @@ about 155k of the 200k characters.
 An older backend that sends 60 days: the cell indices count from 182, so its days don't reach the grid (no arithmetic
 to align them to today): the grid stays blank, the counts show.
 
+**The all-games 4×2** (variant C) has no title row: 8 weeks at a fixed 132 × 114 dp (cells ≈ 14 dp) with today's cell
+ringed in `var(--{health.todayRing|rnone})` (`garden(cols, style, ring)`), and beside it the game chips and ↻, a health
+line (`{health.errors1h}` red with ▲ when `health.errorsHigh`, servers ok / total green when `health.serversAllOk` else
+amber, open alerts amber when `health.hasAlertsOpen`: each colour is a pair of spans with opposite `data-show-if`, since
+element colours can't be bound), up to 3 alert lines (an 8 dp dot in `var(--{health.alerts.N.dot})`, the text ellipsized,
+the age), "No alerts in 24 h" when there are none, and the totals at the bottom. Without `health` (older backends) the
+health part is hidden and the last prod shows instead. Tokens `bad` / `warn` by day / night: #d64545 / #ef6b6b,
+#c77c12 / #f0a03a.
+
 **The 4×1** draws the grid with `gardenRight(cols, style)`: `viewBox="0 0 {w} {h}"` (the box in dp, fit fill) and the
 grid moved to the right edge and scaled to the box's height with `transform='translate({w}) scale({h}) scale(1/82)
 translate(-gridWidth)'` (the svg templates have no arithmetic, but transforms compose), so it fills the height and sits

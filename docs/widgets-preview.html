@@ -82,6 +82,7 @@ exports.mount = mount;
  */
 const compile_1 = require("src/features/live/widgets/compile.ts");
 const default_widget_1 = require("src/features/live/widgets/default-widget.ts");
+const health_1 = require("src/features/live/widgets/program/health.ts");
 const u = (t, c) => ({ t, c });
 const p = (t) => ({ t });
 function wave(from, to, wobble, seed) {
@@ -272,7 +273,40 @@ const GAMES = [
     { id: "cart", name: "Cart Ride", iconUrl: null, days: releaseDays(17, 0.08, 0.25, 155) },
     { id: "slime", name: "Slime", iconUrl: icon("S", "#7a6ad8", "#2c2266"), days: releaseDays(19, 0.1, 0.2, 100) },
 ];
-function allGamesValues(pick) {
+const PREVIEW_NOW = Date.UTC(2026, 10, 18, 12);
+const agoIso = (min) => new Date(PREVIEW_NOW - min * 60000).toISOString();
+/** Per game (GAMES order): its answer's `health` in each mode. */
+const HEALTH = {
+    spike: [
+        { errors1h: 41, errorsPrev1h: 30, servers: 12, serversOk: 12, alertsOpen: 0, alerts: [] },
+        { errors1h: 118, errorsPrev1h: 22, servers: 30, serversOk: 29, alertsOpen: 2, alerts: [
+                { level: "critical", title: "error spike after #142", at: agoIso(4) },
+                { level: "warning", title: "CCU −38%", at: agoIso(12) },
+            ] },
+        { errors1h: 0, errorsPrev1h: 1, servers: 3, serversOk: 3, alertsOpen: 1, alerts: [{ level: "warning", title: "memory 92%", at: agoIso(31) }] },
+        { errors1h: 0, errorsPrev1h: 0, servers: 0, serversOk: 0, alertsOpen: 0, alerts: [{ level: "info", title: "deploy finished", at: agoIso(300) }] },
+    ],
+    calm: [
+        { errors1h: 3, errorsPrev1h: 4, servers: 12, serversOk: 12, alertsOpen: 0, alerts: [] },
+        { errors1h: 5, errorsPrev1h: 6, servers: 30, serversOk: 30, alertsOpen: 0, alerts: [] },
+        { errors1h: 0, errorsPrev1h: 0, servers: 3, serversOk: 3, alertsOpen: 0, alerts: [] },
+        null,
+    ],
+    none: [null, null, null, null],
+};
+/** A JSON value as the flat path bindings the preview's samples use (`health.alerts.0.text`). */
+function flatten(prefix, v, out) {
+    if (v == null)
+        return;
+    if (Array.isArray(v))
+        v.forEach((x, i) => flatten(`${prefix}.${i}`, x, out));
+    else if (typeof v === "object")
+        for (const [k, x] of Object.entries(v))
+            flatten(`${prefix}.${k}`, x, out);
+    else
+        out[prefix] = String(v);
+}
+function allGamesValues(pick, mode = "spike") {
     const shown = pick === null ? GAMES : [GAMES[pick]];
     const days = Array.from({ length: DAYS }, (_, i) => ({
         p: shown.reduce((n, g) => n + g.days[i].p, 0),
@@ -291,6 +325,8 @@ function allGamesValues(pick) {
         "slot.4": "releases",
         ...releaseValues(days, (day) => [...shown].reverse().find((g) => g.days[day].p > 0)?.name ?? null),
     };
+    const health = (0, health_1.mergeHealth)(GAMES.map((g, n) => [g.name, HEALTH[mode][n]]).filter((_, n) => pick === null || n === pick), PREVIEW_NOW);
+    flatten("health", health, values);
     GAMES.forEach((g, n) => {
         values[`games.${n}.id`] = g.id;
         values[`games.${n}.name`] = g.name;
@@ -309,7 +345,7 @@ function allGamesValues(pick) {
     });
     return values;
 }
-SAMPLES.push({ label: "All games (4 games; tap a chip)", deltaUp: true, series: [], values: allGamesValues(null), allGames: true });
+SAMPLES.push({ label: "All games (4 games, an error spike; tap a chip)", deltaUp: true, series: [], values: allGamesValues(null, "spike"), allGames: true, health: "spike" }, { label: "All games (calm, no alerts)", deltaUp: true, series: [], values: allGamesValues(null, "calm"), allGames: true, health: "calm" }, { label: "All games (older backends: no health)", deltaUp: true, series: [], values: allGamesValues(null, "none"), allGames: true, health: "none" });
 function styled(sample, style) {
     if (style === "stats")
         return sample;
@@ -821,6 +857,7 @@ function paint(container) {
 // Page
 const SIZES = [
     { label: "4×2", w: 330, h: 160 },
+    { label: "4×2 (the user's)", w: 380, h: 240 },
     { label: "4×1", w: 330, h: 78 },
     { label: "4×1 (the user's)", w: 380, h: 115 },
     { label: "2×2", w: 168, h: 156 },
@@ -876,7 +913,7 @@ function mount(app) {
         json.textContent = JSON.stringify(r.spec, null, 2);
         const base = SAMPLES[Number(sampleSel.value) || 0];
         // All-games widgets are always the Releases style.
-        const sample = base.allGames ? { ...base, values: allGamesValues(pickedGame) } : styled(base, (styleSel.value || "stats"));
+        const sample = base.allGames ? { ...base, values: allGamesValues(pickedGame, base.health) } : styled(base, (styleSel.value || "stats"));
         const sizes = [...SIZES];
         const cw = Number(customW.value);
         const ch = Number(customH.value);
@@ -2243,7 +2280,7 @@ const n2 = (n) => String(Math.round(n * 100) / 100);
  * Fixed cell geometry in viewBox units; `data-fit="contain"` scales it uniformly into the element's box (the svg
  * templates have no arithmetic, so the cells can't be laid out from {w} / {h}): pick [cols] for the box's aspect.
  */
-function gardenCells(c) {
+function gardenCells(c, ring = "") {
     const step = CELL + GAP;
     const r = RADIUS;
     const a = r * (1 - Math.SQRT1_2); // where the diagonal meets a rounded corner
@@ -2262,12 +2299,17 @@ function gardenCells(c) {
     }
     const sw = 1;
     out.push(`<rect x='${n2((c - 1) * step + sw / 2)}' y='${n2((ROWS - 1) * step + sw / 2)}' width='${CELL - sw}' height='${CELL - sw}' rx='${n2(r - sw / 2)}' fill='none' stroke='var(--text)' stroke-opacity='0.8' stroke-width='${sw}'/>`);
+    // [ring]: a binding holding a colour token (`bad`, `warn`, `rnone` = nothing) drawn over today's outline.
+    if (ring) {
+        const rw = 2;
+        out.push(`<rect x='${n2((c - 1) * step + rw / 2)}' y='${n2((ROWS - 1) * step + rw / 2)}' width='${CELL - rw}' height='${CELL - rw}' rx='${n2(r)}' fill='none' stroke='var(--{${ring}|rnone})' stroke-width='${rw}'/>`);
+    }
     return out.join("");
 }
 const weeks = (cols) => Math.min(cols, Math.floor(DAYS / ROWS));
-function garden(cols, style) {
+function garden(cols, style, ring = "") {
     const c = weeks(cols);
-    return `<svg viewBox="0 0 ${c * (CELL + GAP) - GAP} ${ROWS * (CELL + GAP) - GAP}" data-fit="contain" style="${style}">${gardenCells(c)}</svg>`;
+    return `<svg viewBox="0 0 ${c * (CELL + GAP) - GAP} ${ROWS * (CELL + GAP) - GAP}" data-fit="contain" style="${style}">${gardenCells(c, ring)}</svg>`;
 }
 /**
  * The garden at the element's full height, right-aligned in its box (the 4x1): the viewBox is the box in dp
@@ -2323,30 +2365,31 @@ function counts30(size) {
 exports.DEFAULT_WIDGET_HTML = `
 <!-- Colours: the tokens (var(--name) anywhere below), per system mode. #rrggbbaa: the last pair is the alpha.
      r0, rg1–rg3, rb1–rb3, rnone: the release garden's days (none, prod 1 / 2–3 / 4+, dev 1 / 2–3 / 4+, transparent);
-     chip: an all-games widget's game chips. -->
+     chip: an all-games widget's game chips; bad / warn: its health (errors up, alerts). -->
 <widget-tokens mode="day" style="
 	--bg: #ffffffef; --text: #17171b; --text2: #62606a; --brand: #fb7a32; --up: #1f8a4c; --down: #c93c3c;
 	--divider: #0000001f; --unitTime: #e2700f; --unitPercent: #1f6fd1; --unitRobux: #1f8a4c;
 	--r0: #ebedf0; --rg1: #9be9a8; --rg2: #40c463; --rg3: #216e39; --rb1: #b3d1fa; --rb2: #4a8fe0; --rb3: #1d5cb3; --rnone: #0000;
-	--chip: #ececf0">
+	--chip: #ececf0; --bad: #d64545; --warn: #c77c12">
 </widget-tokens>
 <widget-tokens mode="night" style="
 	--bg: #1c1c20; --text: #f2f0f5; --text2: #a7a3ad; --brand: #fb7a32; --up: #4cc27a; --down: #ef6b6b;
 	--divider: #ffffff33; --unitTime: #fb923c; --unitPercent: #5aa9ff; --unitRobux: #4cc27a;
 	--r0: #2b2b31; --rg1: #1f6f45; --rg2: #2fa463; --rg3: #4cc27a; --rb1: #24508a; --rb2: #3a7fd0; --rb3: #5aa9ff; --rnone: #0000;
-	--chip: #2b2b31">
+	--chip: #2b2b31; --bad: #ef6b6b; --warn: #f0a03a">
 </widget-tokens>
 <widget-strings refreshing="refreshing…" offline="offline · {updated}"></widget-strings>
 <!-- Retention as 34.25 % and its change as ▲1.12 points. -->
 <widget-format ratio-decimals="2"></widget-format>
 
 <!-- 4x2 and up: the CCU and its 6-hour line left, the four stats right. Releases style: 14 weeks (7 rows × 14 columns,
-     GitHub order), the counts (the whole history) and the last prod release beside; all games: a row of game chips (tap: show only that game) above. -->
+     GitHub order), the counts (the whole history) and the last prod release beside. All games (no title row): 8 weeks
+     (14 dp cells) with today ringed by the games' health, beside: the game chips (tap: one game) and ↻, errors / servers /
+     open alerts, the 3 latest alerts, the totals; without health (an older backend): the last prod instead. -->
 <widget state="data" name="medium" min-width="240" min-height="120" refresh="topEnd">
 	<div style="padding: 4px 6px 10px 14px">
-		<div style="display: flex; align-items: center">
-			<img src="{game.iconUrl}" style="width: 22px; height: 22px; border-radius: 6px; background: var(--divider); margin-right: 7px" data-show-if="!allGames">
-			${ALL_GAMES_TITLE}
+		<div style="display: flex; align-items: center" data-show-if="!allGames">
+			<img src="{game.iconUrl}" style="width: 22px; height: 22px; border-radius: 6px; background: var(--divider); margin-right: 7px">
 			<span style="flex: 1; font-size: 12px; font-weight: 500; color: var(--text)">{game}</span>
 			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{status}</span>
 			<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)"></tt-icon>
@@ -2391,27 +2434,77 @@ exports.DEFAULT_WIDGET_HTML = `
 			</div>
 		</div>
 		<div style="flex: 1; margin-top: 6px; padding-right: 8px" data-show-if="!slot.1">
-			${chips(6, true, "gap: 4px; margin-bottom: 3px")}
-			<div style="display: flex; flex: 1; align-items: stretch" data-show-if="${HAS_RELEASES}">
-				${garden(14, "flex: 1")}
-				<div style="justify-content: center; gap: 2px; margin-left: 12px">
+			<div style="flex: 1" data-show-if="!allGames">
+				<div style="display: flex; flex: 1; align-items: stretch" data-show-if="${HAS_RELEASES}">
+					${garden(14, "flex: 1")}
+					<div style="justify-content: center; gap: 2px; margin-left: 12px">
+						<div style="display: flex; align-items: baseline">
+							<span style="font-size: 16px; font-weight: 700; color: var(--rg3)">{${R}.prod}</span>
+							<span style="margin-left: 4px; font-size: 11px; color: var(--text2)">prod</span>
+						</div>
+						<div style="display: flex; align-items: baseline">
+							<span style="font-size: 16px; font-weight: 700; color: var(--rb3)">{${R}.dev}</span>
+							<span style="margin-left: 4px; font-size: 11px; color: var(--text2)">dev</span>
+						</div>
+						<span style="margin-top: 4px; font-size: 10px; color: var(--text2)">last prod</span>
+						<span style="font-size: 11.5px; font-weight: 600; color: var(--text)">{${R}.lastProd|none}</span>
+						<span style="font-size: 9.5px; color: var(--text2)" data-show-if="${R}.lastProdGame">{${R}.lastProdGame}</span>
+						<div data-show-if="!allGames">
+							<span style="font-size: 9.5px; color: var(--text2)" data-show-if="${R}.lastProdLabel">{${R}.lastProdLabel}</span>
+						</div>
+					</div>
+				</div>
+				${GARDEN_LOADING}
+			</div>
+			<div style="display: flex; flex: 1; align-items: center; margin-top: 2px; padding-right: 4px" data-show-if="allGames">
+				${garden(8, "width: 132px; height: 114px", "health.todayRing").replace("<svg ", `<svg data-show-if="${HAS_RELEASES}" `)}
+				<div style="flex: 1; align-self: stretch; margin-left: 12px">
+					<div style="display: flex; align-items: center">
+						${chips(6, false, "flex: 1", 28).replace(' data-show-if="allGames"', "")}
+						<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)" data-tap="refresh"></tt-icon>
+					</div>
+					<div style="margin-top: 6px; gap: 5px" data-show-if="health.todayRing">
+						<div style="display: flex; align-items: baseline">
+							<span style="font-size: 11px; font-weight: 700; color: var(--bad)" data-show-if="health.errorsHigh">{health.errors1h}{health.errorsArrow}</span>
+							<span style="font-size: 11px; font-weight: 700; color: var(--text)" data-show-if="!health.errorsHigh">{health.errors1h}</span>
+							<span style="margin-left: 3px; font-size: 11px; color: var(--text2)">err 1h</span>
+							<span style="margin-left: 10px; font-size: 11px; font-weight: 700; color: var(--up)" data-show-if="health.serversAllOk">{health.serversOk}</span>
+							<span style="margin-left: 10px; font-size: 11px; font-weight: 700; color: var(--warn)" data-show-if="!health.serversAllOk">{health.serversOk}</span>
+							<span style="font-size: 11px; color: var(--text2)">/{health.servers} srv</span>
+							<span style="margin-left: 10px; font-size: 11px; font-weight: 700; color: var(--warn)" data-show-if="health.hasAlertsOpen">{health.alertsOpen}</span>
+							<span style="margin-left: 10px; font-size: 11px; font-weight: 700; color: var(--text)" data-show-if="!health.hasAlertsOpen">{health.alertsOpen}</span>
+							<span style="margin-left: 3px; font-size: 11px; color: var(--text2)">alerts</span>
+						</div>
+						<div style="display: flex; align-items: center" data-show-if="health.alerts.0.text">
+							<svg viewBox="0 0 8 8" style="width: 8px; height: 8px; margin-right: 6px"><circle cx='4' cy='4' r='4' fill='var(--{health.alerts.0.dot|text2})'/></svg>
+							<span style="flex: 1; font-size: 10.5px; color: var(--text)">{health.alerts.0.text}</span>
+							<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{health.alerts.0.age}</span>
+						</div>
+						<div style="display: flex; align-items: center" data-show-if="health.alerts.1.text">
+							<svg viewBox="0 0 8 8" style="width: 8px; height: 8px; margin-right: 6px"><circle cx='4' cy='4' r='4' fill='var(--{health.alerts.1.dot|text2})'/></svg>
+							<span style="flex: 1; font-size: 10.5px; color: var(--text)">{health.alerts.1.text}</span>
+							<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{health.alerts.1.age}</span>
+						</div>
+						<div style="display: flex; align-items: center" data-show-if="health.alerts.2.text">
+							<svg viewBox="0 0 8 8" style="width: 8px; height: 8px; margin-right: 6px"><circle cx='4' cy='4' r='4' fill='var(--{health.alerts.2.dot|text2})'/></svg>
+							<span style="flex: 1; font-size: 10.5px; color: var(--text)">{health.alerts.2.text}</span>
+							<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{health.alerts.2.age}</span>
+						</div>
+						<span style="font-size: 10.5px; color: var(--text2)" data-show-if="!health.alerts.0.text">No alerts in 24 h</span>
+					</div>
+					<div style="margin-top: 6px" data-show-if="!health.todayRing">
+						<span style="font-size: 10.5px; color: var(--text2)">last prod {${R}.lastProd|none}</span>
+						<span style="font-size: 10px; color: var(--text2)" data-show-if="${R}.lastProdGame">{${R}.lastProdGame}</span>
+					</div>
+					<div style="flex: 1"></div>
 					<div style="display: flex; align-items: baseline">
-						<span style="font-size: 16px; font-weight: 700; color: var(--rg3)">{${R}.prod}</span>
+						<span style="font-size: 13px; font-weight: 700; color: var(--rg3)">{${R}.prod|0}</span>
 						<span style="margin-left: 4px; font-size: 11px; color: var(--text2)">prod</span>
-					</div>
-					<div style="display: flex; align-items: baseline">
-						<span style="font-size: 16px; font-weight: 700; color: var(--rb3)">{${R}.dev}</span>
+						<span style="margin-left: 10px; font-size: 13px; font-weight: 700; color: var(--rb3)">{${R}.dev|0}</span>
 						<span style="margin-left: 4px; font-size: 11px; color: var(--text2)">dev</span>
-					</div>
-					<span style="margin-top: 4px; font-size: 10px; color: var(--text2)">last prod</span>
-					<span style="font-size: 11.5px; font-weight: 600; color: var(--text)">{${R}.lastProd|none}</span>
-					<span style="font-size: 9.5px; color: var(--text2)" data-show-if="${R}.lastProdGame">{${R}.lastProdGame}</span>
-					<div data-show-if="!allGames">
-						<span style="font-size: 9.5px; color: var(--text2)" data-show-if="${R}.lastProdLabel">{${R}.lastProdLabel}</span>
 					</div>
 				</div>
 			</div>
-			${GARDEN_LOADING}
 		</div>
 	</div>
 </widget>
@@ -2748,6 +2841,96 @@ exports.DEFAULT_WIDGET_HTML = `
 `;
 
 },
+"src/features/live/widgets/program/health.ts": function (module, exports, require) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.MAX_ALERTS = void 0;
+exports.age = age;
+exports.mergeHealth = mergeHealth;
+/**
+ * Health of all-games widgets (the 4x2's variant C): each answer's top-level `health` (backend: { errors1h,
+ * errorsPrev1h, servers, serversOk, alertsOpen, alerts: [{ level, title, at }] } or null) merged over the shown games,
+ * with the colour tokens the widget HTML can't compute itself (no conditionals in templates).
+ */
+const json_1 = require("src/features/live/widgets/program/json.ts");
+const HOUR = 3600000;
+/** Alerts listed in the widget. */
+exports.MAX_ALERTS = 3;
+function whole(v) {
+    const d = (0, json_1.num)(v);
+    return d == null || d <= 0 ? 0 : Math.trunc(d);
+}
+/** "now", "4m", "2h", "3d" from [at] (ISO) to [now] (ms); "" when unknown. */
+function age(at, now) {
+    if (at == null || !isFinite(now))
+        return "";
+    const ms = Math.max(0, now - at);
+    if (ms < 60000)
+        return "now";
+    if (ms < HOUR)
+        return `${Math.floor(ms / 60000)}m`;
+    if (ms < 24 * HOUR)
+        return `${Math.floor(ms / HOUR)}h`;
+    return `${Math.floor(ms / (24 * HOUR))}d`;
+}
+const LEVEL_DOT = { critical: "bad", warning: "warn", info: "text2" };
+/**
+ * [inputs]: (game name, its answer's `health`) for the shown games. Null when none has health (an older backend: the
+ * widget hides the health parts). Rules: errors high (red, ▲) when errors1h > 0 and ≥ 2 × errorsPrev1h; today's ring
+ * `bad` when errors are high or a critical alert came in the last hour, `warn` when an alert is open, else `rnone`.
+ */
+function mergeHealth(inputs, now) {
+    let any = false;
+    let errors = 0;
+    let prev = 0;
+    let servers = 0;
+    let serversOk = 0;
+    let open = 0;
+    const alerts = [];
+    for (const [game, h] of inputs) {
+        if (!(0, json_1.isObj)(h))
+            continue;
+        any = true;
+        errors += whole(h.errors1h);
+        prev += whole(h.errorsPrev1h);
+        servers += whole(h.servers);
+        serversOk += whole(h.serversOk);
+        open += whole(h.alertsOpen);
+        if (!Array.isArray(h.alerts))
+            continue;
+        for (const a of h.alerts) {
+            if (!(0, json_1.isObj)(a))
+                continue;
+            const title = (0, json_1.text)(a.title);
+            if (!title)
+                continue;
+            const t = typeof a.at === "string" ? Date.parse(a.at) : NaN;
+            const level = typeof a.level === "string" && LEVEL_DOT[a.level] ? a.level : "info";
+            alerts.push({ at: isFinite(t) ? t : null, level, text: `${(0, json_1.cleanName)(game) || game} · ${title.trim()}` });
+        }
+    }
+    if (!any)
+        return null;
+    alerts.sort((a, b) => (b.at == null ? -Infinity : b.at) - (a.at == null ? -Infinity : a.at));
+    const shown = alerts.slice(0, exports.MAX_ALERTS);
+    const high = errors > 0 && errors >= 2 * prev;
+    const criticalNow = alerts.some((a) => a.level === "critical" && a.at != null && now - a.at <= HOUR);
+    return {
+        errors1h: errors,
+        errorsPrev1h: prev,
+        errorsHigh: high ? "1" : "",
+        errorsArrow: high ? "▲" : "",
+        servers,
+        serversOk,
+        serversAllOk: servers > 0 && serversOk >= servers ? "1" : "",
+        alertsOpen: open,
+        hasAlertsOpen: open > 0 ? "1" : "",
+        alerts: shown.map((a) => ({ level: a.level, dot: LEVEL_DOT[a.level], text: a.text, age: age(a.at, now) })),
+        todayRing: high || criticalNow ? "bad" : open > 0 ? "warn" : "rnone",
+    };
+}
+
+},
 "src/features/live/widget-spec.ts": function (module, exports, require) {
 "use strict";
 /**
@@ -2762,6 +2945,106 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.WIDGET_SPEC_VERSION = void 0;
 /** Spec format version the native renderer understands. A spec with a higher version is ignored (built-in default). */
 exports.WIDGET_SPEC_VERSION = 1;
+
+},
+"src/features/live/widgets/program/json.ts": function (module, exports, require) {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.isObj = isObj;
+exports.num = num;
+exports.rounded = rounded;
+exports.str = str;
+exports.text = text;
+exports.webUrl = webUrl;
+exports.metric = metric;
+exports.metrics = metrics;
+exports.cleanName = cleanName;
+function isObj(v) {
+    return v != null && typeof v === "object" && !Array.isArray(v);
+}
+/** A number (or a numeric string), finite; else null (LiveData.kt numOrNull). */
+function num(v) {
+    let d = null;
+    if (typeof v === "number")
+        d = v;
+    else if (typeof v === "string" && NUMERIC.test(v))
+        d = Number(v);
+    return d == null || !isFinite(d) ? null : d;
+}
+/** Kotlin's String.toDouble shape (no blanks, no hex). */
+const NUMERIC = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
+/** Kotlin roundToInt / roundToLong (half up). */
+function rounded(v) {
+    const d = num(v);
+    return d == null ? null : Math.round(d);
+}
+/** Any non-null value as text (strOrNull: `opt(key).toString()`). */
+function str(v) {
+    if (v == null)
+        return null;
+    if (typeof v === "string")
+        return v;
+    if (typeof v === "number" || typeof v === "boolean")
+        return String(v);
+    return JSON.stringify(v);
+}
+/** A non-blank text, else null. */
+function text(v) {
+    const s = str(v);
+    return s != null && s.trim() ? s : null;
+}
+/** An http(s) URL (trimmed), else null (LiveData.kt: game.iconUrl). */
+function webUrl(v) {
+    const s = str(v);
+    if (s == null)
+        return null;
+    const t = s.trim();
+    return /^https?:\/\//i.test(t) ? t : null;
+}
+const METRIC_KNOWN = ["value", "prev", "unit", "label"];
+/**
+ * One `metrics` entry as the native cache keeps it (Metric.fromJson + toJson): its other fields without nulls, then
+ * value / prev (numbers or null), unit / label (non-blank text or null).
+ */
+function metric(o) {
+    const out = {};
+    for (const k of Object.keys(o)) {
+        if (METRIC_KNOWN.indexOf(k) >= 0)
+            continue;
+        const v = o[k];
+        if (v != null)
+            out[k] = v;
+    }
+    out.value = num(o.value);
+    out.prev = num(o.prev);
+    out.unit = text(o.unit);
+    out.label = text(o.label);
+    return out;
+}
+/** The answer's `metrics` as the cache keeps them (null entries, unknown ids, left out). */
+function metrics(v) {
+    const out = {};
+    if (!isObj(v))
+        return out;
+    for (const id of Object.keys(v)) {
+        const e = v[id];
+        if (isObj(e))
+            out[id] = metric(e);
+    }
+    return out;
+}
+/**
+ * A game's name without emoji (pictographs, flags, keycaps, joiners, variation selectors), spaces collapsed: "The Prison
+ * 🔊" → "The Prison". Null when nothing is left.
+ */
+function cleanName(v) {
+    const s = text(v);
+    if (s == null)
+        return null;
+    const out = s.replace(EMOJI, "").replace(/\s+/g, " ").trim();
+    return out ? out : null;
+}
+const EMOJI = /[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\u200D\uFE0E\uFE0F\u20E3]/gu;
 
 }
 };

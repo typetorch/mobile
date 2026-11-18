@@ -39,7 +39,7 @@ const n2 = (n: number) => String(Math.round(n * 100) / 100);
  * Fixed cell geometry in viewBox units; `data-fit="contain"` scales it uniformly into the element's box (the svg
  * templates have no arithmetic, so the cells can't be laid out from {w} / {h}): pick [cols] for the box's aspect.
  */
-function gardenCells(c: number): string {
+function gardenCells(c: number, ring = ""): string {
 	const step = CELL + GAP;
 	const r = RADIUS;
 	const a = r * (1 - Math.SQRT1_2); // where the diagonal meets a rounded corner
@@ -60,14 +60,21 @@ function gardenCells(c: number): string {
 	out.push(
 		`<rect x='${n2((c - 1) * step + sw / 2)}' y='${n2((ROWS - 1) * step + sw / 2)}' width='${CELL - sw}' height='${CELL - sw}' rx='${n2(r - sw / 2)}' fill='none' stroke='var(--text)' stroke-opacity='0.8' stroke-width='${sw}'/>`,
 	);
+	// [ring]: a binding holding a colour token (`bad`, `warn`, `rnone` = nothing) drawn over today's outline.
+	if (ring) {
+		const rw = 2;
+		out.push(
+			`<rect x='${n2((c - 1) * step + rw / 2)}' y='${n2((ROWS - 1) * step + rw / 2)}' width='${CELL - rw}' height='${CELL - rw}' rx='${n2(r)}' fill='none' stroke='var(--{${ring}|rnone})' stroke-width='${rw}'/>`,
+		);
+	}
 	return out.join("");
 }
 
 const weeks = (cols: number) => Math.min(cols, Math.floor(DAYS / ROWS));
 
-function garden(cols: number, style: string): string {
+function garden(cols: number, style: string, ring = ""): string {
 	const c = weeks(cols);
-	return `<svg viewBox="0 0 ${c * (CELL + GAP) - GAP} ${ROWS * (CELL + GAP) - GAP}" data-fit="contain" style="${style}">${gardenCells(c)}</svg>`;
+	return `<svg viewBox="0 0 ${c * (CELL + GAP) - GAP} ${ROWS * (CELL + GAP) - GAP}" data-fit="contain" style="${style}">${gardenCells(c, ring)}</svg>`;
 }
 
 /**
@@ -130,30 +137,31 @@ function counts30(size: number): string {
 export const DEFAULT_WIDGET_HTML = `
 <!-- Colours: the tokens (var(--name) anywhere below), per system mode. #rrggbbaa: the last pair is the alpha.
      r0, rg1–rg3, rb1–rb3, rnone: the release garden's days (none, prod 1 / 2–3 / 4+, dev 1 / 2–3 / 4+, transparent);
-     chip: an all-games widget's game chips. -->
+     chip: an all-games widget's game chips; bad / warn: its health (errors up, alerts). -->
 <widget-tokens mode="day" style="
 	--bg: #ffffffef; --text: #17171b; --text2: #62606a; --brand: #fb7a32; --up: #1f8a4c; --down: #c93c3c;
 	--divider: #0000001f; --unitTime: #e2700f; --unitPercent: #1f6fd1; --unitRobux: #1f8a4c;
 	--r0: #ebedf0; --rg1: #9be9a8; --rg2: #40c463; --rg3: #216e39; --rb1: #b3d1fa; --rb2: #4a8fe0; --rb3: #1d5cb3; --rnone: #0000;
-	--chip: #ececf0">
+	--chip: #ececf0; --bad: #d64545; --warn: #c77c12">
 </widget-tokens>
 <widget-tokens mode="night" style="
 	--bg: #1c1c20; --text: #f2f0f5; --text2: #a7a3ad; --brand: #fb7a32; --up: #4cc27a; --down: #ef6b6b;
 	--divider: #ffffff33; --unitTime: #fb923c; --unitPercent: #5aa9ff; --unitRobux: #4cc27a;
 	--r0: #2b2b31; --rg1: #1f6f45; --rg2: #2fa463; --rg3: #4cc27a; --rb1: #24508a; --rb2: #3a7fd0; --rb3: #5aa9ff; --rnone: #0000;
-	--chip: #2b2b31">
+	--chip: #2b2b31; --bad: #ef6b6b; --warn: #f0a03a">
 </widget-tokens>
 <widget-strings refreshing="refreshing…" offline="offline · {updated}"></widget-strings>
 <!-- Retention as 34.25 % and its change as ▲1.12 points. -->
 <widget-format ratio-decimals="2"></widget-format>
 
 <!-- 4x2 and up: the CCU and its 6-hour line left, the four stats right. Releases style: 14 weeks (7 rows × 14 columns,
-     GitHub order), the counts (the whole history) and the last prod release beside; all games: a row of game chips (tap: show only that game) above. -->
+     GitHub order), the counts (the whole history) and the last prod release beside. All games (no title row): 8 weeks
+     (14 dp cells) with today ringed by the games' health, beside: the game chips (tap: one game) and ↻, errors / servers /
+     open alerts, the 3 latest alerts, the totals; without health (an older backend): the last prod instead. -->
 <widget state="data" name="medium" min-width="240" min-height="120" refresh="topEnd">
 	<div style="padding: 4px 6px 10px 14px">
-		<div style="display: flex; align-items: center">
-			<img src="{game.iconUrl}" style="width: 22px; height: 22px; border-radius: 6px; background: var(--divider); margin-right: 7px" data-show-if="!allGames">
-			${ALL_GAMES_TITLE}
+		<div style="display: flex; align-items: center" data-show-if="!allGames">
+			<img src="{game.iconUrl}" style="width: 22px; height: 22px; border-radius: 6px; background: var(--divider); margin-right: 7px">
 			<span style="flex: 1; font-size: 12px; font-weight: 500; color: var(--text)">{game}</span>
 			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{status}</span>
 			<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)"></tt-icon>
@@ -198,27 +206,77 @@ export const DEFAULT_WIDGET_HTML = `
 			</div>
 		</div>
 		<div style="flex: 1; margin-top: 6px; padding-right: 8px" data-show-if="!slot.1">
-			${chips(6, true, "gap: 4px; margin-bottom: 3px")}
-			<div style="display: flex; flex: 1; align-items: stretch" data-show-if="${HAS_RELEASES}">
-				${garden(14, "flex: 1")}
-				<div style="justify-content: center; gap: 2px; margin-left: 12px">
+			<div style="flex: 1" data-show-if="!allGames">
+				<div style="display: flex; flex: 1; align-items: stretch" data-show-if="${HAS_RELEASES}">
+					${garden(14, "flex: 1")}
+					<div style="justify-content: center; gap: 2px; margin-left: 12px">
+						<div style="display: flex; align-items: baseline">
+							<span style="font-size: 16px; font-weight: 700; color: var(--rg3)">{${R}.prod}</span>
+							<span style="margin-left: 4px; font-size: 11px; color: var(--text2)">prod</span>
+						</div>
+						<div style="display: flex; align-items: baseline">
+							<span style="font-size: 16px; font-weight: 700; color: var(--rb3)">{${R}.dev}</span>
+							<span style="margin-left: 4px; font-size: 11px; color: var(--text2)">dev</span>
+						</div>
+						<span style="margin-top: 4px; font-size: 10px; color: var(--text2)">last prod</span>
+						<span style="font-size: 11.5px; font-weight: 600; color: var(--text)">{${R}.lastProd|none}</span>
+						<span style="font-size: 9.5px; color: var(--text2)" data-show-if="${R}.lastProdGame">{${R}.lastProdGame}</span>
+						<div data-show-if="!allGames">
+							<span style="font-size: 9.5px; color: var(--text2)" data-show-if="${R}.lastProdLabel">{${R}.lastProdLabel}</span>
+						</div>
+					</div>
+				</div>
+				${GARDEN_LOADING}
+			</div>
+			<div style="display: flex; flex: 1; align-items: center; margin-top: 2px; padding-right: 4px" data-show-if="allGames">
+				${garden(8, "width: 132px; height: 114px", "health.todayRing").replace("<svg ", `<svg data-show-if="${HAS_RELEASES}" `)}
+				<div style="flex: 1; align-self: stretch; margin-left: 12px">
+					<div style="display: flex; align-items: center">
+						${chips(6, false, "flex: 1", 28).replace(' data-show-if="allGames"', "")}
+						<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)" data-tap="refresh"></tt-icon>
+					</div>
+					<div style="margin-top: 6px; gap: 5px" data-show-if="health.todayRing">
+						<div style="display: flex; align-items: baseline">
+							<span style="font-size: 11px; font-weight: 700; color: var(--bad)" data-show-if="health.errorsHigh">{health.errors1h}{health.errorsArrow}</span>
+							<span style="font-size: 11px; font-weight: 700; color: var(--text)" data-show-if="!health.errorsHigh">{health.errors1h}</span>
+							<span style="margin-left: 3px; font-size: 11px; color: var(--text2)">err 1h</span>
+							<span style="margin-left: 10px; font-size: 11px; font-weight: 700; color: var(--up)" data-show-if="health.serversAllOk">{health.serversOk}</span>
+							<span style="margin-left: 10px; font-size: 11px; font-weight: 700; color: var(--warn)" data-show-if="!health.serversAllOk">{health.serversOk}</span>
+							<span style="font-size: 11px; color: var(--text2)">/{health.servers} srv</span>
+							<span style="margin-left: 10px; font-size: 11px; font-weight: 700; color: var(--warn)" data-show-if="health.hasAlertsOpen">{health.alertsOpen}</span>
+							<span style="margin-left: 10px; font-size: 11px; font-weight: 700; color: var(--text)" data-show-if="!health.hasAlertsOpen">{health.alertsOpen}</span>
+							<span style="margin-left: 3px; font-size: 11px; color: var(--text2)">alerts</span>
+						</div>
+						<div style="display: flex; align-items: center" data-show-if="health.alerts.0.text">
+							<svg viewBox="0 0 8 8" style="width: 8px; height: 8px; margin-right: 6px"><circle cx='4' cy='4' r='4' fill='var(--{health.alerts.0.dot|text2})'/></svg>
+							<span style="flex: 1; font-size: 10.5px; color: var(--text)">{health.alerts.0.text}</span>
+							<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{health.alerts.0.age}</span>
+						</div>
+						<div style="display: flex; align-items: center" data-show-if="health.alerts.1.text">
+							<svg viewBox="0 0 8 8" style="width: 8px; height: 8px; margin-right: 6px"><circle cx='4' cy='4' r='4' fill='var(--{health.alerts.1.dot|text2})'/></svg>
+							<span style="flex: 1; font-size: 10.5px; color: var(--text)">{health.alerts.1.text}</span>
+							<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{health.alerts.1.age}</span>
+						</div>
+						<div style="display: flex; align-items: center" data-show-if="health.alerts.2.text">
+							<svg viewBox="0 0 8 8" style="width: 8px; height: 8px; margin-right: 6px"><circle cx='4' cy='4' r='4' fill='var(--{health.alerts.2.dot|text2})'/></svg>
+							<span style="flex: 1; font-size: 10.5px; color: var(--text)">{health.alerts.2.text}</span>
+							<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{health.alerts.2.age}</span>
+						</div>
+						<span style="font-size: 10.5px; color: var(--text2)" data-show-if="!health.alerts.0.text">No alerts in 24 h</span>
+					</div>
+					<div style="margin-top: 6px" data-show-if="!health.todayRing">
+						<span style="font-size: 10.5px; color: var(--text2)">last prod {${R}.lastProd|none}</span>
+						<span style="font-size: 10px; color: var(--text2)" data-show-if="${R}.lastProdGame">{${R}.lastProdGame}</span>
+					</div>
+					<div style="flex: 1"></div>
 					<div style="display: flex; align-items: baseline">
-						<span style="font-size: 16px; font-weight: 700; color: var(--rg3)">{${R}.prod}</span>
+						<span style="font-size: 13px; font-weight: 700; color: var(--rg3)">{${R}.prod|0}</span>
 						<span style="margin-left: 4px; font-size: 11px; color: var(--text2)">prod</span>
-					</div>
-					<div style="display: flex; align-items: baseline">
-						<span style="font-size: 16px; font-weight: 700; color: var(--rb3)">{${R}.dev}</span>
+						<span style="margin-left: 10px; font-size: 13px; font-weight: 700; color: var(--rb3)">{${R}.dev|0}</span>
 						<span style="margin-left: 4px; font-size: 11px; color: var(--text2)">dev</span>
-					</div>
-					<span style="margin-top: 4px; font-size: 10px; color: var(--text2)">last prod</span>
-					<span style="font-size: 11.5px; font-weight: 600; color: var(--text)">{${R}.lastProd|none}</span>
-					<span style="font-size: 9.5px; color: var(--text2)" data-show-if="${R}.lastProdGame">{${R}.lastProdGame}</span>
-					<div data-show-if="!allGames">
-						<span style="font-size: 9.5px; color: var(--text2)" data-show-if="${R}.lastProdLabel">{${R}.lastProdLabel}</span>
 					</div>
 				</div>
 			</div>
-			${GARDEN_LOADING}
 		</div>
 	</div>
 </widget>

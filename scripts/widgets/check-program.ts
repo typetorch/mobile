@@ -403,6 +403,55 @@ let gameIds: Json = null;
 	eq([g.prod, g.dev, g.lastProd], [5, 9, "4 d ago"], "games[]: an older backend's totals and last prod");
 }
 
+// Health (the 4x2 variant C): merged over the shown games, the ring and colour rules, missing health.
+{
+	const ago = (ms: number) => new Date(NOW - ms).toISOString();
+	const MIN = 60000;
+	const withHealth = (b: Obj, health: Json) => ({ ok: true, body: { ...b, health }, at: NOW - 60000 });
+	const hA = { errors1h: 150, errorsPrev1h: 40, servers: 30, serversOk: 29, alertsOpen: 2, alerts: [
+		{ level: "critical", title: "error spike after #142", at: ago(4 * MIN) },
+		{ level: "warning", title: "CCU −38%", at: ago(12 * MIN) },
+		{ level: "info", title: "old note", at: ago(20 * 3600000) },
+	] };
+	const hB = { errors1h: 9, errorsPrev1h: 10, servers: 15, serversOk: 15, alertsOpen: 1, alerts: [{ level: "warning", title: "memory 92%", at: ago(31 * MIN) }] };
+	const responses = {
+		...allResponses,
+		"acc-gnome": { [REL_KEY]: withHealth({ ...A_BODY, game: { ...(A_BODY.game as Obj), name: "Zomvival 🔊" } }, hA) },
+		"acc-tower": { [REL_KEY]: withHealth(B_BODY, hB) },
+	};
+	const h = (state: Obj | null, r: Obj = responses) => ((call("shape", { widget: allWidget(state), backends, responses: r, now: NOW }).live as Obj).health ?? null) as Obj | null;
+	const all = h(null) as Obj;
+	eq(
+		[all.errors1h, all.errorsPrev1h, all.errorsHigh, all.errorsArrow, all.servers, all.serversOk, all.serversAllOk, all.alertsOpen, all.hasAlertsOpen],
+		[159, 50, "1", "▲", 45, 44, "", 3, "1"],
+		"health: sums over the games with health; errors ≥ 2× prev → high",
+	);
+	eq(
+		all.alerts,
+		[
+			{ level: "critical", dot: "bad", text: "Zomvival · error spike after #142", age: "4m" },
+			{ level: "warning", dot: "warn", text: "Zomvival · CCU −38%", age: "12m" },
+			{ level: "warning", dot: "warn", text: "Tower Run · memory 92%", age: "31m" },
+		],
+		"health: the newest 3 alerts across games, game name (no emoji) first, age",
+	);
+	eq(all.todayRing, "bad", "health: ring bad (spike / critical in the last hour)");
+	const tower = h({ filter: "acc-tower" }) as Obj;
+	eq(
+		[tower.errors1h, tower.errorsHigh, tower.serversAllOk, tower.alertsOpen, tower.todayRing, (tower.alerts as Obj[]).length],
+		[9, "", "1", 1, "warn", 1],
+		"health: the picked game only; open alert → ring warn; all servers ok",
+	);
+	const calm = h(null, { "acc-gnome": { [REL_KEY]: withHealth(A_BODY, { errors1h: 0, errorsPrev1h: 0, servers: 3, serversOk: 3, alertsOpen: 0, alerts: [] }) } }) as Obj;
+	eq([calm.errorsHigh, calm.todayRing, calm.alerts, calm.hasAlertsOpen], ["", "rnone", [], ""], "health: calm → no ring, no alerts");
+	const oldCritical = h(null, {
+		"acc-gnome": { [REL_KEY]: withHealth(A_BODY, { errors1h: 1, errorsPrev1h: 5, alertsOpen: 0, alerts: [{ level: "critical", title: "x", at: ago(3 * 3600000) }] }) },
+	}) as Obj;
+	eq([oldCritical.todayRing, (oldCritical.alerts as Obj[])[0].age], ["rnone", "3h"], "health: a critical alert older than 1 h, nothing open → no ring");
+	eq(h(null, allResponses), null, "health: no game has health (older backends) → no live.health");
+	eq(h(null, { ...allResponses, "acc-tower": { [REL_KEY]: withHealth(B_BODY, null) } }), null, "health: health null → none");
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // shape: all games, filtered
 

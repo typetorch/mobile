@@ -7,6 +7,7 @@
  */
 import { compileWidgetHtml } from "../../src/features/live/widgets/compile";
 import { DEFAULT_WIDGET_HTML } from "../../src/features/live/widgets/default-widget";
+import { mergeHealth } from "../../src/features/live/widgets/program/health";
 import type { ChartElement, Fill, SizeLayout, SvgElement, WidgetElement, WidgetSpec, WidgetState } from "../../src/features/live/widget-spec";
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -15,7 +16,9 @@ import type { ChartElement, Fill, SizeLayout, SvgElement, WidgetElement, WidgetS
 /** A text segment: the text and its colour (a token name or a CSS colour); no colour = the element's. */
 type Seg = { t: string; c?: string };
 type Val = string | Seg[] | null;
-type Sample = { label: string; values: Record<string, Val>; series: number[]; deltaUp: boolean; allGames?: boolean };
+/** All-games samples: the games' `health` (program/health.ts merges it): a spike, a calm day, none (older backends). */
+type HealthMode = "spike" | "calm" | "none";
+type Sample = { label: string; values: Record<string, Val>; series: number[]; deltaUp: boolean; allGames?: boolean; health?: HealthMode };
 
 const u = (t: string, c: string): Seg => ({ t, c });
 const p = (t: string): Seg => ({ t });
@@ -219,7 +222,37 @@ const GAMES: { id: string; name: string; iconUrl: string | null; days: Day[] }[]
 	{ id: "slime", name: "Slime", iconUrl: icon("S", "#7a6ad8", "#2c2266"), days: releaseDays(19, 0.1, 0.2, 100) },
 ];
 
-function allGamesValues(pick: number | null): Record<string, Val> {
+const PREVIEW_NOW = Date.UTC(2026, 10, 18, 12);
+const agoIso = (min: number) => new Date(PREVIEW_NOW - min * 60000).toISOString();
+/** Per game (GAMES order): its answer's `health` in each mode. */
+const HEALTH: Record<HealthMode, (Record<string, unknown> | null)[]> = {
+	spike: [
+		{ errors1h: 41, errorsPrev1h: 30, servers: 12, serversOk: 12, alertsOpen: 0, alerts: [] },
+		{ errors1h: 118, errorsPrev1h: 22, servers: 30, serversOk: 29, alertsOpen: 2, alerts: [
+			{ level: "critical", title: "error spike after #142", at: agoIso(4) },
+			{ level: "warning", title: "CCU −38%", at: agoIso(12) },
+		] },
+		{ errors1h: 0, errorsPrev1h: 1, servers: 3, serversOk: 3, alertsOpen: 1, alerts: [{ level: "warning", title: "memory 92%", at: agoIso(31) }] },
+		{ errors1h: 0, errorsPrev1h: 0, servers: 0, serversOk: 0, alertsOpen: 0, alerts: [{ level: "info", title: "deploy finished", at: agoIso(300) }] },
+	],
+	calm: [
+		{ errors1h: 3, errorsPrev1h: 4, servers: 12, serversOk: 12, alertsOpen: 0, alerts: [] },
+		{ errors1h: 5, errorsPrev1h: 6, servers: 30, serversOk: 30, alertsOpen: 0, alerts: [] },
+		{ errors1h: 0, errorsPrev1h: 0, servers: 3, serversOk: 3, alertsOpen: 0, alerts: [] },
+		null,
+	],
+	none: [null, null, null, null],
+};
+
+/** A JSON value as the flat path bindings the preview's samples use (`health.alerts.0.text`). */
+function flatten(prefix: string, v: unknown, out: Record<string, Val>) {
+	if (v == null) return;
+	if (Array.isArray(v)) v.forEach((x, i) => flatten(`${prefix}.${i}`, x, out));
+	else if (typeof v === "object") for (const [k, x] of Object.entries(v)) flatten(`${prefix}.${k}`, x, out);
+	else out[prefix] = String(v);
+}
+
+function allGamesValues(pick: number | null, mode: HealthMode = "spike"): Record<string, Val> {
 	const shown = pick === null ? GAMES : [GAMES[pick]];
 	const days = Array.from({ length: DAYS }, (_, i) => ({
 		p: shown.reduce((n, g) => n + g.days[i].p, 0),
@@ -238,6 +271,11 @@ function allGamesValues(pick: number | null): Record<string, Val> {
 		"slot.4": "releases",
 		...releaseValues(days, (day) => [...shown].reverse().find((g) => g.days[day].p > 0)?.name ?? null),
 	};
+	const health = mergeHealth(
+		GAMES.map((g, n): [string, never] => [g.name, HEALTH[mode][n] as never]).filter((_, n) => pick === null || n === pick),
+		PREVIEW_NOW,
+	);
+	flatten("health", health, values);
 	GAMES.forEach((g, n) => {
 		values[`games.${n}.id`] = g.id;
 		values[`games.${n}.name`] = g.name;
@@ -256,7 +294,11 @@ function allGamesValues(pick: number | null): Record<string, Val> {
 	return values;
 }
 
-SAMPLES.push({ label: "All games (4 games; tap a chip)", deltaUp: true, series: [], values: allGamesValues(null), allGames: true });
+SAMPLES.push(
+	{ label: "All games (4 games, an error spike; tap a chip)", deltaUp: true, series: [], values: allGamesValues(null, "spike"), allGames: true, health: "spike" },
+	{ label: "All games (calm, no alerts)", deltaUp: true, series: [], values: allGamesValues(null, "calm"), allGames: true, health: "calm" },
+	{ label: "All games (older backends: no health)", deltaUp: true, series: [], values: allGamesValues(null, "none"), allGames: true, health: "none" },
+);
 
 /** The widget's style (Settings → Widgets): Stats, or Releases (slots ["", "", "", "releases"]) with or without data yet. */
 type Style = "stats" | "releases" | "releasesLoading" | "releasesOld";
@@ -765,6 +807,7 @@ function paint(container: HTMLElement) {
 
 const SIZES: { label: string; w: number; h: number }[] = [
 	{ label: "4×2", w: 330, h: 160 },
+	{ label: "4×2 (the user's)", w: 380, h: 240 },
 	{ label: "4×1", w: 330, h: 78 },
 	{ label: "4×1 (the user's)", w: 380, h: 115 },
 	{ label: "2×2", w: 168, h: 156 },
@@ -820,7 +863,7 @@ export function mount(app: HTMLElement) {
 		json.textContent = JSON.stringify(r.spec, null, 2);
 		const base = SAMPLES[Number(sampleSel.value) || 0];
 		// All-games widgets are always the Releases style.
-		const sample = base.allGames ? { ...base, values: allGamesValues(pickedGame) } : styled(base, (styleSel.value || "stats") as Style);
+		const sample = base.allGames ? { ...base, values: allGamesValues(pickedGame, base.health) } : styled(base, (styleSel.value || "stats") as Style);
 		const sizes = [...SIZES];
 		const cw = Number(customW.value);
 		const ch = Number(customH.value);
