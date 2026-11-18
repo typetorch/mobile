@@ -591,8 +591,9 @@ class Compiler {
 		const tap = el.attrs["data-tap"];
 		if (tap != null) {
 			const t = tap.trim();
-			if (/^(open|refresh|toggle:games\.\d{1,2})$/.test(t)) out.tap = t;
-			else w(`data-tap="${tap}" (open, refresh or toggle:games.N): left out`);
+			// action:<anything>: the widget program's tap (docs/WIDGET_PROGRAM.md; `{bindings}` in it allowed).
+			if (/^(open|refresh|toggle:games\.\d{1,2}|action:\S{1,200})$/.test(t)) out.tap = t;
+			else w(`data-tap="${tap}" (open, refresh, toggle:games.N or action:…): left out`);
 		}
 	}
 

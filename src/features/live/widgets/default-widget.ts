@@ -71,8 +71,9 @@ const GARDEN_LOADING = `<div style="display: grid; flex: 1" data-show-if="!${HAS
 
 /**
  * All-games widgets (docs/WIDGET_SPEC.md, All games): game N's icon chip, a 32 dp tap target that picks the game (or
- * clears the pick). The icon is dimmed by `games.N.alpha` (0.4 when another game is picked) and ringed when
- * `games.N.picked` ("1"; "" → the ring's opacity falls back to 0).
+ * clears the pick): the widget program's `action:toggle:<backend id>` (docs/WIDGET_PROGRAM.md; LiveSync sends these
+ * chips as `toggle:games.N` where the program doesn't run). The icon is dimmed by `games.N.alpha` (0.4 when another
+ * game is picked) and ringed when `games.N.picked` ("1"; "" → the ring's opacity falls back to 0).
  */
 function chipIcon(n: number, show = ""): string {
 	const g = `games.${n}`;
@@ -87,7 +88,7 @@ function chips(count: number, named: boolean, style: string): string {
 		const inner = named
 			? `<div style="display: flex; align-items: center; padding-right: 9px; background: var(--chip); border-radius: 16px" data-show-if="${g}.picked">${chipIcon(n)}<span style="width: 70px; font-size: 10.5px; font-weight: 500; color: var(--text)">{${g}.name}</span></div>${chipIcon(n, `!${g}.picked`)}`
 			: chipIcon(n);
-		out.push(`<div data-show-if="${g}.id" data-tap="toggle:${g}">${inner}</div>`);
+		out.push(`<div data-show-if="${g}.id" data-tap="action:toggle:{${g}.id}">${inner}</div>`);
 	}
 	return `<div style="display: flex; align-items: center; ${style}" data-show-if="allGames">${out.join("")}</div>`;
 }

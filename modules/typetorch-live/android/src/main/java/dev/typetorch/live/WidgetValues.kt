@@ -339,7 +339,8 @@ internal class WidgetValues(
 
     /**
      * The values of one widget: [b] null when no backend; [snap] the cache; the status wording from [spec]; [slots]
-     * the widget's stat slots (metric ids, "" = empty) as `slot.N.*` (1-based).
+     * the widget's stat slots (metric ids, "" = empty) as `slot.N.*` (1-based); [error] a widget program's failure
+     * (`{error}`, set only then, so without a program `error` stays a path into the live answer).
      */
     fun of(
       ctx: Context,
@@ -348,9 +349,11 @@ internal class WidgetValues(
       snap: Snapshot?,
       refreshing: Boolean,
       slots: List<String>,
+      error: String? = null,
     ): WidgetValues {
       val data = snap?.data
       val m = HashMap<String, Any?>()
+      if (error != null) m["error"] = error
       m["backend"] = b?.name?.takeIf { it.isNotBlank() }
       m["game"] = data?.gameName?.takeIf { it.isNotBlank() } ?: b?.name?.takeIf { it.isNotBlank() }
       m["game.iconUrl"] = data?.iconUrl

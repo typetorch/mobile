@@ -53,7 +53,8 @@ internal data class Metric(
     /** A field bigger than this (as JSON text) isn't kept (60 `days` are about 3,500 characters). */
     private const val MAX_EXTRA_CHARS = 16_000
 
-    fun fromJson(o: JSONObject): Metric {
+    /** [maxExtraChars]: the cap per extra field (a widget program's `live` keeps bigger ones). */
+    fun fromJson(o: JSONObject, maxExtraChars: Int = MAX_EXTRA_CHARS): Metric {
       var extra: JSONObject? = null
       val keys = o.keys()
       while (keys.hasNext()) {
@@ -61,8 +62,8 @@ internal data class Metric(
         if (k in KNOWN) continue
         val v = o.opt(k) ?: continue
         if (v == JSONObject.NULL) continue
-        if ((v is JSONObject || v is JSONArray) && v.toString().length > MAX_EXTRA_CHARS) continue
-        if (v is String && v.length > MAX_EXTRA_CHARS) continue
+        if ((v is JSONObject || v is JSONArray) && v.toString().length > maxExtraChars) continue
+        if (v is String && v.length > maxExtraChars) continue
         val e = extra ?: JSONObject().also { extra = it }
         e.put(k, v)
       }
@@ -166,7 +167,11 @@ internal data class LiveData(
       null
     }
 
-    fun fromJson(o: JSONObject): LiveData {
+    /**
+     * [maxExtraChars]: the cap per unknown field (the cache's [MAX_EXTRA_CHARS]; a widget program's `live`, already
+     * bounded by its 256 KB output, passes a bigger one).
+     */
+    fun fromJson(o: JSONObject, maxExtraChars: Int = MAX_EXTRA_CHARS): LiveData {
       val game = o.optJSONObject("game")
       val series = ArrayList<Point>()
       val arr = o.optJSONArray("series")
@@ -194,7 +199,7 @@ internal data class LiveData(
           val id = keys.next()
           val e = mo.optJSONObject(id) ?: continue // null: unknown metric
           try {
-            metrics[id] = Metric.fromJson(e)
+            metrics[id] = Metric.fromJson(e, maxExtraChars)
           } catch (t: Throwable) {
             // a bad entry: skipped
           }
@@ -207,8 +212,8 @@ internal data class LiveData(
         if (k in KNOWN) continue
         val v = o.opt(k) ?: continue
         if (v == JSONObject.NULL) continue
-        if ((v is JSONObject || v is JSONArray) && v.toString().length > MAX_EXTRA_CHARS) continue
-        if (v is String && v.length > MAX_EXTRA_CHARS) continue
+        if ((v is JSONObject || v is JSONArray) && v.toString().length > maxExtraChars) continue
+        if (v is String && v.length > maxExtraChars) continue
         if (extra == null) extra = JSONObject()
         extra.put(k, v)
       }

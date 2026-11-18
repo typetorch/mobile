@@ -12,7 +12,7 @@ import org.json.JSONObject
  * JS API (docs/PUSH_WATCH_WIDGETS.md, section 3):
  *   setBackends(list), startWatch(id), stopWatch(id), watching(), refreshWidgets(), setWidgetSpec(json),
  *   widgetsJson(), setWidgetConfig(id, { backendId?, slots? }), defaultSlotsJson(), setDefaultSlots(slots)
- *   (docs/WIDGET_STATS.md)
+ *   (docs/WIDGET_STATS.md), setWidgetProgram(source) (docs/WIDGET_PROGRAM.md)
  * Synchronous functions (they run on the JS thread); nothing here touches the network.
  */
 class TypeTorchLiveModule : Module() {
@@ -43,6 +43,8 @@ class TypeTorchLiveModule : Module() {
         )
       }.filter { it.id.isNotEmpty() }
       Store.setBackends(ctx, backends)
+      // The widget program's cached answers of removed backends go too (nothing to do without a program).
+      ProgramCache.retain(ctx, backends.map { it.id })
       // Watches of removed backends end; a new token resumes a signed-out watch; names and links refresh.
       WatchService.sync(ctx)
       Unit
@@ -93,6 +95,33 @@ class TypeTorchLiveModule : Module() {
         Store.setWidgetSpecJson(ctx, text)
       }
       Unit
+    }
+
+    // The widget program (docs/WIDGET_PROGRAM.md): JavaScript defining plan / shape / tap, saved natively; "" clears
+    // it (the native path again, its cached answers dropped). True only when it will run: saved and the sandbox is
+    // supported on this phone (Android 8+, a WebView with JavaScriptSandbox). Runs nothing here (no JS engine on this
+    // thread): call refreshWidgets() after.
+    Function("setWidgetProgram") { source: String ->
+      val ctx = context
+      val text = source.trim()
+      if (text.length > WidgetProgram.MAX_SOURCE_CHARS) {
+        throw CodedException("ERR_TYPETORCH_LIVE_PROGRAM", "Widget program over 1,000,000 characters", null)
+      }
+      val before = Store.widgetProgram(ctx)
+      if (text.isEmpty()) {
+        if (before != null) {
+          Store.setWidgetProgram(ctx, null)
+          ProgramCache.clear(ctx)
+        }
+        WidgetProgram.resetLog()
+        false
+      } else {
+        if (text != before) {
+          Store.setWidgetProgram(ctx, text)
+          WidgetProgram.resetLog()
+        }
+        JsEngine.supported()
+      }
     }
 
     // The placed widgets as JSON: [{ "id": 12, "backendId": "…" ("" before a game is picked, "*" for all games),

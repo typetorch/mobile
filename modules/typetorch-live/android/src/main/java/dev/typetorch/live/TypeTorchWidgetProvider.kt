@@ -9,7 +9,8 @@ import android.os.Bundle
 /**
  * The home-screen widget (one game each, or all games: backend id [Store.ALL]). Updates: updatePeriodMillis (30 min),
  * the refresh button (an explicit broadcast to this provider), refreshWidgets() from the app, and every live watch
- * poll of that game. A game tapped on an all-games widget ([WidgetUpdater.ACTION_TOGGLE]) redraws from the cache.
+ * poll of that game. A game tapped on an all-games widget ([WidgetUpdater.ACTION_TOGGLE]) redraws from the cache, and
+ * so does an `action:*` tap of a widget program ([WidgetUpdater.ACTION_PROGRAM_TAP], after the program's tap()).
  * Network runs on a short-lived thread under goAsync(), never on the main thread.
  */
 class TypeTorchWidgetProvider : AppWidgetProvider() {
@@ -19,6 +20,15 @@ class TypeTorchWidgetProvider : AppWidgetProvider() {
       if (intent.action == WidgetUpdater.ACTION_REFRESH) {
         val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
         if (id != AppWidgetManager.INVALID_APPWIDGET_ID) WidgetUpdater.refresh(context, intArrayOf(id), goAsync(), true)
+        return
+      }
+      if (intent.action == WidgetUpdater.ACTION_PROGRAM_TAP) {
+        // An `action:*` tap of a program-drawn widget: the program's tap() saves its state, then a redraw (no fetch).
+        val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
+        val tap = intent.getStringExtra(WidgetUpdater.EXTRA_ACTION).orEmpty()
+        if (id != AppWidgetManager.INVALID_APPWIDGET_ID && tap.startsWith(WidgetProgram.ACTION_PREFIX) && tap.length <= 400) {
+          WidgetUpdater.tapAsync(context, id, tap, goAsync())
+        }
         return
       }
       if (intent.action == WidgetUpdater.ACTION_TOGGLE) {

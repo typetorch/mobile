@@ -75,7 +75,8 @@ internal class Node(
   /** `fill` (stretched), `contain` (meet) or `cover` (slice). */
   val fit: String,
   /**
-   * What a tap on the element's box does (Android 12+): `open`, `refresh` or `toggle:games.N`; null: nothing of its
+   * What a tap on the element's box does (Android 12+): `open`, `refresh`, `toggle:games.N` or `action:…` (a widget
+   * program's tap, `{…}` filled when drawn; nothing without a program); null: nothing of its
    * own (the whole widget's tap). See [WidgetSpecs.TAP].
    */
   val tap: String? = null,
@@ -112,7 +113,7 @@ internal object WidgetSpecs {
   private val CORNERS = setOf("topEnd", "topStart", "bottomEnd", "bottomStart", "none")
 
   /** The `tap` values this build knows; anything else is ignored (a newer spec's tap degrades to no tap). */
-  val TAP = Regex("^(open|refresh|toggle:games\\.[0-9]{1,2})$")
+  val TAP = Regex("^(open|refresh|toggle:games\\.[0-9]{1,2}|action:[^\\r\\n]{0,200})$")
 
   private const val MAX_DEPTH = 24
   private const val MAX_NODES = 400

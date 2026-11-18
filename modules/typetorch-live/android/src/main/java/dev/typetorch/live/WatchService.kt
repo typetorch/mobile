@@ -196,6 +196,8 @@ class WatchService : Service() {
     var n: Notification? = null
     try {
       val result = Store.fetchAndStore(app, b, 30)
+      // A widget program reads the polls too (its own cache, docs/WIDGET_PROGRAM.md).
+      WidgetProgram.recordWatch(app, b, result)
       n = WatchNotifications.build(
         app,
         Store.backend(app, b.id) ?: b,

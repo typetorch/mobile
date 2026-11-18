@@ -39,6 +39,8 @@ internal object Store {
   private const val K_WIDGET_SLOTS = "widgetSlots:"
   private const val K_WIDGET_FILTER = "widgetFilter:"
   private const val K_DEFAULT_SLOTS = "defaultSlots"
+  private const val K_WIDGET_PROGRAM = "widgetProgram"
+  private const val K_PROGRAM_STATE = "programState:"
   private const val K_SNAP = "snap:"
   private const val K_DEAD = "dead:"
 
@@ -207,7 +209,10 @@ internal object Store {
     synchronized(lock) {
       val p = prefs(ctx)
       val edit = p.edit().putString(K_WIDGET + widgetId, backendId)
-      if (p.getString(K_WIDGET + widgetId, null) != backendId) edit.remove(K_WIDGET_FILTER + widgetId)
+      if (p.getString(K_WIDGET + widgetId, null) != backendId) {
+        edit.remove(K_WIDGET_FILTER + widgetId)
+        edit.remove(K_PROGRAM_STATE + widgetId)
+      }
       edit.apply()
     }
   }
@@ -217,6 +222,7 @@ internal object Store {
       .remove(K_WIDGET + widgetId)
       .remove(K_WIDGET_SLOTS + widgetId)
       .remove(K_WIDGET_FILTER + widgetId)
+      .remove(K_PROGRAM_STATE + widgetId)
       .apply()
   }
 
@@ -310,6 +316,22 @@ internal object Store {
     val edit = prefs(ctx).edit()
     if (json == null) edit.remove(K_WIDGET_SPEC) else edit.putString(K_WIDGET_SPEC, json)
     edit.apply()
+  }
+
+  /** The widget program's source (docs/WIDGET_PROGRAM.md), or null: none (the native path). */
+  fun widgetProgram(ctx: Context): String? = prefs(ctx).getString(K_WIDGET_PROGRAM, null)
+
+  fun setWidgetProgram(ctx: Context, source: String?) {
+    val edit = prefs(ctx).edit()
+    if (source == null) edit.remove(K_WIDGET_PROGRAM) else edit.putString(K_WIDGET_PROGRAM, source)
+    edit.apply()
+  }
+
+  /** A widget's program state (JSON text, at most 4 KB), or null before the program first ran for it. */
+  fun programState(ctx: Context, widgetId: Int): String? = prefs(ctx).getString(K_PROGRAM_STATE + widgetId, null)
+
+  fun setProgramState(ctx: Context, widgetId: Int, json: String) {
+    prefs(ctx).edit().putString(K_PROGRAM_STATE + widgetId, json).apply()
   }
 
   // endregion

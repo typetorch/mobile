@@ -17,6 +17,7 @@ up and where) therefore ships as an **OTA update** (`eas update`, JS only), not 
 | Widget plumbing | `.../WidgetUpdater.kt` (state, sizes, bitmaps, taps, the metrics to fetch), `res/layout{,-night}/ttl_widget_canvas.xml` |
 | All games | `.../AllGames.kt` (the merged live object), `.../TypeTorchWidgetProvider.kt` (the game toggle), `.../WidgetConfigureActivity.kt` ("All games") |
 | Stat slots | `.../Store.kt` (per widget and the defaults), the app's Settings → Widgets (`src/features/live/WidgetSettings.tsx`) |
+| Widget program | `.../WidgetProgram.kt` (plan / fetch / shape / tap), `.../JsEngine.kt` (the sandbox, limits), `.../ProgramCache.kt` (answers); section Widget program, docs/WIDGET_PROGRAM.md |
 
 ## How it is drawn
 
@@ -102,7 +103,7 @@ Every element takes these (all optional):
 | `gravity` | placement inside a `stack`: `topStart` (default), `top`, `topEnd`, `start`, `center`, `end`, `bottomStart`, `bottom`, `bottomEnd`, `fill` |
 | `showIf` | a binding name: drawn only when it has a value (`series`: the chart has points); `!name` for the opposite |
 | `background` | a colour, or `{ color, radius }` (radius in dp or `"system"`) |
-| `tap` | what a tap on the element's box does (Android 12+): `open`, `refresh` or `toggle:games.N` (section Tap areas) |
+| `tap` | what a tap on the element's box does (Android 12+): `open`, `refresh`, `toggle:games.N` or `action:…` (section Tap areas) |
 
 | Type | Fields |
 |---|---|
@@ -202,7 +203,8 @@ Any element can have a `tap`:
 |---|---|
 | `open` | the widget's own tap: the game (the backend's `link`), an all-games widget's picked game (else the app) |
 | `refresh` | a refresh, like the corner area (nothing in the signedOut / pick states) |
-| `toggle:games.N` | all-games widgets: picks `games.N` (N from 0), or clears the pick when it is already picked; the widget redraws from the cache (no fetch) and the pick is saved per widget (it survives restarts). Nothing on a per-game widget or when there is no `games.N` |
+| `toggle:games.N` | all-games widgets: picks `games.N` (N from 0), or clears the pick when it is already picked; the widget redraws from the cache (no fetch) and the pick is saved per widget (it survives restarts). Nothing on a per-game widget or when there is no `games.N`. Drawn by a widget program: sent to its `tap` as `action:toggle:games.N` |
+| `action:…` | widget program only (section Widget program): the program's `tap` gets it, saves the widget's new state, and the widget is shaped and drawn again from the cache (no fetch). `{…}` placeholders are filled with the widget's values when drawn (`action:toggle:{games.0.id}`). Up to 200 characters after `action:`, one line. No tap area without a program (and on APKs before the program) |
 
 Anything else is ignored (an unknown value from a newer spec: no tap area).
 
@@ -269,18 +271,19 @@ docs/WIDGET_RELEASES.md, section 3.
 | `updated`, `status` | the oldest of the merged answers' times; `offline` when any of them is stale |
 
 **`releases` merged** over all games (or only the picked one), from each game's top-level `releases` (else its
-`metrics.releases`): the axis is the 60 `days` of the game whose last
-day is the newest; every game's days are added to it by `date` (a day without a date: by its position from the end),
-`p` and `d` summed per day. From those days: `prod` / `dev` (all days), `prod30` / `dev30` (the last 30), `value` =
+`metrics.releases`): the axis is the `days` (182 from the backend) of the game whose
+last day is the newest; every game's days are added to it by `date` (a day without a date: by its position from the
+end), `p` and `d` summed per day. From those days: `prod` / `dev` (all days), `prod30` / `dev30` (the last 30), `value` =
 `prod`, `prev` null, `unit` `count`; `lastProd` (`today`, `1 d ago`, `12 d ago`; null when no prod day) from the
 newest day with `p > 0`; `lastProdLabel` the label of the game that made that release, and `lastProdGame` its name
 (new, merged only); the cell tokens recomputed with the backend's rule (`level(n)`: 0, 1, 2 for 2–3, 3 for 4+; p > 0:
-`bg = "rg" + level(p)`, `tri = d > 0 ? "rb" + level(d) : "rnone"`; only d: `bg = "rb" + level(d)`; neither: `r0`). A
+`bg = "rg" + level(p)`, `tri = d > 0 ? "rb" + level(d) : "rnone"`; only d: `bg = "rb" + level(d)`; neither: `r0`; a day no game has history
+for, i.e. every game's cell for it is `rnone` or the game has no such day: `bg` and `tri` `rnone`, drawn as nothing). A
 game without `days` (an older backend) adds nothing per day; when no game has days, the counts are the games' own
 counts summed and `days` is empty. No game with the metric: `metrics.releases` is missing.
 
 A per-game widget reads the backend's own top-level `releases` (`{releases.days.59.bg}`): unknown top-level fields
-are kept in the cache (each up to 16,000 characters as JSON; 60 days are about 4,000), and an answer without
+are kept in the cache (each up to 16,000 characters as JSON; 182 days are about 11,000), and an answer without
 `releases` keeps the cached one. Metric entries keep their other fields in the cache too (`days`, `prod`, `lastProd`,
 …), so `{metrics.releases.days.59.bg}` also works on this build.
 
@@ -416,6 +419,61 @@ A small widget with the game's icon, the CCU and the delta, and the first two st
   }
 }
 ```
+
+## Widget program
+
+From the APK with `androidx.javascriptengine`, the data side of the widgets (what to fetch, how to combine several
+games, the colour rules) can come from a **widget program**: JavaScript the app sends like the spec (OTA), defining
+`plan`, `shape` and `tap` (docs/WIDGET_PROGRAM.md; the app's program: `src/features/live/widgets/program/`). The spec
+still draws everything; the program only decides what its bindings read.
+
+| | |
+|---|---|
+| JS API | `setWidgetProgram(source: string): boolean` (`modules/typetorch-live/index.ts`): saved natively; `""` clears it (back to the native path, its cached answers dropped). True only when the program will run (saved and the sandbox is supported); false without the module, on an older APK, when cleared or unsupported. Draws nothing: `refreshWidgets()` after |
+| Engine | `JavaScriptSandbox` (an isolated V8 in the WebView's sandbox process). Needs Android 8.0+ (the library's minSdk 26; the app's is 24, overridden in the module manifest) and a WebView that supports it (`JavaScriptSandbox.isSupported()`). Elsewhere, and with no program, the widgets take the native path, unchanged |
+| Native | `.../WidgetProgram.kt` (plan, fetch, shape, tap, the rules below), `.../JsEngine.kt` (the sandbox and the sessions), `.../ProgramCache.kt` (the answers) |
+
+**What the host does.**
+
+- **Refresh** (the 30-minute update, the refresh area, `refreshWidgets()`, a placed widget): per widget `plan` → the
+  requests fetched (one thread per backend, each request once even when several widgets ask it, the same 25 s
+  deadline; one backend failing doesn't stop the others) → cached → `shape` → drawn. A first drawing from the cache
+  (the `refreshing` status) comes before the fetch, as without a program; then the pictures the drawing shows are
+  downloaded (inside the deadline) and the final drawing made.
+- **Redraws without a fetch** (a resize, a tap, a live watch poll): `plan` (only to know which answers to hand over) →
+  `shape` on the cache → drawn.
+- **Live watch polls** (`GET /v1/mobile/live?minutes=30` every 30 s) are cached under the key
+  `/v1/mobile/live?minutes=30` of their backend and handed to `shape` with the planned answers of that backend (also
+  when the plan didn't ask for that key), so the program can lay the newer live numbers over its own answer.
+- **Inputs.** `widget`: `{ id, backendId ("*" = all games), slots, state, filter }` (`state`: the program's saved
+  JSON, null at first; the first time, `{ filter }` from the pick the native all-games widget saved; `filter`: that
+  native pick, "" for none). `backends`: the signed-in ones `[{ id, name, url }]` (never tokens). `now`: epoch ms.
+  `shape` also gets `responses: { "<backend id>": { "<path>?<query>": answer } }` (`<path>` alone when there's no
+  query; the query keys sorted, `encodeURIComponent`-encoded) with `answer` = `{ ok: true, body, at }` (at: when it was
+  fetched, ms) or `{ ok: false, status, error, at, body?, okAt? }` (at: the failed fetch; `body` / `okAt`: the last
+  good answer, kept), only for requests with something cached; `size: { w, h }` (dp, the first reported size) and
+  `night` (the system's mode now: one `live` serves both drawings). `tap` gets `widget`, `backends`, `action` (the tap
+  value without `action:`), `tap` (the whole value) and `now`.
+- **Outputs.** `plan` → `{ requests: [{ backend, path, query }] }`. `shape` → `{ live, state?, open? }`: `live` replaces
+  the fetched (or merged) answer as what the bindings and paths read (the native extras are still added: `slot.N.*`
+  from `live.metrics` and the widget's slots, `status` / `updated` / `refreshing` from the planned answers' times:
+  `updated` the oldest good one, `offline` when any of them is stale); `live: null` = no data yet: `loading`, or
+  `unreachable` once a fetch failed and none worked (`signedOut` / `pick` come before the program runs, as today).
+  `open`: a backend id whose link the whole-widget tap opens (default: all-games widgets `live.filter`'s game, else the
+  widget's game). `tap` → `{ state }`. A `state` from `shape` or `tap` is saved (it survives restarts; cleared when the
+  widget's backend changes or the widget is removed).
+
+**Rules and limits.**
+
+| | |
+|---|---|
+| Requests | GET only; `backend` must be a signed-in backend's id (its saved URL is used, the token added natively); `path` must start with `/v1/`, path characters only (`A-Z a-z 0-9 . _ ~ : @ + , = - /`; no `?`, `#`, `%`, `.` / `..` segments, `//`); `query`: an object of strings, numbers or booleans (at most 1,000 characters encoded). At most 8 per widget per refresh; others are dropped (logged once). No redirects, 10 s timeouts, answers up to 2 MB and JSON only |
+| Answers | cached per backend + `path?query` with their times (files in the app's no-backup storage, at most 64 per backend), kept across restarts. A 401 whose body says `mobile_token_dead` marks the token dead (the widget shows `signedOut` until the app hands over a new one); any other failure keeps the last good body |
+| Calls | each ≤ 2 s (loading the program into a new isolate too); a heap of 16 MB per isolate (`IsolateStartupParameters`, where the WebView supports it; exceeding it ends the whole sandbox, which restarts on the next call); output ≤ 256 KB of JSON; input ≤ 400,000 characters on WebViews without large-evaluation support. Inputs cross into the isolate as one escaped string literal parsed with `JSON.parse`; outputs as `JSON.stringify` text |
+| State | ≤ 4 KB of JSON per widget; a bigger one isn't saved (logged once) |
+| Program | ≤ 1,000,000 characters; plain ES2020, its three functions global (function declarations at the top level of a classic script, or `globalThis.plan = …`); no imports, no I/O |
+| Failures | an exception, a timeout, a bad or too large output: the spec's `unreachable` state with the error's first line in `{error}` (e.g. `Can't reach … · {error|}`), logged once per message (`adb logcat -s TypeTorchLive`, `widget program: …`). The answers stay cached, so the next good run draws them again. A failing `tap` keeps the old state (logged) and redraws. After a timeout, a sandbox crash or a program that doesn't load, the rest of that batch (one refresh, one tap, one poll's redraws) fails at once with the same error |
+| Lifecycle | one sandbox per app process, started by the first call, shared, closed after 60 s without use (a live watch polls every 30 s, so it stays up while one runs); one isolate per batch (the program loaded once into it, then `plan` / `shape` / `tap` for each widget of the batch, so globals can carry over between those calls), closed after the batch. Never on the main thread |
 
 ## Shipping a change
 

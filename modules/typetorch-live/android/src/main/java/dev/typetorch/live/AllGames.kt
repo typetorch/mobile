@@ -21,6 +21,9 @@ internal object AllGames {
   const val NAME = "All games"
   private const val RELEASES = "releases"
 
+  /** The cell token of a day before a game's deploy history began (drawn as nothing). */
+  private const val NONE = "rnone"
+
   /** What an all-games widget draws. [snap] null: no backend has answered yet ([anyFailed]: and some fetch failed). */
   class View(
     val snap: Snapshot?,
@@ -165,9 +168,11 @@ internal object AllGames {
 
   /**
    * The `releases` metrics of several games ([inputs]: game name, metric) as one: per-day `p` / `d` summed by date on
-   * the newest game's 60 days, the counts recomputed from those days, `lastProd` from the newest prod day,
-   * `lastProdLabel` (and `lastProdGame`) from the game that made it, the cell tokens by the backend's rule. Null when
-   * no game has the metric.
+   * the days of the game whose last day is the newest (the backend sends 182), the counts recomputed from those days,
+   * `lastProd` from the newest prod day, `lastProdLabel` (and `lastProdGame`) from the game that made it, the cell
+   * tokens by the backend's rule. A day no game has history for (every game's cell for it is `rnone`, or the game has
+   * no such day: before its deploy history began) stays `rnone` / `rnone` (blank, not a grey square). Null when no game
+   * has the metric.
    */
   fun mergeReleases(inputs: List<Pair<String, Metric>>): Metric? {
     if (inputs.isEmpty()) return null
@@ -222,6 +227,8 @@ internal object AllGames {
     }
     val p = IntArray(n)
     val d = IntArray(n)
+    // Per axis day: some game has history for it (a day of its own whose cell isn't "rnone").
+    val history = BooleanArray(n)
     // Per game: the axis index of its newest prod day (for lastProdLabel).
     var bestAt = -1
     var bestLabel: Any? = null
@@ -232,6 +239,7 @@ internal object AllGames {
       for (i in 0 until days.length()) {
         val o = days.optJSONObject(i) ?: continue
         val at = index[dayKey(o, i, days.length())] ?: continue
+        if (o.optString("bg", "") != NONE) history[at] = true
         val dp = count(o, "p")
         p[at] += dp
         d[at] += count(o, "d")
@@ -266,10 +274,13 @@ internal object AllGames {
         tri = if (di > 0) "rb" + level(di) else "rnone"
       } else if (di > 0) {
         bg = "rb" + level(di)
-        tri = "rnone"
-      } else {
+        tri = NONE
+      } else if (history[i]) {
         bg = "r0"
-        tri = "rnone"
+        tri = NONE
+      } else {
+        bg = NONE
+        tri = NONE
       }
       val day = JSONObject()
       val date = axis[i].date

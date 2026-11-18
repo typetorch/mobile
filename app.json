@@ -49,7 +49,8 @@
           "color": "#fb7a32",
           "defaultChannel": "milestones"
         }
-      ]
+      ],
+      "./plugins/with-js-engine-override.js"
     ],
     "experiments": {
       "reactCompiler": true

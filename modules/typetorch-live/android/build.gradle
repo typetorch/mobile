@@ -26,4 +26,8 @@ dependencies {
   // Already in every Expo app: expo-modules-core exposes it as an `api` dependency at this exact version.
   // Declared here so this module's own resources link against androidx.core's (TextAppearance.Compat.Notification*).
   implementation "androidx.core:core-ktx:1.17.0"
+  // The widget program's sandbox (docs/WIDGET_PROGRAM.md): an isolated V8 in the WebView's sandbox process. Its minSdk
+  // is 26 (the app's is 24): the manifest overrides it and every use checks Build.VERSION and isSupported() first
+  // (JsEngine.supported()). Brings guava (ListenableFuture) and androidx.concurrent:concurrent-futures as `api`.
+  implementation "androidx.javascriptengine:javascriptengine:1.1.1"
 }

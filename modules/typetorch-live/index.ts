@@ -31,6 +31,8 @@ type NativeTypeTorchLive = {
 	setWidgetConfig?(id: number, config: { backendId?: string; slots?: string[] }): boolean;
 	defaultSlotsJson?(): string;
 	setDefaultSlots?(slots: string[]): void;
+	// Added with the widget program (docs/WIDGET_PROGRAM.md); missing in older builds of the module.
+	setWidgetProgram?(source: string): boolean;
 };
 
 /** The stat slots new widgets get until the app sets others (the same as Store.BUILT_IN_SLOTS natively). */
@@ -149,6 +151,23 @@ export function setWidgetSpec(json: string): boolean {
 		return true;
 	} catch (e) {
 		warn("setWidgetSpec", e);
+		return false;
+	}
+}
+
+/**
+ * Sets the widget program (docs/WIDGET_PROGRAM.md): JavaScript defining `plan`, `shape` and `tap` that the native side
+ * runs in a sandbox to fetch and shape the widgets' data. Saved natively; "" clears it (the native path again). True
+ * only when the program will run: saved and the sandbox is supported on this phone (Android 8+ with a recent WebView).
+ * False without the native module, on an older APK, when cleared, or when unsupported (the widgets keep the native
+ * path). Draws nothing by itself: call refreshWidgets() after.
+ */
+export function setWidgetProgram(source: string): boolean {
+	if (!native?.setWidgetProgram) return false;
+	try {
+		return native.setWidgetProgram(String(source ?? "")) === true;
+	} catch (e) {
+		warn("setWidgetProgram", e);
 		return false;
 	}
 }

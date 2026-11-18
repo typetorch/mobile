@@ -16,6 +16,7 @@ import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
+import org.json.JSONObject
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
@@ -30,6 +31,10 @@ internal object WidgetUpdater {
   /** A tap on `toggle:games.N` of an all-games widget: [EXTRA_GAME] is the game's backend id. */
   const val ACTION_TOGGLE = "dev.typetorch.live.action.TOGGLE_GAME"
   const val EXTRA_GAME = "dev.typetorch.live.extra.GAME"
+
+  /** A tap on `action:*` (widget program, docs/WIDGET_PROGRAM.md): [EXTRA_ACTION] is the tap value, templates filled. */
+  const val ACTION_PROGRAM_TAP = "dev.typetorch.live.action.PROGRAM_TAP"
+  const val EXTRA_ACTION = "dev.typetorch.live.extra.ACTION"
 
   /** The cache's series window (the spec's charts show up to 6 hours). */
   private const val SERIES_MINUTES = 360
@@ -69,9 +74,15 @@ internal object WidgetUpdater {
   fun renderForBackend(ctx: Context, backendId: String) {
     val app = ctx.applicationContext
     val mgr = AppWidgetManager.getInstance(app) ?: return
-    for (id in widgetIds(app)) {
-      val w = Store.widgetBackend(app, id)
-      if (w == backendId || w == Store.ALL) render(app, mgr, id, false)
+    // With a widget program: one sandbox session for the batch (a worker thread: the live watch's).
+    val session = openSession(app)
+    try {
+      for (id in widgetIds(app)) {
+        val w = Store.widgetBackend(app, id)
+        if (w == backendId || w == Store.ALL) render(app, mgr, id, false, session)
+      }
+    } finally {
+      session?.close()
     }
   }
 
@@ -87,16 +98,25 @@ internal object WidgetUpdater {
     }
     try {
       Thread({
+        // A widget program set and supported: plan → fetch → shape → draw (docs/WIDGET_PROGRAM.md); else today's path.
+        val session = openSession(app)
         try {
           val mgr = AppWidgetManager.getInstance(app)
           if (mgr != null) {
-            for (id in ids) render(app, mgr, id, showRefreshing)
-            fetchFor(app, ids)
-            for (id in ids) render(app, mgr, id, false)
+            for (id in ids) render(app, mgr, id, showRefreshing, session)
+            if (session == null) {
+              fetchFor(app, ids)
+              for (id in ids) render(app, mgr, id, false)
+            } else {
+              val deadline = SystemClock.elapsedRealtime() + FETCH_DEADLINE_MS
+              WidgetProgram.fetch(app, session, ids, deadline)
+              for (id in ids) render(app, mgr, id, false, session, deadline)
+            }
           }
         } catch (t: Throwable) {
           Log.w("widget refresh failed", t)
         } finally {
+          session?.close()
           finish(pending)
         }
       }, "TypeTorchLive-widgets").start()
@@ -104,6 +124,14 @@ internal object WidgetUpdater {
       Log.w("widget thread failed", t)
       finish(pending)
     }
+  }
+
+  /** The widget program's session for one batch, or null (no program, unsupported, or failing to read): today's path. */
+  private fun openSession(app: Context): ProgramSession? = try {
+    WidgetProgram.open(app)
+  } catch (t: Throwable) {
+    Log.w("widget program open failed", t)
+    null
   }
 
   private fun finish(pending: BroadcastReceiver.PendingResult?) {
@@ -229,16 +257,26 @@ internal object WidgetUpdater {
   /**
    * Draws one widget from the cache. Any thread (a worker preferably: it draws bitmaps), no network, never throws.
    * If the launcher refuses the update (too much bitmap memory, or too big for Binder), it tries once more, lean.
+   * [session]: the widget program's (its `shape` gives the values; worker threads only), null: today's path.
+   * [imagesUntil] (elapsedRealtime, with a session): first download the pictures the drawing shows, until then.
    */
-  fun render(ctx: Context, mgr: AppWidgetManager, widgetId: Int, refreshing: Boolean) {
+  fun render(
+    ctx: Context, mgr: AppWidgetManager, widgetId: Int, refreshing: Boolean, session: ProgramSession? = null,
+    imagesUntil: Long = 0L,
+  ) {
+    var got: Look? = null
     try {
-      mgr.updateAppWidget(widgetId, build(ctx, mgr, widgetId, refreshing, false))
+      val l = look(ctx, mgr, widgetId, refreshing, session)
+      got = l
+      if (session != null && imagesUntil > 0L) programImages(ctx, l, imagesUntil)
+      mgr.updateAppWidget(widgetId, build(ctx, mgr, widgetId, l, false))
       return
     } catch (t: Throwable) {
       Log.w("widget update failed, retrying lean", t)
     }
     try {
-      mgr.updateAppWidget(widgetId, build(ctx, mgr, widgetId, refreshing, true))
+      val l = got ?: look(ctx, mgr, widgetId, refreshing, session)
+      mgr.updateAppWidget(widgetId, build(ctx, mgr, widgetId, l, true))
     } catch (t: Throwable) {
       Log.w("widget update failed", t)
     }
@@ -249,15 +287,43 @@ internal object WidgetUpdater {
     val app = ctx.applicationContext
     try {
       Thread({
+        val session = openSession(app)
         try {
           val mgr = AppWidgetManager.getInstance(app)
-          if (mgr != null) render(app, mgr, widgetId, false)
+          if (mgr != null) render(app, mgr, widgetId, false, session)
         } catch (t: Throwable) {
           Log.w("widget draw failed", t)
         } finally {
+          session?.close()
           finish(pending)
         }
       }, "TypeTorchLive-widget-draw").start()
+    } catch (t: Throwable) {
+      Log.w("widget thread failed", t)
+      finish(pending)
+    }
+  }
+
+  /**
+   * An `action:*` tap ([tap], templates filled) on a new thread: the program's `tap` saves the widget's new state,
+   * then `shape` and a redraw from the cache (no fetch). Without a program (cleared since the drawing): a redraw.
+   */
+  fun tapAsync(ctx: Context, widgetId: Int, tap: String, pending: BroadcastReceiver.PendingResult?) {
+    val app = ctx.applicationContext
+    try {
+      Thread({
+        val session = openSession(app)
+        try {
+          if (session != null) WidgetProgram.tap(app, session, widgetId, tap)
+          val mgr = AppWidgetManager.getInstance(app)
+          if (mgr != null) render(app, mgr, widgetId, false, session)
+        } catch (t: Throwable) {
+          Log.w("widget tap failed", t)
+        } finally {
+          session?.close()
+          finish(pending)
+        }
+      }, "TypeTorchLive-widget-tap").start()
     } catch (t: Throwable) {
       Log.w("widget thread failed", t)
       finish(pending)
@@ -275,11 +341,18 @@ internal object WidgetUpdater {
     val slots: List<String> = emptyList(),
     /** All-games widgets: `games[]` (`toggle:games.N` picks games[N]); else empty. */
     val games: List<Backend> = emptyList(),
+    /** Drawn from a widget program's `shape`: `action:*` taps (and toggles) go to its `tap`. */
+    val program: Boolean = false,
+    /** The program's failure (`{error}`, the unreachable state). */
+    val error: String? = null,
   )
 
-  private fun look(ctx: Context, widgetId: Int, refreshing: Boolean): Look {
+  private fun look(
+    ctx: Context, mgr: AppWidgetManager, widgetId: Int, refreshing: Boolean, session: ProgramSession?,
+  ): Look {
     val backendId = Store.widgetBackend(ctx, widgetId)
       ?: return Look(WidgetSpecs.PICK, null, null, false, configurePending(ctx, widgetId), null)
+    if (session != null) return programLook(ctx, mgr, widgetId, backendId, refreshing, session)
     if (backendId == Store.ALL) return allLook(ctx, widgetId, refreshing)
     val b = Store.backend(ctx, backendId)
     if (b == null || Store.isDead(ctx, b.id, b.token)) {
@@ -318,9 +391,103 @@ internal object WidgetUpdater {
     return Look(WidgetSpecs.DATA, b, snap, refreshing, open, refresh, slots, view.games)
   }
 
+  /**
+   * A widget with a program (docs/WIDGET_PROGRAM.md): signed out / no backend as today; else `plan` + `shape` on the
+   * cached answers, `live` read by the bindings like the fetched answer (the slots, status and updated still native,
+   * from the answers' times). `live` null: loading, or unreachable once a fetch failed and none worked. The call
+   * failing: unreachable with `{error}`. The whole widget's tap: the program's `open` backend, else (all games) the
+   * picked game (`live.filter`), else the game.
+   */
+  private fun programLook(
+    ctx: Context, mgr: AppWidgetManager, widgetId: Int, backendId: String, refreshing: Boolean, session: ProgramSession,
+  ): Look {
+    val signedIn = AllGames.signedIn(ctx)
+    val all = backendId == Store.ALL
+    val own: Backend? = if (all) null else Store.backend(ctx, backendId)
+    if (all) {
+      if (signedIn.isEmpty()) {
+        return Look(WidgetSpecs.SIGNED_OUT, null, null, false, Links.openPending(ctx, widgetId, null), null)
+      }
+    } else if (own == null || Store.isDead(ctx, own.id, own.token)) {
+      return Look(WidgetSpecs.SIGNED_OUT, own, null, false, Links.openPending(ctx, widgetId, null), null)
+    }
+    val size = sizes(ctx, mgr, widgetId, false).first()
+    val shaped = WidgetProgram.shape(ctx, session, widgetId, backendId, signedIn, size, WidgetRenderer.isNight(ctx))
+    val live = shaped.live
+    var error = shaped.error
+    var data: LiveData? = null
+    if (live != null && error == null) {
+      try {
+        data = LiveData.fromJson(live, WidgetProgram.MAX_LIVE_FIELD_CHARS)
+      } catch (t: Throwable) {
+        error = "shape(): bad live object"
+        WidgetProgram.logOnce("shape(): bad live object")
+      }
+    }
+    val pickedId = live?.optString("filter", "")?.takeIf { it.isNotEmpty() }
+    val picked = if (pickedId == null) null else signedIn.firstOrNull { it.id == pickedId }
+    val openId = shaped.open ?: (if (all) pickedId else null)
+    val openB = if (openId == null) null else signedIn.firstOrNull { it.id == openId }
+    val b: Backend = own ?: allBackend(picked)
+    val click = Links.openPending(ctx, widgetId, openB?.link ?: own?.link)
+    val refresh = refreshPending(ctx, widgetId)
+    val slots = Store.widgetSlots(ctx, widgetId)
+    val games = if (all) gamesOf(live, signedIn) else emptyList()
+    val err = error
+    if (err != null) {
+      val snap = Snapshot(null, shaped.okAt, shaped.failedAt)
+      return Look(WidgetSpecs.UNREACHABLE, b, snap, false, click, refresh, slots, games, true, err)
+    }
+    val d = data
+    if (d == null) {
+      val state = if (!refreshing && shaped.anyFailed && !shaped.anyOk) WidgetSpecs.UNREACHABLE else WidgetSpecs.LOADING
+      val snap = Snapshot(null, shaped.okAt, shaped.failedAt)
+      return Look(state, b, snap, refreshing, click, refresh, slots, games, true, null)
+    }
+    return Look(WidgetSpecs.DATA, b, Snapshot(d, shaped.okAt, shaped.failedAt), refreshing, click, refresh, slots, games, true)
+  }
+
+  /** `live.games[]` as backends (for the toggles' labels): the signed-in one with that id, else a stand-in. */
+  private fun gamesOf(live: JSONObject?, signedIn: List<Backend>): List<Backend> {
+    val arr = live?.optJSONArray("games") ?: return emptyList()
+    val out = ArrayList<Backend>()
+    for (i in 0 until min(arr.length(), 16)) {
+      val o = arr.optJSONObject(i)
+      val id = o?.optString("id", "").orEmpty()
+      val known = if (id.isEmpty()) null else signedIn.firstOrNull { it.id == id }
+      out.add(known ?: Backend(id, o?.optString("name", "").orEmpty(), "", "", ""))
+    }
+    return out
+  }
+
+  /** The pictures a program-drawn widget shows (its spec's images and svg `<image>`s), downloaded until [until]. */
+  private fun programImages(ctx: Context, look: Look, until: Long) {
+    if (look.state != WidgetSpecs.DATA) return
+    try {
+      val spec = WidgetSpecs.stored(ctx) ?: WidgetSpecs.default
+      val values = WidgetValues.of(ctx, spec, look.backend, look.snap, false, look.slots, look.error)
+      val binds = WidgetSpecs.imageBinds(spec) +
+        (if (spec !== WidgetSpecs.default) WidgetSpecs.imageBinds(WidgetSpecs.default) else emptySet())
+      val urls = LinkedHashSet<String>()
+      for (bind in binds) {
+        val url = values.str(bind) ?: continue
+        if (WidgetImages.isWebUrl(url)) urls.add(url)
+      }
+      for (t in WidgetSpecs.svgTemplates(spec)) {
+        if (urls.size >= 16) break
+        urls.addAll(Svg.imageUrls(t, values))
+      }
+      for (url in urls.take(16)) {
+        if (SystemClock.elapsedRealtime() >= until) break
+        WidgetImages.ensure(ctx, url)
+      }
+    } catch (t: Throwable) {
+      Log.w("program images failed", t)
+    }
+  }
+
   /** The sent spec, else (absent, unparseable or failing to draw) the built-in one, else a plain text widget. */
-  private fun build(ctx: Context, mgr: AppWidgetManager, widgetId: Int, refreshing: Boolean, lean: Boolean): RemoteViews {
-    val look = look(ctx, widgetId, refreshing)
+  private fun build(ctx: Context, mgr: AppWidgetManager, widgetId: Int, look: Look, lean: Boolean): RemoteViews {
     val sizes = sizes(ctx, mgr, widgetId, lean)
     val sent = WidgetSpecs.stored(ctx)
     if (sent != null) {
@@ -345,7 +512,7 @@ internal object WidgetUpdater {
   private fun views(
     ctx: Context, spec: WidgetSpec, look: Look, sizes: List<SizeF>, lean: Boolean, widgetId: Int,
   ): RemoteViews {
-    val values = WidgetValues.of(ctx, spec, look.backend, look.snap, look.refreshing, look.slots)
+    val values = WidgetValues.of(ctx, spec, look.backend, look.snap, look.refreshing, look.slots, look.error)
     val budget = pixelBudget(ctx, sizes.size * (if (lean) 1 else 2), lean)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && sizes.size > 1) {
       val map = LinkedHashMap<SizeF, RemoteViews>()
@@ -396,7 +563,7 @@ internal object WidgetUpdater {
     }
     for (id in HIT_IDS) v.setViewVisibility(id, if (id == hit) View.VISIBLE else View.GONE)
     if (hit != 0 && refresh != null) v.setOnClickPendingIntent(hit, refresh)
-    applyTaps(ctx, v, look, widgetId, taps)
+    applyTaps(ctx, v, look, values, widgetId, taps)
     return v
   }
 
@@ -405,13 +572,15 @@ internal object WidgetUpdater {
    * bitmap is stretched to the widget, so a box can be off by the few dp the launcher's real size differs from the
    * drawn one). Older Android can't move views in RemoteViews: no tap areas, the whole widget's tap only.
    */
-  private fun applyTaps(ctx: Context, v: RemoteViews, look: Look, widgetId: Int, taps: List<TapBox>) {
+  private fun applyTaps(
+    ctx: Context, v: RemoteViews, look: Look, values: WidgetValues, widgetId: Int, taps: List<TapBox>,
+  ) {
     val pool = TAP_IDS
     var used = 0
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
       for (t in taps) {
         if (used >= pool.size) break
-        val pending = tapPending(ctx, look, widgetId, t.tap) ?: continue
+        val pending = tapPending(ctx, look, values, widgetId, t.tap) ?: continue
         val id = pool[used]
         try {
           placeTap(v, id, t)
@@ -438,13 +607,24 @@ internal object WidgetUpdater {
     v.setViewLayoutHeight(id, t.h, dip)
   }
 
-  /** `open`: the widget's own tap (the picked game, the game, or the app); `refresh`; `toggle:games.N`: a broadcast. */
-  private fun tapPending(ctx: Context, look: Look, widgetId: Int, tap: String): PendingIntent? {
+  /**
+   * `open`: the widget's own tap (the picked game, the game, or the app); `refresh`; `toggle:games.N`: a broadcast
+   * (drawn by a program: its `tap` with `action:toggle:games.N`); `action:*`: the program's `tap` (its `{…}` filled
+   * with the widget's values; nothing without a program).
+   */
+  private fun tapPending(ctx: Context, look: Look, values: WidgetValues, widgetId: Int, tap: String): PendingIntent? {
     if (tap == "open") return look.click
     if (tap == "refresh") return look.refresh
+    if (tap.startsWith(WidgetProgram.ACTION_PREFIX)) {
+      if (!look.program) return null
+      val filled = if (tap.indexOf('{') >= 0) values.template(tap) else tap
+      return actionPending(ctx, widgetId, filled)
+    }
     if (tap.startsWith(TOGGLE_PREFIX)) {
       val n = tap.substring(TOGGLE_PREFIX.length).toIntOrNull() ?: return null
       val game = look.games.getOrNull(n) ?: return null
+      if (look.program) return actionPending(ctx, widgetId, WidgetProgram.ACTION_PREFIX + tap)
+      if (game.id.isEmpty()) return null
       return togglePending(ctx, widgetId, n, game.id)
     }
     return null
@@ -590,6 +770,27 @@ internal object WidgetUpdater {
       .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
       .putExtra(EXTRA_GAME, gameId)
     val code = 0x10000000 or ((widgetId and 0x00FFFFFF) shl 4) or (n and 0xF)
+    return PendingIntent.getBroadcast(ctx, code, intent, Links.FLAGS)
+  }
+
+  /**
+   * An `action:*` tap ([tap], templates filled) of a program-drawn widget: a broadcast to the provider. The tap is in
+   * the data, so each tap value is its own PendingIntent (two drawings' areas never overwrite each other's extras).
+   */
+  private fun actionPending(ctx: Context, widgetId: Int, tap: String): PendingIntent {
+    val data = Uri.Builder()
+      .scheme("typetorch-live")
+      .authority("widget")
+      .appendPath(widgetId.toString())
+      .appendPath("action")
+      .appendQueryParameter("tap", tap)
+      .build()
+    val intent = Intent(ctx, TypeTorchWidgetProvider::class.java)
+      .setAction(ACTION_PROGRAM_TAP)
+      .setData(data)
+      .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+      .putExtra(EXTRA_ACTION, tap)
+    val code = 0x20000000 or ((widgetId and 0x00FFFFFF) shl 4) or (tap.hashCode() and 0xF)
     return PendingIntent.getBroadcast(ctx, code, intent, Links.FLAGS)
   }
 

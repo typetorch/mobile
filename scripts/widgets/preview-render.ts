@@ -434,7 +434,7 @@ const GRAVITY: Record<string, [string, string]> = {
 	fill: ["stretch", "stretch"],
 };
 
-/** What a tap area does in the preview (set by mount: `toggle:games.N` picks / clears game N of the all-games sample). */
+/** What a tap area does in the preview (set by mount: a game toggle picks / clears game N of the all-games sample). */
 let onTap: ((tap: string) => void) | null = null;
 
 function render(e: WidgetElement, parent: Parent, ctx: Ctx): HTMLElement | null {
@@ -847,9 +847,11 @@ export function mount(app: HTMLElement) {
 	};
 
 	onTap = (tap) => {
-		const m = /^toggle:games\.(\d+)$/.exec(tap);
-		if (!m || !SAMPLES[Number(sampleSel.value) || 0].allGames) return;
-		const n = Number(m[1]);
+		// toggle:games.N (the native path), or the program's action:toggle:{games.N.id} / action:toggle:<backend id>.
+		const m = /^(?:toggle:games\.(\d+)|action:toggle:\{games\.(\d+)\.id\})$/.exec(tap);
+		const byId = /^action:toggle:(.+)$/.exec(tap);
+		const n = m ? Number(m[1] ?? m[2]) : byId ? GAMES.findIndex((g) => g.id === byId[1]) : -1;
+		if (n < 0 || !SAMPLES[Number(sampleSel.value) || 0].allGames) return;
 		if (n >= GAMES.length) return;
 		pickedGame = pickedGame === n ? null : n;
 		draw();

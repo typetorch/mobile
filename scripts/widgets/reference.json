@@ -339,7 +339,7 @@
                     {
                       "type": "column",
                       "showIf": "games.0.id",
-                      "tap": "toggle:games.0",
+                      "tap": "action:toggle:{games.0.id}",
                       "children": [
                         {
                           "type": "row",
@@ -381,7 +381,7 @@
                     {
                       "type": "column",
                       "showIf": "games.1.id",
-                      "tap": "toggle:games.1",
+                      "tap": "action:toggle:{games.1.id}",
                       "children": [
                         {
                           "type": "row",
@@ -423,7 +423,7 @@
                     {
                       "type": "column",
                       "showIf": "games.2.id",
-                      "tap": "toggle:games.2",
+                      "tap": "action:toggle:{games.2.id}",
                       "children": [
                         {
                           "type": "row",
@@ -465,7 +465,7 @@
                     {
                       "type": "column",
                       "showIf": "games.3.id",
-                      "tap": "toggle:games.3",
+                      "tap": "action:toggle:{games.3.id}",
                       "children": [
                         {
                           "type": "row",
@@ -507,7 +507,7 @@
                     {
                       "type": "column",
                       "showIf": "games.4.id",
-                      "tap": "toggle:games.4",
+                      "tap": "action:toggle:{games.4.id}",
                       "children": [
                         {
                           "type": "row",
@@ -549,7 +549,7 @@
                     {
                       "type": "column",
                       "showIf": "games.5.id",
-                      "tap": "toggle:games.5",
+                      "tap": "action:toggle:{games.5.id}",
                       "children": [
                         {
                           "type": "row",
@@ -1014,7 +1014,7 @@
                     {
                       "type": "column",
                       "showIf": "games.0.id",
-                      "tap": "toggle:games.0",
+                      "tap": "action:toggle:{games.0.id}",
                       "children": [
                         {
                           "type": "svg",
@@ -1027,7 +1027,7 @@
                     {
                       "type": "column",
                       "showIf": "games.1.id",
-                      "tap": "toggle:games.1",
+                      "tap": "action:toggle:{games.1.id}",
                       "children": [
                         {
                           "type": "svg",
@@ -1040,7 +1040,7 @@
                     {
                       "type": "column",
                       "showIf": "games.2.id",
-                      "tap": "toggle:games.2",
+                      "tap": "action:toggle:{games.2.id}",
                       "children": [
                         {
                           "type": "svg",
@@ -1053,7 +1053,7 @@
                     {
                       "type": "column",
                       "showIf": "games.3.id",
-                      "tap": "toggle:games.3",
+                      "tap": "action:toggle:{games.3.id}",
                       "children": [
                         {
                           "type": "svg",
@@ -1209,7 +1209,7 @@
                     {
                       "type": "column",
                       "showIf": "games.0.id",
-                      "tap": "toggle:games.0",
+                      "tap": "action:toggle:{games.0.id}",
                       "children": [
                         {
                           "type": "svg",
@@ -1222,7 +1222,7 @@
                     {
                       "type": "column",
                       "showIf": "games.1.id",
-                      "tap": "toggle:games.1",
+                      "tap": "action:toggle:{games.1.id}",
                       "children": [
                         {
                           "type": "svg",
@@ -1235,7 +1235,7 @@
                     {
                       "type": "column",
                       "showIf": "games.2.id",
-                      "tap": "toggle:games.2",
+                      "tap": "action:toggle:{games.2.id}",
                       "children": [
                         {
                           "type": "svg",
@@ -1248,7 +1248,7 @@
                     {
                       "type": "column",
                       "showIf": "games.3.id",
-                      "tap": "toggle:games.3",
+                      "tap": "action:toggle:{games.3.id}",
                       "children": [
                         {
                           "type": "svg",
@@ -1261,7 +1261,7 @@
                     {
                       "type": "column",
                       "showIf": "games.4.id",
-                      "tap": "toggle:games.4",
+                      "tap": "action:toggle:{games.4.id}",
                       "children": [
                         {
                           "type": "svg",
@@ -1274,7 +1274,7 @@
                     {
                       "type": "column",
                       "showIf": "games.5.id",
-                      "tap": "toggle:games.5",
+                      "tap": "action:toggle:{games.5.id}",
                       "children": [
                         {
                           "type": "svg",
