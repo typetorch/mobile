@@ -408,7 +408,7 @@ export const DEFAULT_WIDGET_HTML = `
 				</div>
 				${HEALTH_LINES}
 			</div>
-			<div style="flex: 1.15; margin: 2px 10px 0 10px">
+			<div style="flex: 1.45; margin: 2px 8px 0 2px">
 				<tt-chart minutes="360" bucket="5" labels zero smooth dot fill style="flex: 1; margin-bottom: 1px; color: var(--brand)"></tt-chart>
 				<div style="display: flex; align-items: center; margin-left: 18px; margin-bottom: 2px">
 					<span style="font-size: 9px; color: var(--text2)">6h ago</span>

@@ -1563,11 +1563,11 @@
                 },
                 {
                   "type": "column",
-                  "weight": 1.15,
+                  "weight": 1.45,
                   "margin": {
                     "top": 2,
-                    "start": 10,
-                    "end": 10
+                    "start": 2,
+                    "end": 8
                   },
                   "children": [
                     {
