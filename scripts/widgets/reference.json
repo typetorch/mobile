@@ -107,8 +107,44 @@
                       "weight": 1,
                       "margin": {
                         "top": 2,
-                        "bottom": 3
+                        "bottom": 1
                       }
+                    },
+                    {
+                      "type": "row",
+                      "align": "center",
+                      "margin": {
+                        "bottom": 2,
+                        "start": 18
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "6h ago",
+                          "size": 9,
+                          "color": "text2"
+                        },
+                        {
+                          "type": "spacer",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "3h ago",
+                          "size": 9,
+                          "color": "text2"
+                        },
+                        {
+                          "type": "spacer",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "{updated|now}",
+                          "size": 9,
+                          "color": "text2"
+                        }
+                      ]
                     },
                     {
                       "type": "text",
@@ -620,22 +656,67 @@
                   ]
                 },
                 {
-                  "type": "chart",
-                  "bind": "series",
-                  "minutes": 360,
-                  "bucket": 5,
-                  "color": "brand",
-                  "fill": true,
-                  "dot": true,
-                  "zero": true,
-                  "smooth": true,
-                  "labels": true,
+                  "type": "column",
                   "weight": 1.7,
                   "margin": {
                     "top": 2,
                     "start": 10,
                     "end": 10
-                  }
+                  },
+                  "children": [
+                    {
+                      "type": "chart",
+                      "bind": "series",
+                      "minutes": 360,
+                      "bucket": 5,
+                      "color": "brand",
+                      "fill": true,
+                      "dot": true,
+                      "zero": true,
+                      "smooth": true,
+                      "labels": true,
+                      "weight": 1,
+                      "margin": {
+                        "bottom": 1
+                      }
+                    },
+                    {
+                      "type": "row",
+                      "align": "center",
+                      "margin": {
+                        "bottom": 2,
+                        "start": 18
+                      },
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "6h ago",
+                          "size": 9,
+                          "color": "text2"
+                        },
+                        {
+                          "type": "spacer",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "3h ago",
+                          "size": 9,
+                          "color": "text2"
+                        },
+                        {
+                          "type": "spacer",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "{updated|now}",
+                          "size": 9,
+                          "color": "text2"
+                        }
+                      ]
+                    }
+                  ]
                 },
                 {
                   "type": "column",

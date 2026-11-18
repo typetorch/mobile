@@ -37,7 +37,14 @@ export const DEFAULT_WIDGET_HTML = `
 					<span style="font-size: 34px; font-weight: 600; color: var(--text)">{ccu}</span>
 					<span style="margin-left: 4px; font-size: 13px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
 				</div>
-				<tt-chart minutes="360" bucket="5" labels zero smooth dot fill style="flex: 1; margin: 2px 0 3px; color: var(--brand)"></tt-chart>
+				<tt-chart minutes="360" bucket="5" labels zero smooth dot fill style="flex: 1; margin: 2px 0 1px; color: var(--brand)"></tt-chart>
+				<div style="display: flex; align-items: center; margin-left: 18px; margin-bottom: 2px">
+					<span style="font-size: 9px; color: var(--text2)">6h ago</span>
+					<div style="flex: 1"></div>
+					<span style="font-size: 9px; color: var(--text2)">3h ago</span>
+					<div style="flex: 1"></div>
+					<span style="font-size: 9px; color: var(--text2)">{updated|now}</span>
+				</div>
 				<span style="font-size: 10px; color: var(--text2)">last 6 h · {serversLabel|no servers} · peak {peakToday}</span>
 			</div>
 			<div style="flex: 1; justify-content: center; gap: 6px; margin-left: 12px">
@@ -131,7 +138,16 @@ export const DEFAULT_WIDGET_HTML = `
 					<span style="margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
 				</div>
 			</div>
-			<tt-chart minutes="360" bucket="5" labels zero smooth dot fill style="flex: 1.7; margin: 2px 10px 0 10px; color: var(--brand)"></tt-chart>
+			<div style="flex: 1.7; margin: 2px 10px 0 10px">
+				<tt-chart minutes="360" bucket="5" labels zero smooth dot fill style="flex: 1; margin-bottom: 1px; color: var(--brand)"></tt-chart>
+				<div style="display: flex; align-items: center; margin-left: 18px; margin-bottom: 2px">
+					<span style="font-size: 9px; color: var(--text2)">6h ago</span>
+					<div style="flex: 1"></div>
+					<span style="font-size: 9px; color: var(--text2)">3h ago</span>
+					<div style="flex: 1"></div>
+					<span style="font-size: 9px; color: var(--text2)">{updated|now}</span>
+				</div>
+			</div>
 			<div style="justify-content: center; align-items: flex-end; gap: 1px">
 				<div style="display: flex; align-items: baseline" data-show-if="slot.1">
 					<span style="font-size: 10px; color: var(--text2)">{slot.1.label}</span>
