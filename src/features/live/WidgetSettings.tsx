@@ -227,7 +227,7 @@ function WidgetCard({
 			<Chips options={gameOptions} value={widget.backendId} onChange={(id) => id !== widget.backendId && onGame(id)} />
 			{allGames ? (
 				<Txt variant="small">
-					The releases of every signed-in game of the last 60 days (30 on the small sizes), added up; tap a game's icon on the widget to see only that
+					The releases of every signed-in game of the last weeks, added up; tap a game's icon on the widget to see only that
 					game, tap it again for all.{picked ? ` Showing ${picked} now.` : ""}
 				</Txt>
 			) : null}
@@ -243,8 +243,8 @@ function WidgetCard({
 				/>
 			) : (
 				<Txt variant="small">
-					The game's releases of the last 60 days (30 on the small sizes): green for prod, blue for dev, darker for fewer, a day with both split
-					diagonally, today outlined. Switch back to Stats to get the stats you had.
+					The game's releases of the last weeks, one column per week (as many as the size fits, up to 26): green for prod, blue for dev, darker for
+					fewer, a day with both split diagonally, today outlined. Switch back to Stats to get the stats you had.
 				</Txt>
 			)}
 		</View>

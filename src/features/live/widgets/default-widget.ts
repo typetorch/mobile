@@ -10,51 +10,58 @@
  */
 /**
  * The release garden (docs/WIDGET_RELEASES.md, docs/WIDGET_HTML.md "The release garden"): a widget whose slot 1 is empty
- * (Settings → Widgets, style Releases: slots ["", "", "", "releases"]) draws the last 60 / 30 days of releases instead of
- * the stats. The data: the live answer's top-level `releases` (the backend sends it with every answer, so the APKs that
- * keep only a metric's value / prev still have it; an all-games widget gets it merged over the games). 60 days, oldest
- * first, the last one today; each day's `bg` / `tri` are the colour tokens below.
+ * (Settings → Widgets, style Releases: slots ["", "", "", "releases"]) draws the last weeks of releases (GitHub-style,
+ * as many weeks as the size fits) instead of the stats. The data: the live answer's top-level `releases` (the backend
+ * sends it with every answer, so the APKs that keep only a metric's value / prev still have it; an all-games widget gets
+ * it merged over the games). DAYS days, oldest first, the last one today; each day's `bg` / `tri` are the colour tokens
+ * below (`rnone` for the days before the game's history: nothing drawn).
  */
 const R = "releases";
-/** Shown when the release data is there (the newest day has its colour). */
-const HAS_RELEASES = `${R}.days.59.bg`;
+/** How many days the backend sends in `releases.days` (oldest first, the last one today): 26 weeks. */
+const DAYS = 182;
+/** Shown when the release data is there (`prod` comes with every `releases`, also an older backend's). */
+const HAS_RELEASES = `${R}.prod`;
+
+const ROWS = 7;
+const CELL = 10;
+const GAP = 2;
+const RADIUS = 2;
 
 const n2 = (n: number) => String(Math.round(n * 100) / 100);
 
 /**
- * One `<svg>` with the last cols × rows days (oldest top left, row by row, today bottom right, outlined): per day a
- * rounded square in the day's `bg` token and over its bottom-right half (below the top-right → bottom-left diagonal,
- * following the rounded corners) the `tri` token (`rnone`, transparent, unless the day has prod and dev releases).
+ * One `<svg>` with the last 7 × [cols] days in GitHub order: 7 rows per column, a column filled top to bottom, columns
+ * oldest left; today is the bottom-right cell (outlined). Column c, row r shows `days[DAYS - 7·cols + 7·c + r]`. Per day
+ * a rounded square in its `bg` token and, over its bottom-right half (below the top-right → bottom-left diagonal,
+ * following the rounded corners), its `tri` token (`rnone`, transparent, unless the day has prod and dev releases).
+ * A missing day (an older backend's shorter list) is `rnone`: nothing drawn, as for the days before the game's history.
+ * The two shapes are in `<defs>` once and placed with `<use>` (its fill is inherited), which keeps the markup small.
  * Fixed cell geometry in viewBox units; `data-fit="contain"` scales it uniformly into the element's box (the svg
- * templates have no arithmetic, so the cells can't be laid out from {w} / {h}).
+ * templates have no arithmetic, so the cells can't be laid out from {w} / {h}): pick [cols] for the box's aspect.
  */
-function garden(cols: number, rows: number, cell: number, gap: number, radius: number, style: string): string {
-	const count = cols * rows;
-	const first = 60 - count;
-	const w = cols * cell + (cols - 1) * gap;
-	const h = rows * cell + (rows - 1) * gap;
-	const r = radius;
+function garden(cols: number, style: string): string {
+	const c = Math.min(cols, Math.floor(DAYS / ROWS));
+	const step = CELL + GAP;
+	const r = RADIUS;
 	const a = r * (1 - Math.SQRT1_2); // where the diagonal meets a rounded corner
-	const side = cell - 2 * r;
-	const out: string[] = [];
-	let todayX = 0;
-	let todayY = 0;
-	for (let k = 0; k < count; k++) {
-		const day = first + k;
-		const x = (k % cols) * (cell + gap);
-		const y = Math.floor(k / cols) * (cell + gap);
-		out.push(`<rect x='${n2(x)}' y='${n2(y)}' width='${cell}' height='${cell}' rx='${r}' fill='var(--{${R}.days.${day}.bg|r0})'/>`);
-		out.push(
-			`<path d='M${n2(x + cell - a)},${n2(y + a)}a${r},${r} 0 0 1 ${n2(a)},${n2(r - a)}v${n2(side)}a${r},${r} 0 0 1 -${r},${r}h-${n2(side)}a${r},${r} 0 0 1 -${n2(r - a)},-${n2(a)}z' fill='var(--{${R}.days.${day}.tri|rnone})'/>`,
-		);
-		todayX = x;
-		todayY = y;
+	const side = CELL - 2 * r;
+	const out: string[] = [
+		`<defs><rect id='c' width='${CELL}' height='${CELL}' rx='${r}'/><path id='t' d='M${n2(CELL - a)},${n2(a)}a${r},${r} 0 0 1 ${n2(a)},${n2(r - a)}v${side}a${r},${r} 0 0 1 -${r},${r}h-${side}a${r},${r} 0 0 1 -${n2(r - a)},-${n2(a)}z'/></defs>`,
+	];
+	for (let col = 0; col < c; col++) {
+		out.push(col ? `<g transform='translate(${col * step})'>` : "<g>");
+		for (let row = 0; row < ROWS; row++) {
+			const day = DAYS - ROWS * c + ROWS * col + row;
+			const y = row ? ` y='${row * step}'` : "";
+			out.push(`<use href='#c'${y} fill='var(--{${R}.days.${day}.bg|rnone})'/><use href='#t'${y} fill='var(--{${R}.days.${day}.tri|rnone})'/>`);
+		}
+		out.push("</g>");
 	}
-	const sw = Math.max(1, Math.round(cell * 0.1 * 10) / 10);
+	const sw = 1;
 	out.push(
-		`<rect x='${n2(todayX + sw / 2)}' y='${n2(todayY + sw / 2)}' width='${n2(cell - sw)}' height='${n2(cell - sw)}' rx='${n2(Math.max(0, r - sw / 2))}' fill='none' stroke='var(--text)' stroke-opacity='0.8' stroke-width='${sw}'/>`,
+		`<rect x='${n2((c - 1) * step + sw / 2)}' y='${n2((ROWS - 1) * step + sw / 2)}' width='${CELL - sw}' height='${CELL - sw}' rx='${n2(r - sw / 2)}' fill='none' stroke='var(--text)' stroke-opacity='0.8' stroke-width='${sw}'/>`,
 	);
-	return `<svg viewBox="0 0 ${n2(w)} ${n2(h)}" data-fit="contain" style="${style}">${out.join("")}</svg>`;
+	return `<svg viewBox="0 0 ${c * step - GAP} ${ROWS * step - GAP}" data-fit="contain" style="${style}">${out.join("")}</svg>`;
 }
 
 /** "Loading releases…" in the garden's place until the release data is there. */
@@ -120,8 +127,8 @@ export const DEFAULT_WIDGET_HTML = `
 <!-- Retention as 34.25 % and its change as ▲1.12 points. -->
 <widget-format ratio-decimals="2"></widget-format>
 
-<!-- 4x2 and up: the CCU and its 6-hour line left, the four stats right. Releases style: 60 days (5 rows of 12), the
-     counts and the last prod release beside; all games: a row of game chips (tap: show only that game) above. -->
+<!-- 4x2 and up: the CCU and its 6-hour line left, the four stats right. Releases style: 14 weeks (7 rows × 14 columns,
+     GitHub order), the counts (the whole history) and the last prod release beside; all games: a row of game chips (tap: show only that game) above. -->
 <widget state="data" name="medium" min-width="240" min-height="120" refresh="topEnd">
 	<div style="padding: 4px 6px 10px 14px">
 		<div style="display: flex; align-items: center">
@@ -173,7 +180,7 @@ export const DEFAULT_WIDGET_HTML = `
 		<div style="flex: 1; margin-top: 6px; padding-right: 8px" data-show-if="!slot.1">
 			${chips(6, true, "gap: 4px; margin-bottom: 3px")}
 			<div style="display: flex; flex: 1; align-items: stretch" data-show-if="${HAS_RELEASES}">
-				${garden(12, 5, 15, 3, 3, "flex: 1")}
+				${garden(14, "flex: 1")}
 				<div style="justify-content: center; gap: 2px; margin-left: 12px">
 					<div style="display: flex; align-items: baseline">
 						<span style="font-size: 16px; font-weight: 700; color: var(--rg3)">{${R}.prod}</span>
@@ -196,7 +203,7 @@ export const DEFAULT_WIDGET_HTML = `
 	</div>
 </widget>
 
-<!-- 2x2: the CCU, then a 2x2 grid of the stats at the bottom. Releases style: the last 30 days (5 rows of 6), counts under; all games: chips of the first 4 games above. -->
+<!-- 2x2: the CCU, then a 2x2 grid of the stats at the bottom. Releases style: 11 weeks (7 × 11), the 30-day counts under; all games: chips of the first 4 games above. -->
 <widget state="data" name="grid" min-width="100" min-height="115" refresh="topEnd">
 	<div style="padding: 4px 6px 10px 12px">
 		<div style="display: flex; align-items: center">
@@ -248,7 +255,7 @@ export const DEFAULT_WIDGET_HTML = `
 		<div style="flex: 1; margin-top: 4px; padding-right: 6px" data-show-if="!slot.1">
 			${chips(4, false, "gap: 4px; margin-bottom: 2px")}
 			<div style="flex: 1; margin-bottom: 2px" data-show-if="${HAS_RELEASES}">
-				${garden(6, 5, 15, 3, 3, "flex: 1; margin-bottom: 5px")}
+				${garden(11, "flex: 1; margin-bottom: 5px")}
 				${counts30(13)}
 			</div>
 			${GARDEN_LOADING}
@@ -256,8 +263,8 @@ export const DEFAULT_WIDGET_HTML = `
 	</div>
 </widget>
 
-<!-- 4x1 (wide and short): the CCU left, the 6-hour line in the middle, the stats right. Releases style: 60 days (3 rows
-     of 20), the 60-day counts and the last prod release right; all games: the game chips in the header. -->
+<!-- 4x1 (wide and short): the CCU left, the 6-hour line in the middle, the stats right. Releases style: 22 weeks (7 × 22),
+     the counts (the whole history) and the last prod release right; all games: the game chips in the header. -->
 <widget state="data" name="wide" min-width="240" min-height="60" refresh="topEnd">
 	<div style="padding: 4px 6px 8px 12px">
 		<div style="display: flex; align-items: center">
@@ -305,7 +312,7 @@ export const DEFAULT_WIDGET_HTML = `
 		</div>
 		<div style="flex: 1; padding-right: 6px" data-show-if="!slot.1">
 			<div style="display: flex; flex: 1; align-items: stretch" data-show-if="${HAS_RELEASES}">
-				${garden(20, 3, 11, 2, 2, "flex: 1; margin: 1px 0 3px")}
+				${garden(22, "flex: 1; margin: 1px 0 3px")}
 				<div style="justify-content: center; align-items: flex-end; gap: 1px; margin-left: 10px">
 					<div style="display: flex; align-items: baseline">
 						<span style="font-size: 13px; font-weight: 700; color: var(--rg3)">{${R}.prod}</span>
@@ -321,7 +328,7 @@ export const DEFAULT_WIDGET_HTML = `
 	</div>
 </widget>
 
-<!-- 2x1 tall enough for four stats. Releases style: the last 30 days (3 rows of 10), counts under. -->
+<!-- 2x1 tall enough for four stats. Releases style: 24 weeks (7 × 24), the 30-day counts under. -->
 <widget state="data" name="small4" min-width="100" min-height="90" refresh="topEnd">
 	<div style="padding: 4px 6px 8px 12px">
 		<div style="display: flex; align-items: center">
@@ -359,7 +366,7 @@ export const DEFAULT_WIDGET_HTML = `
 		</div>
 		<div style="flex: 1; margin-top: 2px; padding-right: 6px" data-show-if="!slot.1">
 			<div style="flex: 1" data-show-if="${HAS_RELEASES}">
-				${garden(10, 3, 11, 2, 2, "flex: 1; margin-bottom: 4px")}
+				${garden(24, "flex: 1; margin-bottom: 4px")}
 				${counts30(12)}
 			</div>
 			${GARDEN_LOADING}
@@ -367,14 +374,20 @@ export const DEFAULT_WIDGET_HTML = `
 	</div>
 </widget>
 
-<!-- 2x1 from 72 dp: three stats. Releases style: the last 30 days (2 rows of 15), counts under. -->
+<!-- 2x1 from 72 dp: three stats. Releases style: 26 weeks (7 × 26), the 30-day counts in the header. -->
 <widget state="data" name="small" min-width="100" min-height="72" refresh="topEnd">
 	<div style="padding: 4px 6px 8px 12px">
 		<div style="display: flex; align-items: center">
 			<img src="{game.iconUrl}" style="width: 18px; height: 18px; border-radius: 6px; background: var(--divider); margin-right: 7px" data-show-if="!allGames">
 			${ALL_GAMES_TITLE}
 			<span style="flex: 1; font-size: 12px; font-weight: 500; color: var(--text2)">{game}</span>
-			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{status}</span>
+			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)" data-show-if="slot.1">{status}</span>
+			<div data-show-if="!slot.1">
+				<div style="display: flex; align-items: baseline; margin-left: 6px" data-show-if="${HAS_RELEASES}">
+					<span style="font-size: 12px; font-weight: 700; color: var(--rg3)">{${R}.prod30}</span>
+					<span style="margin-left: 5px; font-size: 12px; font-weight: 700; color: var(--rb3)">{${R}.dev30}</span>
+				</div>
+			</div>
 			<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)"></tt-icon>
 		</div>
 		<div style="flex: 1" data-show-if="slot.1">
@@ -400,17 +413,13 @@ export const DEFAULT_WIDGET_HTML = `
 			<div style="flex: 1"></div>
 		</div>
 		<div style="flex: 1; margin-top: 2px; padding-right: 6px" data-show-if="!slot.1">
-			<div style="flex: 1" data-show-if="${HAS_RELEASES}">
-				${garden(15, 2, 11, 2, 2, "flex: 1; margin-bottom: 3px")}
-				${counts30(12)}
-			</div>
+			${garden(26, "flex: 1").replace("<svg ", `<svg data-show-if="${HAS_RELEASES}" `)}
 			${GARDEN_LOADING}
 		</div>
 	</div>
 </widget>
 
-<!-- anything smaller: two stats. Releases style: the last 30 days (2 rows of 15), the 30-day prod / dev counts in the
-     header. -->
+<!-- anything smaller: two stats. Releases style: 26 weeks (7 × 26), the 30-day counts in the header. -->
 <widget state="data" name="tiny" min-width="0" min-height="0" refresh="topEnd">
 	<div style="padding: 4px 6px 8px 12px">
 		<div style="display: flex; align-items: center">
@@ -445,7 +454,7 @@ export const DEFAULT_WIDGET_HTML = `
 			<div style="flex: 1"></div>
 		</div>
 		<div style="flex: 1; margin-top: 2px; padding-right: 6px" data-show-if="!slot.1">
-			${garden(15, 2, 11, 2, 2, "flex: 1").replace("<svg ", `<svg data-show-if="${HAS_RELEASES}" `)}
+			${garden(26, "flex: 1").replace("<svg ", `<svg data-show-if="${HAS_RELEASES}" `)}
 			${GARDEN_LOADING}
 		</div>
 	</div>

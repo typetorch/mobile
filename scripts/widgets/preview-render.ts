@@ -145,20 +145,25 @@ const SAMPLES: Sample[] = [
 /** level(n): 0 for 0, 1 for 1, 2 for 2–3, 3 for 4+. */
 const level = (n: number) => (n === 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : 3);
 
-type Day = { p: number; d: number };
+/** h: inside the game's deploy history (before it the backend sends bg / tri "rnone"). */
+type Day = { p: number; d: number; h: boolean };
 
-/** 60 days of made-up releases (seeded, so the page looks the same each time). */
-function releaseDays(seed: number, prodRate: number, devRate: number): Day[] {
+/** How many days the backend sends (26 weeks, the last one today). */
+const DAYS = 182;
+
+/** DAYS days of made-up releases (seeded, so the page looks the same each time); the history begins at day [start]. */
+function releaseDays(seed: number, prodRate: number, devRate: number, start: number): Day[] {
 	let x = seed;
 	const rnd = () => {
 		x = (x * 16807) % 2147483647;
 		return x / 2147483647;
 	};
 	const out: Day[] = [];
-	for (let i = 0; i < 60; i++) {
-		const p = rnd() < prodRate ? 1 + Math.floor(rnd() * 3) : 0;
-		const d = rnd() < devRate ? 1 + Math.floor(rnd() * 5) : 0;
-		out.push({ p, d });
+	for (let i = 0; i < DAYS; i++) {
+		const h = i >= start;
+		const p = h && rnd() < prodRate ? 1 + Math.floor(rnd() * 3) : 0;
+		const d = h && rnd() < devRate ? 1 + Math.floor(rnd() * 5) : 0;
+		out.push({ p, d, h });
 	}
 	return out;
 }
@@ -171,32 +176,33 @@ function releaseValues(days: Day[], lastProdGame?: (day: number) => string | nul
 	let prod30 = 0;
 	let dev30 = 0;
 	let last = -1;
-	days.forEach(({ p, d }, i) => {
+	days.forEach(({ p, d, h }, i) => {
 		prod += p;
 		dev += d;
-		if (i >= 30) {
+		if (i >= days.length - 30) {
 			prod30 += p;
 			dev30 += d;
 		}
 		if (p) last = i;
 		out[`releases.days.${i}.p`] = String(p);
 		out[`releases.days.${i}.d`] = String(d);
-		out[`releases.days.${i}.bg`] = p ? `rg${level(p)}` : d ? `rb${level(d)}` : "r0";
-		out[`releases.days.${i}.tri`] = p && d ? `rb${level(d)}` : "rnone";
+		out[`releases.days.${i}.bg`] = !h ? "rnone" : p ? `rg${level(p)}` : d ? `rb${level(d)}` : "r0";
+		out[`releases.days.${i}.tri`] = h && p && d ? `rb${level(d)}` : "rnone";
 	});
 	out["releases.value"] = String(prod);
 	out["releases.prod"] = String(prod);
 	out["releases.dev"] = String(dev);
 	out["releases.prod30"] = String(prod30);
 	out["releases.dev30"] = String(dev30);
-	out["releases.lastProd"] = last < 0 ? null : last === 59 ? "today" : `${59 - last} d ago`;
+	const today = days.length - 1;
+	out["releases.lastProd"] = last < 0 ? null : last === today ? "today" : `${today - last} d ago`;
 	out["releases.lastProdLabel"] = last < 0 ? null : `#${100 + prod} · v0.9.${prod % 10}`;
 	if (lastProdGame) out["releases.lastProdGame"] = last < 0 ? null : lastProdGame(last);
 	return out;
 }
 
-// Each sample gets its own release history (the sparse one: no prod release in 60 days).
-const RELEASE_SAMPLES = [releaseDays(7, 0.28, 0.55), releaseDays(11, 0.12, 0.35), releaseDays(5, 0, 0.12)];
+// Each sample gets its own release history (the sparse one: no prod release at all).
+const RELEASE_SAMPLES = [releaseDays(7, 0.28, 0.55, 140), releaseDays(11, 0.12, 0.35, 120), releaseDays(5, 0, 0.12, 160)];
 SAMPLES.forEach((s, i) => Object.assign(s.values, releaseValues(RELEASE_SAMPLES[i] ?? [])));
 
 /** A made-up game icon (an SVG data URL), so the svg `<image>`s have something to draw. */
@@ -207,17 +213,18 @@ function icon(initials: string, from: string, to: string): string {
 
 /** The all-games sample (docs/WIDGET_SPEC.md, All games): four games, merged releases, `games.N`, the pick. */
 const GAMES: { id: string; name: string; iconUrl: string | null; days: Day[] }[] = [
-	{ id: "prison", name: "The Prison", iconUrl: icon("TP", "#e0803a", "#7a2f12"), days: releaseDays(11, 0.18, 0.35) },
-	{ id: "zomvival", name: "Zomvival", iconUrl: icon("Z", "#5aa060", "#1d4a2a"), days: releaseDays(13, 0.12, 0.3) },
-	{ id: "cart", name: "Cart Ride", iconUrl: null, days: releaseDays(17, 0.08, 0.25) },
-	{ id: "slime", name: "Slime", iconUrl: icon("S", "#7a6ad8", "#2c2266"), days: releaseDays(19, 0.1, 0.2) },
+	{ id: "prison", name: "The Prison", iconUrl: icon("TP", "#e0803a", "#7a2f12"), days: releaseDays(11, 0.18, 0.35, 140) },
+	{ id: "zomvival", name: "Zomvival", iconUrl: icon("Z", "#5aa060", "#1d4a2a"), days: releaseDays(13, 0.12, 0.3, 120) },
+	{ id: "cart", name: "Cart Ride", iconUrl: null, days: releaseDays(17, 0.08, 0.25, 155) },
+	{ id: "slime", name: "Slime", iconUrl: icon("S", "#7a6ad8", "#2c2266"), days: releaseDays(19, 0.1, 0.2, 100) },
 ];
 
 function allGamesValues(pick: number | null): Record<string, Val> {
 	const shown = pick === null ? GAMES : [GAMES[pick]];
-	const days = Array.from({ length: 60 }, (_, i) => ({
+	const days = Array.from({ length: DAYS }, (_, i) => ({
 		p: shown.reduce((n, g) => n + g.days[i].p, 0),
 		d: shown.reduce((n, g) => n + g.days[i].d, 0),
+		h: shown.some((g) => g.days[i].h),
 	}));
 	const values: Record<string, Val> = {
 		allGames: "1",
@@ -244,12 +251,24 @@ function allGamesValues(pick: number | null): Record<string, Val> {
 SAMPLES.push({ label: "All games (4 games; tap a chip)", deltaUp: true, series: [], values: allGamesValues(null), allGames: true });
 
 /** The widget's style (Settings → Widgets): Stats, or Releases (slots ["", "", "", "releases"]) with or without data yet. */
-type Style = "stats" | "releases" | "releasesLoading";
+type Style = "stats" | "releases" | "releasesLoading" | "releasesOld";
 
 function styled(sample: Sample, style: Style): Sample {
 	if (style === "stats") return sample;
 	const values: Record<string, Val> = { ...sample.values, "slot.1": null, "slot.2": null, "slot.3": null, "slot.4": "releases", "slot.4.label": "Releases" };
 	if (style === "releasesLoading") for (const k of Object.keys(values)) if (k.startsWith("releases.")) delete values[k];
+	// An older backend: only the last 60 days, at indices 0..59.
+	if (style === "releasesOld") {
+		const days: Record<string, Val> = {};
+		for (const [k, v] of Object.entries(values)) {
+			const m = /^releases\.days\.(\d+)\.(\w+)$/.exec(k);
+			if (!m) continue;
+			delete values[k];
+			const i = Number(m[1]) - (DAYS - 60);
+			if (i >= 0) days[`releases.days.${i}.${m[2]}`] = v;
+		}
+		Object.assign(values, days);
+	}
 	return { ...sample, values };
 }
 

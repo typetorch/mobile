@@ -134,7 +134,7 @@ function page(js: string): string {
 <header>
 	<h1>Widget preview</h1>
 	<label>Sample <select id="sample"></select></label>
-	<label>Style <select id="style"><option value="stats">Stats</option><option value="releases">Releases</option><option value="releasesLoading">Releases (no data yet)</option></select></label>
+	<label>Style <select id="style"><option value="stats">Stats</option><option value="releases">Releases</option><option value="releasesLoading">Releases (no data yet)</option><option value="releasesOld">Releases (older backend: 60 days)</option></select></label>
 	<label>Zoom <select id="zoom"><option value="1">1×</option><option value="1.5" selected>1.5×</option><option value="2">2×</option></select></label>
 	<label><input type="checkbox" id="hit"> hit areas</label>
 	<label>Custom <input id="cw" type="number" min="40" max="600" placeholder="w"> × <input id="ch" type="number" min="40" max="600" placeholder="h"> dp</label>
