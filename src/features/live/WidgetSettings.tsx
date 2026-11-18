@@ -14,6 +14,11 @@ import { useAccounts } from "@/store/accounts";
 import { space, useTheme } from "@/theme";
 import * as Live from "@modules/typetorch-live";
 
+/** The all-games backend id ("*"); defined here too so this screen also runs over OTA on an APK whose module predates it. */
+const ALL_GAMES = "*";
+/** The game picked on an all-games widget (absent on older APKs). */
+const filterOf = (w: unknown): string | undefined => (w as { filter?: string }).filter;
+
 import { WIDGET_WARNINGS } from "./widgets";
 import {
 	clampWindow,
@@ -202,13 +207,13 @@ function WidgetCard({
 }) {
 	const p = useTheme();
 	const { backends } = useAccounts();
-	const allGames = widget.backendId === Live.ALL_GAMES;
+	const allGames = widget.backendId === ALL_GAMES;
 	const backend = backends.find((b) => b.id === widget.backendId);
 	const title = allGames ? "All games" : (backend?.name ?? (widget.backendId ? "A removed backend" : "No game picked yet"));
-	const picked = allGames && widget.filter ? backends.find((b) => b.id === widget.filter)?.name : undefined;
+	const picked = allGames && filterOf(widget) ? backends.find((b) => b.id === filterOf(widget))?.name : undefined;
 	const slots = fourSlots(widget.slots);
 	const style = widgetStyle(slots);
-	const gameOptions = [{ value: Live.ALL_GAMES, label: "All games" }, ...backends.map((b) => ({ value: b.id, label: b.name }))];
+	const gameOptions = [{ value: ALL_GAMES, label: "All games" }, ...backends.map((b) => ({ value: b.id, label: b.name }))];
 	return (
 		<View style={{ gap: 6 }}>
 			<View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: 2 }}>
@@ -280,11 +285,11 @@ export function WidgetSettings() {
 	 */
 	const setWidgetGame = (w: Live.LiveWidget, backendId: string) => {
 		const ok =
-			backendId === Live.ALL_GAMES
+			backendId === ALL_GAMES
 				? Live.setWidgetConfig(w.id, { backendId })
-				: Live.setWidgetConfig(w.id, { backendId, slots: w.backendId === Live.ALL_GAMES ? [...RELEASES_SLOTS] : fourSlots(w.slots) });
+				: Live.setWidgetConfig(w.id, { backendId, slots: w.backendId === ALL_GAMES ? [...RELEASES_SLOTS] : fourSlots(w.slots) });
 		if (!ok) {
-			if (backendId === Live.ALL_GAMES) notify("Needs the newest app version", "All-games widgets come with the next app update.");
+			if (backendId === ALL_GAMES) notify("Needs the newest app version", "All-games widgets come with the next app update.");
 			else notify("Couldn't change the widget", "It may have been removed from the home screen.");
 			reload();
 			return;
@@ -325,7 +330,7 @@ export function WidgetSettings() {
 		let ok = true;
 		// Releases and all-games widgets keep theirs.
 		for (const w of widgets) {
-			if (w.backendId !== Live.ALL_GAMES && widgetStyle(fourSlots(w.slots)) === "stats") ok = Live.setWidgetConfig(w.id, { slots: defaults }) && ok;
+			if (w.backendId !== ALL_GAMES && widgetStyle(fourSlots(w.slots)) === "stats") ok = Live.setWidgetConfig(w.id, { slots: defaults }) && ok;
 		}
 		reload();
 		refreshSoon();
