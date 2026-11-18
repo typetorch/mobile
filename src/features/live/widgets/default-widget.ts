@@ -124,28 +124,30 @@ export const DEFAULT_WIDGET_HTML = `
 			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{status}</span>
 			<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)"></tt-icon>
 		</div>
-		<div style="display: flex; flex: 1; align-items: center; padding-right: 6px">
-			<div style="display: flex; align-items: baseline">
-				<span style="font-size: 24px; font-weight: 600; color: var(--text)">{ccu}</span>
-				<span style="margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
+		<div style="display: flex; flex: 1; align-items: stretch; padding-right: 6px">
+			<div style="justify-content: center">
+				<div style="display: flex; align-items: baseline">
+					<span style="font-size: 24px; font-weight: 600; color: var(--text)">{ccu}</span>
+					<span style="margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
+				</div>
 			</div>
-			<tt-chart minutes="360" bucket="5" labels zero smooth dot fill style="flex: 1; height: 34px; margin: 0 10px; color: var(--brand)"></tt-chart>
-			<div style="flex: 0.9; align-items: flex-end; gap: 1px">
+			<tt-chart minutes="360" bucket="5" labels zero smooth dot fill style="flex: 1.7; margin: 2px 10px 0 10px; color: var(--brand)"></tt-chart>
+			<div style="justify-content: center; align-items: flex-end; gap: 1px">
 				<div style="display: flex; align-items: baseline" data-show-if="slot.1">
-					<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.1.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.1.value:short}</span>
+					<span style="font-size: 10px; color: var(--text2)">{slot.1.label}</span>
+					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.1.value}</span>
 				</div>
 				<div style="display: flex; align-items: baseline" data-show-if="slot.2">
-					<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.2.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.2.value:short}</span>
+					<span style="font-size: 10px; color: var(--text2)">{slot.2.label}</span>
+					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.2.value}</span>
 				</div>
 				<div style="display: flex; align-items: baseline" data-show-if="slot.3">
-					<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.3.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.3.value:short}</span>
+					<span style="font-size: 10px; color: var(--text2)">{slot.3.label}</span>
+					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.3.value}</span>
 				</div>
 				<div style="display: flex; align-items: baseline" data-show-if="slot.4">
-					<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.4.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.4.value:short}</span>
+					<span style="font-size: 10px; color: var(--text2)">{slot.4.label}</span>
+					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.4.value}</span>
 				</div>
 			</div>
 		</div>

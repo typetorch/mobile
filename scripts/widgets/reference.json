@@ -1,49 +1,17 @@
 {
   "version": 1,
-  "tokens": {
-    "day": {
-      "bg": "#EFFFFFFF",
-      "text": "#FF17171B",
-      "text2": "#FF62606A",
-      "brand": "#FFFB7A32",
-      "up": "#FF1F8A4C",
-      "down": "#FFC93C3C",
-      "divider": "#1F000000",
-      "unitTime": "#FFE2700F",
-      "unitPercent": "#FF1F6FD1",
-      "unitRobux": "#FF1F8A4C"
-    },
-    "night": {
-      "bg": "#FF1C1C20",
-      "text": "#FFF2F0F5",
-      "text2": "#FFA7A3AD",
-      "brand": "#FFFB7A32",
-      "up": "#FF4CC27A",
-      "down": "#FFEF6B6B",
-      "divider": "#33FFFFFF",
-      "unitTime": "#FFFB923C",
-      "unitPercent": "#FF5AA9FF",
-      "unitRobux": "#FF4CC27A"
-    }
-  },
-  "strings": {
-    "refreshing": "refreshing…",
-    "offline": "offline · {updated}"
-  },
   "layouts": {
     "data": [
       {
-        "name": "medium",
         "minWidth": 240,
         "minHeight": 120,
-        "refresh": "topEnd",
         "root": {
           "type": "column",
           "padding": {
-            "start": 14,
             "top": 4,
-            "end": 6,
-            "bottom": 10
+            "bottom": 10,
+            "start": 14,
+            "end": 6
           },
           "children": [
             {
@@ -81,20 +49,20 @@
                   "type": "icon",
                   "name": "refresh",
                   "size": 15,
-                  "padding": 4,
-                  "color": "text2"
+                  "color": "text2",
+                  "padding": 4
                 }
               ]
             },
             {
               "type": "row",
-              "weight": 1,
               "align": "stretch",
-              "margin": {
-                "top": 4
-              },
+              "weight": 1,
               "padding": {
                 "end": 8
+              },
+              "margin": {
+                "top": 4
               },
               "children": [
                 {
@@ -129,8 +97,13 @@
                       "type": "chart",
                       "bind": "series",
                       "minutes": 360,
+                      "bucket": 5,
                       "color": "brand",
                       "fill": true,
+                      "dot": true,
+                      "zero": true,
+                      "smooth": true,
+                      "labels": true,
                       "weight": 1,
                       "margin": {
                         "top": 2,
@@ -147,9 +120,9 @@
                 },
                 {
                   "type": "column",
-                  "weight": 1,
-                  "justify": "center",
                   "gap": 6,
+                  "justify": "center",
+                  "weight": 1,
                   "margin": {
                     "start": 12
                   },
@@ -295,20 +268,20 @@
               ]
             }
           ]
-        }
+        },
+        "name": "medium",
+        "refresh": "topEnd"
       },
       {
-        "name": "grid",
         "minWidth": 100,
         "minHeight": 115,
-        "refresh": "topEnd",
         "root": {
           "type": "column",
           "padding": {
-            "start": 12,
             "top": 4,
-            "end": 6,
-            "bottom": 10
+            "bottom": 10,
+            "start": 12,
+            "end": 6
           },
           "children": [
             {
@@ -337,8 +310,8 @@
                   "type": "icon",
                   "name": "refresh",
                   "size": 15,
-                  "padding": 4,
-                  "color": "text2"
+                  "color": "text2",
+                  "padding": 4
                 }
               ]
             },
@@ -372,10 +345,10 @@
                   "text": "· {serversLabel}",
                   "size": 10,
                   "color": "text2",
+                  "weight": 1,
                   "margin": {
                     "start": 4
                   },
-                  "weight": 1,
                   "showIf": "servers"
                 }
               ]
@@ -386,8 +359,8 @@
             },
             {
               "type": "row",
-              "align": "start",
               "gap": 6,
+              "align": "start",
               "padding": {
                 "end": 6
               },
@@ -471,8 +444,8 @@
             },
             {
               "type": "row",
-              "align": "start",
               "gap": 6,
+              "align": "start",
               "padding": {
                 "end": 6
               },
@@ -552,20 +525,20 @@
               ]
             }
           ]
-        }
+        },
+        "name": "grid",
+        "refresh": "topEnd"
       },
       {
-        "name": "wide",
         "minWidth": 240,
         "minHeight": 60,
-        "refresh": "topEnd",
         "root": {
           "type": "column",
           "padding": {
-            "start": 12,
             "top": 4,
-            "end": 6,
-            "bottom": 8
+            "bottom": 8,
+            "start": 12,
+            "end": 6
           },
           "children": [
             {
@@ -603,40 +576,46 @@
                   "type": "icon",
                   "name": "refresh",
                   "size": 15,
-                  "padding": 4,
-                  "color": "text2"
+                  "color": "text2",
+                  "padding": 4
                 }
               ]
             },
             {
               "type": "row",
+              "align": "stretch",
               "weight": 1,
-              "align": "center",
               "padding": {
                 "end": 6
               },
               "children": [
                 {
-                  "type": "row",
-                  "align": "baseline",
+                  "type": "column",
+                  "justify": "center",
                   "children": [
                     {
-                      "type": "text",
-                      "text": "{ccu}",
-                      "size": 24,
-                      "fontWeight": "semibold",
-                      "color": "text"
-                    },
-                    {
-                      "type": "text",
-                      "text": "{delta}",
-                      "size": 12,
-                      "fontWeight": "bold",
-                      "color": "delta",
-                      "margin": {
-                        "start": 4
-                      },
-                      "showIf": "delta"
+                      "type": "row",
+                      "align": "baseline",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{ccu}",
+                          "size": 24,
+                          "fontWeight": "semibold",
+                          "color": "text"
+                        },
+                        {
+                          "type": "text",
+                          "text": "{delta}",
+                          "size": 12,
+                          "fontWeight": "bold",
+                          "color": "delta",
+                          "margin": {
+                            "start": 4
+                          },
+                          "showIf": "delta"
+                        }
+                      ]
                     }
                   ]
                 },
@@ -644,20 +623,25 @@
                   "type": "chart",
                   "bind": "series",
                   "minutes": 360,
+                  "bucket": 5,
                   "color": "brand",
                   "fill": true,
-                  "weight": 1,
-                  "height": 34,
+                  "dot": true,
+                  "zero": true,
+                  "smooth": true,
+                  "labels": true,
+                  "weight": 1.7,
                   "margin": {
+                    "top": 2,
                     "start": 10,
                     "end": 10
                   }
                 },
                 {
                   "type": "column",
-                  "weight": 0.9,
-                  "align": "end",
                   "gap": 1,
+                  "align": "end",
+                  "justify": "center",
                   "children": [
                     {
                       "type": "row",
@@ -668,13 +652,11 @@
                           "type": "text",
                           "text": "{slot.1.label}",
                           "size": 10,
-                          "color": "text2",
-                          "align": "end",
-                          "weight": 1
+                          "color": "text2"
                         },
                         {
                           "type": "text",
-                          "text": "{slot.1.value:short}",
+                          "text": "{slot.1.value}",
                           "size": 11,
                           "fontWeight": "semibold",
                           "color": "text",
@@ -693,13 +675,11 @@
                           "type": "text",
                           "text": "{slot.2.label}",
                           "size": 10,
-                          "color": "text2",
-                          "align": "end",
-                          "weight": 1
+                          "color": "text2"
                         },
                         {
                           "type": "text",
-                          "text": "{slot.2.value:short}",
+                          "text": "{slot.2.value}",
                           "size": 11,
                           "fontWeight": "semibold",
                           "color": "text",
@@ -718,13 +698,11 @@
                           "type": "text",
                           "text": "{slot.3.label}",
                           "size": 10,
-                          "color": "text2",
-                          "align": "end",
-                          "weight": 1
+                          "color": "text2"
                         },
                         {
                           "type": "text",
-                          "text": "{slot.3.value:short}",
+                          "text": "{slot.3.value}",
                           "size": 11,
                           "fontWeight": "semibold",
                           "color": "text",
@@ -743,13 +721,11 @@
                           "type": "text",
                           "text": "{slot.4.label}",
                           "size": 10,
-                          "color": "text2",
-                          "align": "end",
-                          "weight": 1
+                          "color": "text2"
                         },
                         {
                           "type": "text",
-                          "text": "{slot.4.value:short}",
+                          "text": "{slot.4.value}",
                           "size": 11,
                           "fontWeight": "semibold",
                           "color": "text",
@@ -764,20 +740,20 @@
               ]
             }
           ]
-        }
+        },
+        "name": "wide",
+        "refresh": "topEnd"
       },
       {
-        "name": "small4",
         "minWidth": 100,
         "minHeight": 90,
-        "refresh": "topEnd",
         "root": {
           "type": "column",
           "padding": {
-            "start": 12,
             "top": 4,
-            "end": 6,
-            "bottom": 8
+            "bottom": 8,
+            "start": 12,
+            "end": 6
           },
           "children": [
             {
@@ -815,8 +791,8 @@
                   "type": "icon",
                   "name": "refresh",
                   "size": 15,
-                  "padding": 4,
-                  "color": "text2"
+                  "color": "text2",
+                  "padding": 4
                 }
               ]
             },
@@ -851,9 +827,9 @@
                 },
                 {
                   "type": "column",
-                  "weight": 1,
-                  "align": "end",
                   "gap": 1,
+                  "align": "end",
+                  "weight": 1,
                   "margin": {
                     "start": 8
                   },
@@ -967,20 +943,20 @@
               "weight": 1
             }
           ]
-        }
+        },
+        "name": "small4",
+        "refresh": "topEnd"
       },
       {
-        "name": "small",
         "minWidth": 100,
         "minHeight": 72,
-        "refresh": "topEnd",
         "root": {
           "type": "column",
           "padding": {
-            "start": 12,
             "top": 4,
-            "end": 6,
-            "bottom": 8
+            "bottom": 8,
+            "start": 12,
+            "end": 6
           },
           "children": [
             {
@@ -1018,8 +994,8 @@
                   "type": "icon",
                   "name": "refresh",
                   "size": 15,
-                  "padding": 4,
-                  "color": "text2"
+                  "color": "text2",
+                  "padding": 4
                 }
               ]
             },
@@ -1054,9 +1030,9 @@
                 },
                 {
                   "type": "column",
-                  "weight": 1,
-                  "align": "end",
                   "gap": 1,
+                  "align": "end",
+                  "weight": 1,
                   "margin": {
                     "start": 8
                   },
@@ -1145,20 +1121,20 @@
               "weight": 1
             }
           ]
-        }
+        },
+        "name": "small",
+        "refresh": "topEnd"
       },
       {
-        "name": "tiny",
         "minWidth": 0,
         "minHeight": 0,
-        "refresh": "topEnd",
         "root": {
           "type": "column",
           "padding": {
-            "start": 12,
             "top": 4,
-            "end": 6,
-            "bottom": 8
+            "bottom": 8,
+            "start": 12,
+            "end": 6
           },
           "children": [
             {
@@ -1196,8 +1172,8 @@
                   "type": "icon",
                   "name": "refresh",
                   "size": 15,
-                  "padding": 4,
-                  "color": "text2"
+                  "color": "text2",
+                  "padding": 4
                 }
               ]
             },
@@ -1232,9 +1208,9 @@
                 },
                 {
                   "type": "column",
-                  "weight": 1,
-                  "align": "end",
                   "gap": 1,
+                  "align": "end",
+                  "weight": 1,
                   "margin": {
                     "start": 8
                   },
@@ -1298,15 +1274,15 @@
               "weight": 1
             }
           ]
-        }
+        },
+        "name": "tiny",
+        "refresh": "topEnd"
       }
     ],
     "loading": [
       {
-        "name": "message",
         "minWidth": 0,
         "minHeight": 0,
-        "refresh": "topEnd",
         "root": {
           "type": "stack",
           "padding": 8,
@@ -1318,29 +1294,30 @@
               "color": "text",
               "align": "center",
               "maxLines": 2,
-              "gravity": "center",
               "margin": {
-                "horizontal": 20
-              }
+                "start": 20,
+                "end": 20
+              },
+              "gravity": "center"
             },
             {
               "type": "icon",
               "name": "refresh",
               "size": 18,
-              "padding": 3,
               "color": "text2",
+              "padding": 3,
               "gravity": "topEnd"
             }
           ]
-        }
+        },
+        "name": "message",
+        "refresh": "topEnd"
       }
     ],
     "unreachable": [
       {
-        "name": "message",
         "minWidth": 0,
         "minHeight": 0,
-        "refresh": "topEnd",
         "root": {
           "type": "stack",
           "padding": 8,
@@ -1352,29 +1329,30 @@
               "color": "text",
               "align": "center",
               "maxLines": 2,
-              "gravity": "center",
               "margin": {
-                "horizontal": 20
-              }
+                "start": 20,
+                "end": 20
+              },
+              "gravity": "center"
             },
             {
               "type": "icon",
               "name": "refresh",
               "size": 18,
-              "padding": 3,
               "color": "text2",
+              "padding": 3,
               "gravity": "topEnd"
             }
           ]
-        }
+        },
+        "name": "message",
+        "refresh": "topEnd"
       }
     ],
     "signedOut": [
       {
-        "name": "message",
         "minWidth": 0,
         "minHeight": 0,
-        "refresh": "none",
         "root": {
           "type": "stack",
           "padding": 8,
@@ -1386,21 +1364,22 @@
               "color": "text",
               "align": "center",
               "maxLines": 2,
-              "gravity": "center",
               "margin": {
-                "horizontal": 20
-              }
+                "start": 20,
+                "end": 20
+              },
+              "gravity": "center"
             }
           ]
-        }
+        },
+        "name": "message",
+        "refresh": "none"
       }
     ],
     "pick": [
       {
-        "name": "message",
         "minWidth": 0,
         "minHeight": 0,
-        "refresh": "none",
         "root": {
           "type": "stack",
           "padding": 8,
@@ -1412,14 +1391,50 @@
               "color": "text",
               "align": "center",
               "maxLines": 2,
-              "gravity": "center",
               "margin": {
-                "horizontal": 20
-              }
+                "start": 20,
+                "end": 20
+              },
+              "gravity": "center"
             }
           ]
-        }
+        },
+        "name": "message",
+        "refresh": "none"
       }
     ]
+  },
+  "tokens": {
+    "day": {
+      "bg": "#EFFFFFFF",
+      "text": "#FF17171B",
+      "text2": "#FF62606A",
+      "brand": "#FFFB7A32",
+      "up": "#FF1F8A4C",
+      "down": "#FFC93C3C",
+      "divider": "#1F000000",
+      "unitTime": "#FFE2700F",
+      "unitPercent": "#FF1F6FD1",
+      "unitRobux": "#FF1F8A4C"
+    },
+    "night": {
+      "bg": "#FF1C1C20",
+      "text": "#FFF2F0F5",
+      "text2": "#FFA7A3AD",
+      "brand": "#FFFB7A32",
+      "up": "#FF4CC27A",
+      "down": "#FFEF6B6B",
+      "divider": "#33FFFFFF",
+      "unitTime": "#FFFB923C",
+      "unitPercent": "#FF5AA9FF",
+      "unitRobux": "#FF4CC27A"
+    }
+  },
+  "strings": {
+    "refreshing": "refreshing…",
+    "offline": "offline · {updated}"
+  },
+  "format": {
+    "ratioDecimals": 2
   }
 }
