@@ -95,7 +95,8 @@ class TypeTorchLiveModule : Module() {
       Unit
     }
 
-    // The placed widgets as JSON: [{ "id": 12, "backendId": "…" ("" before a game is picked), "slots": ["dau", …] }].
+    // The placed widgets as JSON: [{ "id": 12, "backendId": "…" ("" before a game is picked, "*" for all games),
+    // "slots": ["dau", …], "filter": "…" (an all-games widget's picked game; "" = all) }].
     // A JSON string keeps the bridge to plain types; index.ts parses it (widgets()).
     Function("widgetsJson") {
       val ctx = context
@@ -105,14 +106,16 @@ class TypeTorchLiveModule : Module() {
           JSONObject()
             .put("id", id)
             .put("backendId", Store.widgetBackend(ctx, id) ?: "")
-            .put("slots", JSONArray(Store.widgetSlots(ctx, id))),
+            .put("slots", JSONArray(Store.widgetSlots(ctx, id)))
+            .put("filter", Store.widgetFilter(ctx, id) ?: ""),
         )
       }
       arr.toString()
     }
 
-    // Changes a placed widget: its game (a backend from setBackends) and/or its stat slots (metric ids, up to 4; an
-    // invalid id becomes an empty slot). False for an unknown widget or backend. Draws nothing: refreshWidgets() after.
+    // Changes a placed widget: its game (a backend from setBackends, or "*": all games) and/or its stat slots (metric
+    // ids, up to 4; an invalid id becomes an empty slot; "*" without slots gets the Releases slots). False for an
+    // unknown widget or backend. Draws nothing: refreshWidgets() after.
     Function("setWidgetConfig") { id: Int, config: Map<String, Any?> ->
       setWidgetConfig(context, id, config)
     }
@@ -133,7 +136,8 @@ class TypeTorchLiveModule : Module() {
     val known = WidgetUpdater.widgetIds(ctx).contains(id) || Store.widgetBackend(ctx, id) != null
     if (!known) return false
     val backendId = (config["backendId"] as? String)?.trim().orEmpty()
-    if (backendId.isNotEmpty() && Store.backend(ctx, backendId) == null) return false
+    val all = backendId == Store.ALL
+    if (backendId.isNotEmpty() && !all && Store.backend(ctx, backendId) == null) return false
     // A JS array arrives as a List (an Array, defensively, too).
     val slots: List<*>? = when (val s = config["slots"]) {
       is List<*> -> s
@@ -142,6 +146,7 @@ class TypeTorchLiveModule : Module() {
     }
     if (backendId.isNotEmpty()) Store.setWidgetBackend(ctx, id, backendId)
     if (slots != null) Store.setWidgetSlots(ctx, id, Store.sanitizeSlots(slots))
+    else if (all) Store.setWidgetSlots(ctx, id, Store.RELEASES_SLOTS)
     return true
   }
 

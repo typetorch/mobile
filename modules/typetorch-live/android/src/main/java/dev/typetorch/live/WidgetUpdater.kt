@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.util.SizeF
+import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
@@ -25,6 +26,10 @@ import kotlin.math.min
  */
 internal object WidgetUpdater {
   const val ACTION_REFRESH = "dev.typetorch.live.action.REFRESH_WIDGET"
+
+  /** A tap on `toggle:games.N` of an all-games widget: [EXTRA_GAME] is the game's backend id. */
+  const val ACTION_TOGGLE = "dev.typetorch.live.action.TOGGLE_GAME"
+  const val EXTRA_GAME = "dev.typetorch.live.extra.GAME"
 
   /** The cache's series window (the spec's charts show up to 6 hours). */
   private const val SERIES_MINUTES = 360
@@ -57,11 +62,17 @@ internal object WidgetUpdater {
     refresh(app, widgetIds(app), null, false)
   }
 
-  /** Redraws the widgets of one backend from the cache (after a live watch poll). Any thread, no network. */
+  /**
+   * Redraws the widgets of one backend (and the all-games ones, which show it too) from the cache (after a live watch
+   * poll). Any thread, no network.
+   */
   fun renderForBackend(ctx: Context, backendId: String) {
     val app = ctx.applicationContext
     val mgr = AppWidgetManager.getInstance(app) ?: return
-    for (id in widgetIds(app)) if (Store.widgetBackend(app, id) == backendId) render(app, mgr, id, false)
+    for (id in widgetIds(app)) {
+      val w = Store.widgetBackend(app, id)
+      if (w == backendId || w == Store.ALL) render(app, mgr, id, false)
+    }
   }
 
   /**
@@ -103,10 +114,14 @@ internal object WidgetUpdater {
     }
   }
 
+  /**
+   * Fetches the backends of [ids] in parallel (an all-games widget: every signed-in backend; one failing doesn't stop
+   * the others), each answer cached on its own, within [FETCH_DEADLINE_MS].
+   */
   private fun fetchFor(app: Context, ids: IntArray) {
-    val backends = ids.toList().mapNotNull { Store.widgetBackend(app, it) }
-      .distinct()
-      .mapNotNull { Store.backend(app, it) }
+    val picked = ids.toList().mapNotNull { Store.widgetBackend(app, it) }.distinct()
+    val wantsAll = Store.ALL in picked
+    val backends = (if (wantsAll) Store.backends(app) else picked.mapNotNull { Store.backend(app, it) })
       .filter { !Store.isDead(app, it.id, it.token) }
     if (backends.isEmpty()) return
     val deadline = SystemClock.elapsedRealtime() + FETCH_DEADLINE_MS
@@ -126,16 +141,63 @@ internal object WidgetUpdater {
       }
     }
     for (t in threads) {
-      val left = deadline - SystemClock.elapsedRealtime()
-      if (left <= 0) break
-      try {
-        t.join(left)
-      } catch (e: InterruptedException) {
-        Thread.currentThread().interrupt()
-        break
+      if (!join(t, deadline)) break
+    }
+    if (wantsAll && SystemClock.elapsedRealtime() < deadline) {
+      val t = Thread({ fetchAllImages(app) }, "TypeTorchLive-images").apply {
+        isDaemon = true
+        start()
       }
+      join(t, deadline)
     }
   }
+
+  /** Waits for [t] until [deadline] (elapsedRealtime); false when the time is up or the wait was interrupted. */
+  private fun join(t: Thread, deadline: Long): Boolean {
+    val left = deadline - SystemClock.elapsedRealtime()
+    if (left <= 0) return false
+    return try {
+      t.join(left)
+      true
+    } catch (e: InterruptedException) {
+      Thread.currentThread().interrupt()
+      false
+    }
+  }
+
+  /**
+   * The pictures of all-games widgets: every game's icon (`games.N.iconUrl`, usually already there from its own
+   * backend's refresh) and what the spec's images and svg `<image>`s show with the merged values.
+   */
+  private fun fetchAllImages(app: Context) {
+    try {
+      val view = AllGames.view(app, null)
+      val urls = LinkedHashSet<String>()
+      for (g in view.games) {
+        val icon = Store.snapshot(app, g.id)?.data?.iconUrl
+        if (icon != null && WidgetImages.isWebUrl(icon)) urls.add(icon)
+      }
+      val snap = view.snap
+      if (snap?.data != null) {
+        val spec = WidgetSpecs.stored(app) ?: WidgetSpecs.default
+        val values = WidgetValues.of(app, spec, allBackend(null), snap, false, Store.RELEASES_SLOTS)
+        for (bind in WidgetSpecs.imageBinds(spec)) {
+          val url = values.str(bind) ?: continue
+          if (WidgetImages.isWebUrl(url)) urls.add(url)
+        }
+        for (t in WidgetSpecs.svgTemplates(spec)) {
+          if (urls.size >= 16) break
+          urls.addAll(Svg.imageUrls(t, values))
+        }
+      }
+      for (url in urls.take(16)) WidgetImages.ensure(app, url)
+    } catch (t: Throwable) {
+      Log.w("all-games images failed", t)
+    }
+  }
+
+  /** The backend an all-games widget's bindings see: the picked game's, else a stand-in named "All games". */
+  private fun allBackend(picked: Backend?): Backend = picked ?: Backend(Store.ALL, AllGames.NAME, "", "", "")
 
   /** Downloads the pictures the spec's `image` elements show for [b] (the game's icon), when missing or a day old. */
   private fun fetchImages(app: Context, b: Backend) {
@@ -211,11 +273,14 @@ internal object WidgetUpdater {
     val click: PendingIntent,
     val refresh: PendingIntent?,
     val slots: List<String> = emptyList(),
+    /** All-games widgets: `games[]` (`toggle:games.N` picks games[N]); else empty. */
+    val games: List<Backend> = emptyList(),
   )
 
   private fun look(ctx: Context, widgetId: Int, refreshing: Boolean): Look {
     val backendId = Store.widgetBackend(ctx, widgetId)
       ?: return Look(WidgetSpecs.PICK, null, null, false, configurePending(ctx, widgetId), null)
+    if (backendId == Store.ALL) return allLook(ctx, widgetId, refreshing)
     val b = Store.backend(ctx, backendId)
     if (b == null || Store.isDead(ctx, b.id, b.token)) {
       return Look(WidgetSpecs.SIGNED_OUT, b, null, false, Links.openPending(ctx, widgetId, null), null)
@@ -231,6 +296,28 @@ internal object WidgetUpdater {
     return Look(WidgetSpecs.DATA, b, snap, refreshing, open, refresh, slots)
   }
 
+  /**
+   * An all-games widget: the cached answers of every signed-in backend merged ([AllGames]), filtered to the picked
+   * game. Signed out of every backend: the signedOut state. A tap opens the picked game, else the app.
+   */
+  private fun allLook(ctx: Context, widgetId: Int, refreshing: Boolean): Look {
+    val view = AllGames.forWidget(ctx, widgetId)
+    if (view.games.isEmpty()) {
+      return Look(WidgetSpecs.SIGNED_OUT, null, null, false, Links.openPending(ctx, widgetId, null), null)
+    }
+    val picked = view.picked
+    val b = allBackend(picked)
+    val open = Links.openPending(ctx, widgetId, picked?.link)
+    val refresh = refreshPending(ctx, widgetId)
+    val slots = Store.widgetSlots(ctx, widgetId)
+    val snap = view.snap
+    if (snap?.data == null) {
+      val state = if (!refreshing && view.anyFailed) WidgetSpecs.UNREACHABLE else WidgetSpecs.LOADING
+      return Look(state, b, snap, refreshing, open, refresh, slots, view.games)
+    }
+    return Look(WidgetSpecs.DATA, b, snap, refreshing, open, refresh, slots, view.games)
+  }
+
   /** The sent spec, else (absent, unparseable or failing to draw) the built-in one, else a plain text widget. */
   private fun build(ctx: Context, mgr: AppWidgetManager, widgetId: Int, refreshing: Boolean, lean: Boolean): RemoteViews {
     val look = look(ctx, widgetId, refreshing)
@@ -238,13 +325,13 @@ internal object WidgetUpdater {
     val sent = WidgetSpecs.stored(ctx)
     if (sent != null) {
       try {
-        return views(ctx, sent, look, sizes, lean)
+        return views(ctx, sent, look, sizes, lean, widgetId)
       } catch (t: Throwable) {
         Log.w("sent widget spec failed to draw, using the built-in one", t)
       }
     }
     return try {
-      views(ctx, WidgetSpecs.default, look, sizes, lean)
+      views(ctx, WidgetSpecs.default, look, sizes, lean, widgetId)
     } catch (t: Throwable) {
       Log.w("built-in widget spec failed to draw", t)
       message(ctx, plainText(ctx, look), look.click, look.refresh)
@@ -255,15 +342,17 @@ internal object WidgetUpdater {
    * Android 12+ with several reported sizes (portrait and landscape cells): one drawing per size, the launcher picks.
    * Else one drawing at the current size.
    */
-  private fun views(ctx: Context, spec: WidgetSpec, look: Look, sizes: List<SizeF>, lean: Boolean): RemoteViews {
+  private fun views(
+    ctx: Context, spec: WidgetSpec, look: Look, sizes: List<SizeF>, lean: Boolean, widgetId: Int,
+  ): RemoteViews {
     val values = WidgetValues.of(ctx, spec, look.backend, look.snap, look.refreshing, look.slots)
     val budget = pixelBudget(ctx, sizes.size * (if (lean) 1 else 2), lean)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && sizes.size > 1) {
       val map = LinkedHashMap<SizeF, RemoteViews>()
-      for (sz in sizes) map[sz] = one(ctx, spec, look, values, sz, lean, budget)
+      for (sz in sizes) map[sz] = one(ctx, spec, look, values, sz, lean, budget, widgetId)
       return RemoteViews(map)
     }
-    return one(ctx, spec, look, values, sizes[0], lean, budget)
+    return one(ctx, spec, look, values, sizes[0], lean, budget, widgetId)
   }
 
   /**
@@ -272,23 +361,27 @@ internal object WidgetUpdater {
    */
   private fun one(
     ctx: Context, spec: WidgetSpec, look: Look, values: WidgetValues, size: SizeF, lean: Boolean, budget: Int,
+    widgetId: Int,
   ): RemoteViews {
     val w = size.width
     val h = size.height
     val layout = WidgetSpecs.pick(spec, look.state, w, h)
     val v = RemoteViews(ctx.packageName, R.layout.ttl_widget_canvas)
     val description: String
+    val taps: List<TapBox>
     if (lean) {
       val img = WidgetRenderer.render(ctx, spec, layout, values, WidgetRenderer.isNight(ctx), w, h, budget)
       v.setImageViewBitmap(R.id.ttl_w_img_day, img.bitmap)
       v.setImageViewBitmap(R.id.ttl_w_img_night, img.bitmap)
       description = img.description
+      taps = img.taps
     } else {
       val day = WidgetRenderer.render(ctx, spec, layout, values, false, w, h, budget)
       val night = WidgetRenderer.render(ctx, spec, layout, values, true, w, h, budget)
       v.setImageViewBitmap(R.id.ttl_w_img_day, day.bitmap)
       v.setImageViewBitmap(R.id.ttl_w_img_night, night.bitmap)
       description = day.description
+      taps = day.taps
     }
     v.setContentDescription(R.id.ttl_w_img_day, description)
     v.setContentDescription(R.id.ttl_w_img_night, description)
@@ -303,8 +396,88 @@ internal object WidgetUpdater {
     }
     for (id in HIT_IDS) v.setViewVisibility(id, if (id == hit) View.VISIBLE else View.GONE)
     if (hit != 0 && refresh != null) v.setOnClickPendingIntent(hit, refresh)
+    applyTaps(ctx, v, look, widgetId, taps)
     return v
   }
+
+  /**
+   * The spec's tap areas: Android 12+ places one view of the pool per tappable box (in dp from the top left; the
+   * bitmap is stretched to the widget, so a box can be off by the few dp the launcher's real size differs from the
+   * drawn one). Older Android can't move views in RemoteViews: no tap areas, the whole widget's tap only.
+   */
+  private fun applyTaps(ctx: Context, v: RemoteViews, look: Look, widgetId: Int, taps: List<TapBox>) {
+    val pool = TAP_IDS
+    var used = 0
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      for (t in taps) {
+        if (used >= pool.size) break
+        val pending = tapPending(ctx, look, widgetId, t.tap) ?: continue
+        val id = pool[used]
+        try {
+          placeTap(v, id, t)
+        } catch (e: Throwable) {
+          Log.w("tap area failed", e)
+          break
+        }
+        v.setOnClickPendingIntent(id, pending)
+        val label = tapLabel(ctx, look, t)
+        if (label.isNotEmpty()) v.setContentDescription(id, label)
+        v.setViewVisibility(id, View.VISIBLE)
+        used++
+      }
+    }
+    for (i in used until pool.size) v.setViewVisibility(pool[i], View.GONE)
+  }
+
+  @RequiresApi(Build.VERSION_CODES.S)
+  private fun placeTap(v: RemoteViews, id: Int, t: TapBox) {
+    val dip = TypedValue.COMPLEX_UNIT_DIP
+    v.setViewLayoutMargin(id, RemoteViews.MARGIN_LEFT, t.x, dip)
+    v.setViewLayoutMargin(id, RemoteViews.MARGIN_TOP, t.y, dip)
+    v.setViewLayoutWidth(id, t.w, dip)
+    v.setViewLayoutHeight(id, t.h, dip)
+  }
+
+  /** `open`: the widget's own tap (the picked game, the game, or the app); `refresh`; `toggle:games.N`: a broadcast. */
+  private fun tapPending(ctx: Context, look: Look, widgetId: Int, tap: String): PendingIntent? {
+    if (tap == "open") return look.click
+    if (tap == "refresh") return look.refresh
+    if (tap.startsWith(TOGGLE_PREFIX)) {
+      val n = tap.substring(TOGGLE_PREFIX.length).toIntOrNull() ?: return null
+      val game = look.games.getOrNull(n) ?: return null
+      return togglePending(ctx, widgetId, n, game.id)
+    }
+    return null
+  }
+
+  private fun tapLabel(ctx: Context, look: Look, t: TapBox): String {
+    if (t.label.isNotBlank()) return t.label
+    return when {
+      t.tap == "refresh" -> ctx.getString(R.string.ttl_widget_refresh)
+      t.tap == "open" -> ctx.getString(R.string.ttl_action_open)
+      t.tap.startsWith(TOGGLE_PREFIX) -> {
+        val n = t.tap.substring(TOGGLE_PREFIX.length).toIntOrNull()
+        val game = if (n == null) null else look.games.getOrNull(n)
+        game?.name.orEmpty()
+      }
+      else -> ""
+    }
+  }
+
+  private const val TOGGLE_PREFIX = "toggle:games."
+
+  /** The hit areas for the spec's taps (res/layout{,-night}/ttl_widget_canvas.xml). */
+  private val TAP_IDS: IntArray
+    get() = intArrayOf(
+      R.id.ttl_w_tap_0,
+      R.id.ttl_w_tap_1,
+      R.id.ttl_w_tap_2,
+      R.id.ttl_w_tap_3,
+      R.id.ttl_w_tap_4,
+      R.id.ttl_w_tap_5,
+      R.id.ttl_w_tap_6,
+      R.id.ttl_w_tap_7,
+    )
 
   private val HIT_IDS: IntArray
     get() = intArrayOf(
@@ -404,6 +577,20 @@ internal object WidgetUpdater {
       .setData(Uri.parse("typetorch-live://widget/$widgetId"))
       .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
     return PendingIntent.getBroadcast(ctx, widgetId, intent, Links.FLAGS)
+  }
+
+  /**
+   * Picks game [n] ([gameId]) of an all-games widget, or clears the pick (the provider saves it and redraws from the
+   * cache). A request code per widget and area, and the area in the data, so each is its own PendingIntent.
+   */
+  private fun togglePending(ctx: Context, widgetId: Int, n: Int, gameId: String): PendingIntent {
+    val intent = Intent(ctx, TypeTorchWidgetProvider::class.java)
+      .setAction(ACTION_TOGGLE)
+      .setData(Uri.parse("typetorch-live://widget/$widgetId/toggle/$n"))
+      .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+      .putExtra(EXTRA_GAME, gameId)
+    val code = 0x10000000 or ((widgetId and 0x00FFFFFF) shl 4) or (n and 0xF)
+    return PendingIntent.getBroadcast(ctx, code, intent, Links.FLAGS)
   }
 
   private fun configurePending(ctx: Context, widgetId: Int): PendingIntent {

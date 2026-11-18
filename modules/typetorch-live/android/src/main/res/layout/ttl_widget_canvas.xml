@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The widget (docs/WIDGET_SPEC.md): one bitmap drawn from the widget spec, per day/night mode, plus a transparent
-     refresh hit area in one corner (the spec picks it; the others stay gone). The launcher resolves this layout with
-     the system's night mode, so layout-night/ shows the night bitmap: a mode switch needs no redraw. -->
+<!-- The widget (docs/WIDGET_SPEC.md): one bitmap drawn from the widget spec, per day/night mode, a pool of transparent
+     tap areas placed over the spec's `tap` elements (Android 12+), plus a transparent refresh hit area in one corner
+     (the spec picks it; the others stay gone). The launcher resolves this layout with the system's night mode, so
+     layout-night/ shows the night bitmap: a mode switch needs no redraw. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
   android:id="@android:id/background"
   android:layout_width="match_parent"
@@ -18,6 +19,58 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:scaleType="fitXY"
+    android:visibility="gone" />
+
+  <!-- The spec's tap areas (an element's `tap`): positioned per drawing on Android 12+ (setViewLayoutMargin / Width /
+       Height in dp from the top left), gone when unused and on older Android. Before the refresh corners, so a
+       corner stays on top. -->
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_0"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
+    android:visibility="gone" />
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_1"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
+    android:visibility="gone" />
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_2"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
+    android:visibility="gone" />
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_3"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
+    android:visibility="gone" />
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_4"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
+    android:visibility="gone" />
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_5"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
+    android:visibility="gone" />
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_6"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
+    android:visibility="gone" />
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_7"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
     android:visibility="gone" />
 
   <FrameLayout

@@ -36,14 +36,22 @@ type NativeTypeTorchLive = {
 /** The stat slots new widgets get until the app sets others (the same as Store.BUILT_IN_SLOTS natively). */
 export const BUILT_IN_SLOTS: readonly string[] = ["session:1h", "dau", "d1", "revenue:72h"];
 
+/** The backend id of an all-games widget (docs/WIDGET_SPEC.md, All games; docs/WIDGET_RELEASES.md, section 3). */
+export const ALL_GAMES = "*";
+
+/** The slots of the Releases style (slot 1 empty is its marker); an all-games widget gets them by default. */
+export const RELEASES_SLOTS: readonly string[] = ["", "", "", "releases"];
+
 /** A home-screen widget as the native side keeps it (docs/WIDGET_STATS.md). */
 export type LiveWidget = {
 	/** The launcher's widget id. */
 	id: number;
-	/** The backend (account id) it shows; "" until a game is picked. */
+	/** The backend (account id) it shows; "" until a game is picked; ALL_GAMES ("*") for all games. */
 	backendId: string;
 	/** Metric ids of its stat slots (up to 4; "" = empty), e.g. ["session:1h", "dau", "d1", "revenue:72h"]. */
 	slots: string[];
+	/** An all-games widget's picked game (a backend id, tapped on the widget); "" = all games (or an older build). */
+	filter: string;
 };
 
 const native: NativeTypeTorchLive | null =
@@ -153,13 +161,14 @@ export function widgets(): LiveWidget[] {
 		if (!Array.isArray(parsed)) return [];
 		return parsed.flatMap((w): LiveWidget[] => {
 			if (!w || typeof w !== "object") return [];
-			const o = w as { id?: unknown; backendId?: unknown; slots?: unknown };
+			const o = w as { id?: unknown; backendId?: unknown; slots?: unknown; filter?: unknown };
 			if (typeof o.id !== "number") return [];
 			return [
 				{
 					id: o.id,
 					backendId: typeof o.backendId === "string" ? o.backendId : "",
 					slots: Array.isArray(o.slots) ? o.slots.map((x) => (typeof x === "string" ? x : "")) : [],
+					filter: typeof o.filter === "string" ? o.filter : "",
 				},
 			];
 		});
@@ -170,9 +179,11 @@ export function widgets(): LiveWidget[] {
 }
 
 /**
- * Changes a placed widget: its game (a backend id from setBackends) and/or its stat slots (metric ids, up to 4; an
- * invalid id becomes an empty slot). False for an unknown widget or backend, or without the native module. Draws
- * nothing: call refreshWidgets() after (it fetches the new metrics).
+ * Changes a placed widget: its game (a backend id from setBackends, or ALL_GAMES "*": the releases of every signed-in
+ * backend, merged) and/or its stat slots (metric ids, up to 4; an invalid id becomes an empty slot; ALL_GAMES without
+ * slots gets RELEASES_SLOTS). False for an unknown widget or backend, or without the native module (an APK older than
+ * the all-games build also answers false for "*"). Draws nothing: call refreshWidgets() after (it fetches the new
+ * metrics).
  */
 export function setWidgetConfig(id: number, config: { backendId?: string; slots?: string[] }): boolean {
 	if (!native?.setWidgetConfig) return false;

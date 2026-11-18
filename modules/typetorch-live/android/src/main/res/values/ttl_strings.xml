@@ -27,4 +27,6 @@
   <string name="ttl_configure_title">Pick a game</string>
   <string name="ttl_configure_empty">No games yet. Open TypeTorch and sign in to a backend first.</string>
   <string name="ttl_configure_open">Open TypeTorch</string>
+  <string name="ttl_configure_all">All games</string>
+  <string name="ttl_configure_all_subtitle">Releases of every game you\'re signed in to</string>
 </resources>

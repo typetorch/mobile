@@ -1,13 +1,15 @@
 /**
- * Settings → Widgets (docs/WIDGET_STATS.md): the home-screen widgets placed now, each with its four stat slots, and the
- * slots new widgets start with. A change is saved natively at once (setWidgetConfig / setDefaultSlots) and the widgets
- * refresh, which fetches the new metrics from the backend.
+ * Settings → Widgets (docs/WIDGET_STATS.md): the home-screen widgets placed now, each with its style (Stats: four stat
+ * slots; Releases: the release garden, docs/WIDGET_RELEASES.md), and the slots new widgets start with. A change is saved
+ * natively at once (setWidgetConfig / setDefaultSlots) and the widgets refresh, which fetches the new metrics from the
+ * backend.
  */
 import { Stack, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { AppState, View } from "react-native";
 
 import { Button, Chips, EmptyState, Field, Icon, List, notify, Row, Screen, Section, Segmented, Txt } from "@/components/ui";
+import { storedValue } from "@/features/typetorch/persist";
 import { useAccounts } from "@/store/accounts";
 import { space, useTheme } from "@/theme";
 import * as Live from "@modules/typetorch-live";
@@ -20,10 +22,13 @@ import {
 	metricKind,
 	parseSlot,
 	QUICK_WINDOWS,
+	RELEASES_SLOTS,
 	slotId,
 	slotTitle,
+	widgetStyle,
 	windowId,
 	windowLabel,
+	type WidgetStyle,
 	type WindowUnit,
 } from "./widget-metrics";
 
@@ -37,11 +42,38 @@ function refreshSoon() {
 	}, 700);
 }
 
-const METRIC_OPTIONS = [...METRICS.map((m) => ({ value: m.base, label: m.label })), { value: "", label: "None" }];
+/**
+ * The stat slots a widget had before it was switched to Releases (widget id → slots), so switching back brings them
+ * back. Kept on the phone (AsyncStorage); the native side only keeps the current slots.
+ */
+const statSlots = storedValue<Record<string, string[]>>(
+	"widgets.statSlots.v1",
+	{},
+	(text) => {
+		try {
+			const v = JSON.parse(text) as unknown;
+			if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+			const out: Record<string, string[]> = {};
+			for (const [k, x] of Object.entries(v)) if (Array.isArray(x)) out[k] = fourSlots(x.map((s) => (typeof s === "string" ? s : "")));
+			return out;
+		} catch {
+			return undefined;
+		}
+	},
+	(v) => (Object.keys(v).length ? JSON.stringify(v) : null),
+);
+
+const STYLE_OPTIONS: { value: WidgetStyle; label: string }[] = [
+	{ value: "stats", label: "Stats" },
+	{ value: "releases", label: "Releases" },
+];
+
+const METRIC_OPTIONS = METRICS.map((m) => ({ value: m.base, label: m.label }));
+const NONE_OPTION = { value: "", label: "None" };
 const WINDOW_OPTIONS = [...QUICK_WINDOWS.map((w) => ({ value: windowId(w), label: windowLabel(w) })), { value: "custom", label: "Custom…" }];
 
 /** The editor under an opened slot: the metric, its hint, and for windowed metrics the window. */
-function SlotEditor({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+function SlotEditor({ value, allowNone, onChange }: { value: string; allowNone: boolean; onChange: (id: string) => void }) {
 	const p = useTheme();
 	const { base, window } = parseSlot(value);
 	const kind = metricKind(base);
@@ -75,7 +107,7 @@ function SlotEditor({ value, onChange }: { value: string; onChange: (id: string)
 	return (
 		<View style={{ gap: space.sm, paddingHorizontal: space.md, paddingBottom: space.md }}>
 			<Chips
-				options={METRIC_OPTIONS}
+				options={allowNone ? [...METRIC_OPTIONS, NONE_OPTION] : METRIC_OPTIONS}
 				value={kind || !value ? base : "\u0000"}
 				onChange={(b) => {
 					setCustom(false);
@@ -128,7 +160,7 @@ function SlotEditor({ value, onChange }: { value: string; onChange: (id: string)
 	);
 }
 
-/** Four slots in one list; one opens at a time. */
+/** Four slots in one list; one opens at a time. Slot 1 can't be left empty (an empty slot 1 is the Releases style). */
 function SlotList({ slots, onChange }: { slots: string[]; onChange: (index: number, id: string) => void }) {
 	const p = useTheme();
 	const [open, setOpen] = useState<number | null>(null);
@@ -150,19 +182,33 @@ function SlotList({ slots, onChange }: { slots: string[]; onChange: (index: numb
 						right={<Icon name={open === i ? "chevron-up" : "chevron-down"} size={16} color={p.mutedForeground} />}
 						onPress={() => setOpen(open === i ? null : i)}
 					/>
-					{open === i ? <SlotEditor value={id} onChange={(next) => onChange(i, next)} /> : null}
+					{open === i ? <SlotEditor value={id} allowNone={i !== 0} onChange={(next) => onChange(i, next)} /> : null}
 				</View>
 			))}
 		</List>
 	);
 }
 
-function WidgetCard({ widget, onChange }: { widget: Live.LiveWidget; onChange: (slots: string[]) => void }) {
+function WidgetCard({
+	widget,
+	onChange,
+	onStyle,
+	onGame,
+}: {
+	widget: Live.LiveWidget;
+	onChange: (slots: string[]) => void;
+	onStyle: (style: WidgetStyle) => void;
+	onGame: (backendId: string) => void;
+}) {
 	const p = useTheme();
 	const { backends } = useAccounts();
+	const allGames = widget.backendId === Live.ALL_GAMES;
 	const backend = backends.find((b) => b.id === widget.backendId);
-	const title = backend?.name ?? (widget.backendId ? "A removed backend" : "No game picked yet");
+	const title = allGames ? "All games" : (backend?.name ?? (widget.backendId ? "A removed backend" : "No game picked yet"));
+	const picked = allGames && widget.filter ? backends.find((b) => b.id === widget.filter)?.name : undefined;
 	const slots = fourSlots(widget.slots);
+	const style = widgetStyle(slots);
+	const gameOptions = [{ value: Live.ALL_GAMES, label: "All games" }, ...backends.map((b) => ({ value: b.id, label: b.name }))];
 	return (
 		<View style={{ gap: 6 }}>
 			<View style={{ flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: 2 }}>
@@ -172,15 +218,30 @@ function WidgetCard({ widget, onChange }: { widget: Live.LiveWidget; onChange: (
 				</Txt>
 				{backend?.signedOut ? <Txt variant="small" color={p.warning}>signed out</Txt> : null}
 			</View>
-			{!widget.backendId ? <Txt variant="small">Tap the widget on the home screen to pick its game.</Txt> : null}
-			<SlotList
-				slots={slots}
-				onChange={(i, id) => {
-					const next = [...slots];
-					next[i] = id;
-					onChange(next);
-				}}
-			/>
+			{!widget.backendId ? <Txt variant="small">Tap the widget on the home screen to pick its game, or pick it here.</Txt> : null}
+			<Chips options={gameOptions} value={widget.backendId} onChange={(id) => id !== widget.backendId && onGame(id)} />
+			{allGames ? (
+				<Txt variant="small">
+					The releases of every signed-in game of the last 60 days (30 on the small sizes), added up; tap a game's icon on the widget to see only that
+					game, tap it again for all.{picked ? ` Showing ${picked} now.` : ""}
+				</Txt>
+			) : null}
+			{allGames ? null : <Segmented<WidgetStyle> options={STYLE_OPTIONS} value={style} onChange={(s) => s !== style && onStyle(s)} />}
+			{allGames ? null : style === "stats" ? (
+				<SlotList
+					slots={slots}
+					onChange={(i, id) => {
+						const next = [...slots];
+						next[i] = id;
+						onChange(next);
+					}}
+				/>
+			) : (
+				<Txt variant="small">
+					The game's releases of the last 60 days (30 on the small sizes): green for prod, blue for dev, darker for fewer, a day with both split
+					diagonally, today outlined. Switch back to Stats to get the stats you had.
+				</Txt>
+			)}
 		</View>
 	);
 }
@@ -213,6 +274,46 @@ export function WidgetSettings() {
 		refreshSoon();
 	};
 
+	/**
+	 * The widget's game: a backend, or All games (releases only; an APK older than the all-games build says no). A single
+	 * game keeps the widget's slots (from All games: the Releases style).
+	 */
+	const setWidgetGame = (w: Live.LiveWidget, backendId: string) => {
+		const ok =
+			backendId === Live.ALL_GAMES
+				? Live.setWidgetConfig(w.id, { backendId })
+				: Live.setWidgetConfig(w.id, { backendId, slots: w.backendId === Live.ALL_GAMES ? [...RELEASES_SLOTS] : fourSlots(w.slots) });
+		if (!ok) {
+			if (backendId === Live.ALL_GAMES) notify("Needs the newest app version", "All-games widgets come with the next app update.");
+			else notify("Couldn't change the widget", "It may have been removed from the home screen.");
+			reload();
+			return;
+		}
+		reload();
+		Live.refreshWidgets();
+	};
+
+	/** Releases: keep the stat slots for later, then the release slots. Stats: the kept slots, else the defaults. */
+	const setWidgetStyle = async (w: Live.LiveWidget, style: WidgetStyle) => {
+		await statSlots.load();
+		const kept = { ...statSlots.get() };
+		// Forget widgets that are gone from the home screen.
+		for (const id of Object.keys(kept)) if (!widgets.some((x) => String(x.id) === id)) delete kept[id];
+		const current = fourSlots(w.slots);
+		if (style === "releases") {
+			if (widgetStyle(current) === "stats") kept[String(w.id)] = current;
+			statSlots.set(kept);
+			setWidgetSlots(w, [...RELEASES_SLOTS]);
+			return;
+		}
+		const saved = kept[String(w.id)];
+		const defaultSlots = fourSlots(Live.defaultSlots());
+		const next = saved && widgetStyle(saved) === "stats" ? saved : widgetStyle(defaultSlots) === "stats" ? defaultSlots : [...Live.BUILT_IN_SLOTS];
+		delete kept[String(w.id)];
+		statSlots.set(kept);
+		setWidgetSlots(w, next);
+	};
+
 	const setDefault = (i: number, id: string) => {
 		const next = [...defaults];
 		next[i] = id;
@@ -222,7 +323,10 @@ export function WidgetSettings() {
 
 	const applyDefaultsToAll = () => {
 		let ok = true;
-		for (const w of widgets) ok = Live.setWidgetConfig(w.id, { slots: defaults }) && ok;
+		// Releases and all-games widgets keep theirs.
+		for (const w of widgets) {
+			if (w.backendId !== Live.ALL_GAMES && widgetStyle(fourSlots(w.slots)) === "stats") ok = Live.setWidgetConfig(w.id, { slots: defaults }) && ok;
+		}
 		reload();
 		refreshSoon();
 		if (!ok) notify("Some widgets didn't change", "They may have been removed from the home screen.");
@@ -244,7 +348,13 @@ export function WidgetSettings() {
 				{widgets.length ? (
 					<View style={{ gap: space.lg }}>
 						{widgets.map((w) => (
-							<WidgetCard key={w.id} widget={w} onChange={(slots) => setWidgetSlots(w, slots)} />
+							<WidgetCard
+								key={w.id}
+								widget={w}
+								onChange={(slots) => setWidgetSlots(w, slots)}
+								onStyle={(s) => void setWidgetStyle(w, s)}
+								onGame={(id) => setWidgetGame(w, id)}
+							/>
 						))}
 					</View>
 				) : (
@@ -258,7 +368,7 @@ export function WidgetSettings() {
 
 			<Section title="Default for new widgets">
 				<SlotList slots={defaults} onChange={setDefault} />
-				{widgets.length ? <Button title="Use these on every widget" small icon="copy-outline" onPress={applyDefaultsToAll} style={{ alignSelf: "flex-start" }} /> : null}
+				{widgets.length ? <Button title="Use these on every Stats widget" small icon="copy-outline" onPress={applyDefaultsToAll} style={{ alignSelf: "flex-start" }} /> : null}
 			</Section>
 
 			{__DEV__ && WIDGET_WARNINGS.length ? (
@@ -272,7 +382,8 @@ export function WidgetSettings() {
 			) : null}
 
 			<Txt variant="small">
-				The 2×1 size shows the first three stats, 2×2 and 4×2 all four. ▲/▼ compare with the period before. Widgets refresh about every 30 minutes; tap a
+				The 2×1 size shows the first three stats, 2×2 and 4×2 all four. Releases needs a backend that knows the release metric; until
+				then the widget shows “Loading releases…”. ▲/▼ compare with the period before. Widgets refresh about every 30 minutes; tap a
 				widget's ↻ for now. A backend that doesn't know a stat yet shows “—”.
 			</Txt>
 		</Screen>

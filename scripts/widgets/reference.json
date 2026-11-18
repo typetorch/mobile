@@ -26,7 +26,19 @@
                   "placeholder": "divider",
                   "margin": {
                     "end": 7
-                  }
+                  },
+                  "showIf": "!allGames"
+                },
+                {
+                  "type": "text",
+                  "text": "Releases ·",
+                  "size": 12,
+                  "fontWeight": "semibold",
+                  "color": "text",
+                  "margin": {
+                    "end": 4
+                  },
+                  "showIf": "allGames"
                 },
                 {
                   "type": "text",
@@ -64,6 +76,7 @@
               "margin": {
                 "top": 4
               },
+              "showIf": "slot.1",
               "children": [
                 {
                   "type": "column",
@@ -302,6 +315,405 @@
                   ]
                 }
               ]
+            },
+            {
+              "type": "column",
+              "weight": 1,
+              "padding": {
+                "end": 8
+              },
+              "margin": {
+                "top": 6
+              },
+              "showIf": "!slot.1",
+              "children": [
+                {
+                  "type": "row",
+                  "gap": 4,
+                  "align": "center",
+                  "margin": {
+                    "bottom": 3
+                  },
+                  "showIf": "allGames",
+                  "children": [
+                    {
+                      "type": "column",
+                      "showIf": "games.0.id",
+                      "tap": "toggle:games.0",
+                      "children": [
+                        {
+                          "type": "row",
+                          "align": "center",
+                          "padding": {
+                            "end": 9
+                          },
+                          "background": {
+                            "color": "chip",
+                            "radius": 16
+                          },
+                          "showIf": "games.0.picked",
+                          "children": [
+                            {
+                              "type": "svg",
+                              "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.0.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.0.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.0.picked|0}'/></svg>",
+                              "width": 32,
+                              "height": 32
+                            },
+                            {
+                              "type": "text",
+                              "text": "{games.0.name}",
+                              "size": 10.5,
+                              "fontWeight": "medium",
+                              "color": "text",
+                              "width": 70
+                            }
+                          ]
+                        },
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.0.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.0.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.0.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32,
+                          "showIf": "!games.0.picked"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "showIf": "games.1.id",
+                      "tap": "toggle:games.1",
+                      "children": [
+                        {
+                          "type": "row",
+                          "align": "center",
+                          "padding": {
+                            "end": 9
+                          },
+                          "background": {
+                            "color": "chip",
+                            "radius": 16
+                          },
+                          "showIf": "games.1.picked",
+                          "children": [
+                            {
+                              "type": "svg",
+                              "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.1.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.1.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.1.picked|0}'/></svg>",
+                              "width": 32,
+                              "height": 32
+                            },
+                            {
+                              "type": "text",
+                              "text": "{games.1.name}",
+                              "size": 10.5,
+                              "fontWeight": "medium",
+                              "color": "text",
+                              "width": 70
+                            }
+                          ]
+                        },
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.1.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.1.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.1.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32,
+                          "showIf": "!games.1.picked"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "showIf": "games.2.id",
+                      "tap": "toggle:games.2",
+                      "children": [
+                        {
+                          "type": "row",
+                          "align": "center",
+                          "padding": {
+                            "end": 9
+                          },
+                          "background": {
+                            "color": "chip",
+                            "radius": 16
+                          },
+                          "showIf": "games.2.picked",
+                          "children": [
+                            {
+                              "type": "svg",
+                              "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.2.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.2.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.2.picked|0}'/></svg>",
+                              "width": 32,
+                              "height": 32
+                            },
+                            {
+                              "type": "text",
+                              "text": "{games.2.name}",
+                              "size": 10.5,
+                              "fontWeight": "medium",
+                              "color": "text",
+                              "width": 70
+                            }
+                          ]
+                        },
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.2.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.2.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.2.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32,
+                          "showIf": "!games.2.picked"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "showIf": "games.3.id",
+                      "tap": "toggle:games.3",
+                      "children": [
+                        {
+                          "type": "row",
+                          "align": "center",
+                          "padding": {
+                            "end": 9
+                          },
+                          "background": {
+                            "color": "chip",
+                            "radius": 16
+                          },
+                          "showIf": "games.3.picked",
+                          "children": [
+                            {
+                              "type": "svg",
+                              "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.3.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.3.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.3.picked|0}'/></svg>",
+                              "width": 32,
+                              "height": 32
+                            },
+                            {
+                              "type": "text",
+                              "text": "{games.3.name}",
+                              "size": 10.5,
+                              "fontWeight": "medium",
+                              "color": "text",
+                              "width": 70
+                            }
+                          ]
+                        },
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.3.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.3.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.3.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32,
+                          "showIf": "!games.3.picked"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "showIf": "games.4.id",
+                      "tap": "toggle:games.4",
+                      "children": [
+                        {
+                          "type": "row",
+                          "align": "center",
+                          "padding": {
+                            "end": 9
+                          },
+                          "background": {
+                            "color": "chip",
+                            "radius": 16
+                          },
+                          "showIf": "games.4.picked",
+                          "children": [
+                            {
+                              "type": "svg",
+                              "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.4.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.4.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.4.picked|0}'/></svg>",
+                              "width": 32,
+                              "height": 32
+                            },
+                            {
+                              "type": "text",
+                              "text": "{games.4.name}",
+                              "size": 10.5,
+                              "fontWeight": "medium",
+                              "color": "text",
+                              "width": 70
+                            }
+                          ]
+                        },
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.4.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.4.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.4.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32,
+                          "showIf": "!games.4.picked"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "showIf": "games.5.id",
+                      "tap": "toggle:games.5",
+                      "children": [
+                        {
+                          "type": "row",
+                          "align": "center",
+                          "padding": {
+                            "end": 9
+                          },
+                          "background": {
+                            "color": "chip",
+                            "radius": 16
+                          },
+                          "showIf": "games.5.picked",
+                          "children": [
+                            {
+                              "type": "svg",
+                              "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.5.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.5.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.5.picked|0}'/></svg>",
+                              "width": 32,
+                              "height": 32
+                            },
+                            {
+                              "type": "text",
+                              "text": "{games.5.name}",
+                              "size": 10.5,
+                              "fontWeight": "medium",
+                              "color": "text",
+                              "width": 70
+                            }
+                          ]
+                        },
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.5.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.5.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.5.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32,
+                          "showIf": "!games.5.picked"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "row",
+                  "align": "stretch",
+                  "weight": 1,
+                  "showIf": "releases.days.59.bg",
+                  "children": [
+                    {
+                      "type": "svg",
+                      "svg": "<svg viewBox=\"0 0 213 87\"><rect x='0' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.0.bg|r0})'/><path d='M14.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.0.tri|rnone})'/><rect x='18' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.1.bg|r0})'/><path d='M32.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.1.tri|rnone})'/><rect x='36' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.2.bg|r0})'/><path d='M50.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.2.tri|rnone})'/><rect x='54' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.3.bg|r0})'/><path d='M68.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.3.tri|rnone})'/><rect x='72' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.4.bg|r0})'/><path d='M86.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.4.tri|rnone})'/><rect x='90' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.5.bg|r0})'/><path d='M104.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.5.tri|rnone})'/><rect x='108' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.6.bg|r0})'/><path d='M122.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.6.tri|rnone})'/><rect x='126' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.7.bg|r0})'/><path d='M140.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.7.tri|rnone})'/><rect x='144' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.8.bg|r0})'/><path d='M158.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.8.tri|rnone})'/><rect x='162' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.9.bg|r0})'/><path d='M176.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.9.tri|rnone})'/><rect x='180' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.10.bg|r0})'/><path d='M194.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.10.tri|rnone})'/><rect x='198' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.11.bg|r0})'/><path d='M212.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.11.tri|rnone})'/><rect x='0' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.12.bg|r0})'/><path d='M14.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.12.tri|rnone})'/><rect x='18' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.13.bg|r0})'/><path d='M32.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.13.tri|rnone})'/><rect x='36' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.14.bg|r0})'/><path d='M50.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.14.tri|rnone})'/><rect x='54' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.15.bg|r0})'/><path d='M68.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.15.tri|rnone})'/><rect x='72' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.16.bg|r0})'/><path d='M86.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.16.tri|rnone})'/><rect x='90' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.17.bg|r0})'/><path d='M104.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.17.tri|rnone})'/><rect x='108' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.18.bg|r0})'/><path d='M122.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.18.tri|rnone})'/><rect x='126' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.19.bg|r0})'/><path d='M140.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.19.tri|rnone})'/><rect x='144' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.20.bg|r0})'/><path d='M158.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.20.tri|rnone})'/><rect x='162' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.21.bg|r0})'/><path d='M176.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.21.tri|rnone})'/><rect x='180' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.22.bg|r0})'/><path d='M194.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.22.tri|rnone})'/><rect x='198' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.23.bg|r0})'/><path d='M212.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.23.tri|rnone})'/><rect x='0' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.24.bg|r0})'/><path d='M14.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.24.tri|rnone})'/><rect x='18' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.25.bg|r0})'/><path d='M32.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.25.tri|rnone})'/><rect x='36' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.26.bg|r0})'/><path d='M50.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.26.tri|rnone})'/><rect x='54' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.27.bg|r0})'/><path d='M68.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.27.tri|rnone})'/><rect x='72' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.28.bg|r0})'/><path d='M86.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.28.tri|rnone})'/><rect x='90' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.29.bg|r0})'/><path d='M104.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.29.tri|rnone})'/><rect x='108' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.30.bg|r0})'/><path d='M122.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.30.tri|rnone})'/><rect x='126' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.31.bg|r0})'/><path d='M140.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.31.tri|rnone})'/><rect x='144' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.32.bg|r0})'/><path d='M158.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.32.tri|rnone})'/><rect x='162' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.33.bg|r0})'/><path d='M176.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.33.tri|rnone})'/><rect x='180' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.34.bg|r0})'/><path d='M194.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.34.tri|rnone})'/><rect x='198' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.35.bg|r0})'/><path d='M212.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.35.tri|rnone})'/><rect x='0' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.36.bg|r0})'/><path d='M14.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.36.tri|rnone})'/><rect x='18' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.37.bg|r0})'/><path d='M32.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.37.tri|rnone})'/><rect x='36' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.38.bg|r0})'/><path d='M50.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.38.tri|rnone})'/><rect x='54' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.39.bg|r0})'/><path d='M68.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.39.tri|rnone})'/><rect x='72' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.40.bg|r0})'/><path d='M86.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.40.tri|rnone})'/><rect x='90' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.41.bg|r0})'/><path d='M104.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.41.tri|rnone})'/><rect x='108' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.42.bg|r0})'/><path d='M122.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.42.tri|rnone})'/><rect x='126' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.43.bg|r0})'/><path d='M140.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.43.tri|rnone})'/><rect x='144' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.44.bg|r0})'/><path d='M158.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.44.tri|rnone})'/><rect x='162' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.45.bg|r0})'/><path d='M176.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.45.tri|rnone})'/><rect x='180' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.46.bg|r0})'/><path d='M194.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.46.tri|rnone})'/><rect x='198' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.47.bg|r0})'/><path d='M212.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.47.tri|rnone})'/><rect x='0' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.48.bg|r0})'/><path d='M14.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.48.tri|rnone})'/><rect x='18' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.49.bg|r0})'/><path d='M32.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.49.tri|rnone})'/><rect x='36' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.50.bg|r0})'/><path d='M50.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.50.tri|rnone})'/><rect x='54' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.51.bg|r0})'/><path d='M68.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.51.tri|rnone})'/><rect x='72' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.52.bg|r0})'/><path d='M86.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.52.tri|rnone})'/><rect x='90' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.53.bg|r0})'/><path d='M104.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.53.tri|rnone})'/><rect x='108' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.54.bg|r0})'/><path d='M122.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.54.tri|rnone})'/><rect x='126' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.55.bg|r0})'/><path d='M140.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.55.tri|rnone})'/><rect x='144' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.56.bg|r0})'/><path d='M158.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.56.tri|rnone})'/><rect x='162' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.57.bg|r0})'/><path d='M176.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.57.tri|rnone})'/><rect x='180' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.58.bg|r0})'/><path d='M194.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.58.tri|rnone})'/><rect x='198' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.59.bg|r0})'/><path d='M212.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.59.tri|rnone})'/><rect x='198.75' y='72.75' width='13.5' height='13.5' rx='2.25' fill='none' stroke='var(--text)' stroke-opacity='0.8' stroke-width='1.5'/></svg>",
+                      "fit": "contain",
+                      "weight": 1
+                    },
+                    {
+                      "type": "column",
+                      "gap": 2,
+                      "justify": "center",
+                      "margin": {
+                        "start": 12
+                      },
+                      "children": [
+                        {
+                          "type": "row",
+                          "align": "baseline",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{releases.prod}",
+                              "size": 16,
+                              "fontWeight": "bold",
+                              "color": "rg3"
+                            },
+                            {
+                              "type": "text",
+                              "text": "prod",
+                              "size": 11,
+                              "color": "text2",
+                              "margin": {
+                                "start": 4
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "row",
+                          "align": "baseline",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{releases.dev}",
+                              "size": 16,
+                              "fontWeight": "bold",
+                              "color": "rb3"
+                            },
+                            {
+                              "type": "text",
+                              "text": "dev",
+                              "size": 11,
+                              "color": "text2",
+                              "margin": {
+                                "start": 4
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "text": "last prod",
+                          "size": 10,
+                          "color": "text2",
+                          "margin": {
+                            "top": 4
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "text": "{releases.lastProd|none}",
+                          "size": 11.5,
+                          "fontWeight": "semibold",
+                          "color": "text"
+                        },
+                        {
+                          "type": "text",
+                          "text": "{releases.lastProdGame}",
+                          "size": 9.5,
+                          "color": "text2",
+                          "showIf": "releases.lastProdGame"
+                        },
+                        {
+                          "type": "column",
+                          "showIf": "!allGames",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{releases.lastProdLabel}",
+                              "size": 9.5,
+                              "color": "text2",
+                              "showIf": "releases.lastProdLabel"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "stack",
+                  "weight": 1,
+                  "showIf": "!releases.days.59.bg",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Loading releases…",
+                      "size": 11,
+                      "color": "text2",
+                      "align": "center",
+                      "margin": {
+                        "start": 8,
+                        "end": 8
+                      },
+                      "gravity": "center"
+                    }
+                  ]
+                }
+              ]
             }
           ]
         },
@@ -332,7 +744,19 @@
                   "placeholder": "divider",
                   "margin": {
                     "end": 7
-                  }
+                  },
+                  "showIf": "!allGames"
+                },
+                {
+                  "type": "text",
+                  "text": "Releases ·",
+                  "size": 12,
+                  "fontWeight": "semibold",
+                  "color": "text",
+                  "margin": {
+                    "end": 4
+                  },
+                  "showIf": "allGames"
                 },
                 {
                   "type": "text",
@@ -352,68 +776,311 @@
               ]
             },
             {
-              "type": "row",
-              "align": "baseline",
+              "type": "column",
+              "weight": 1,
+              "showIf": "slot.1",
+              "children": [
+                {
+                  "type": "row",
+                  "align": "baseline",
+                  "margin": {
+                    "top": 4
+                  },
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "{ccu}",
+                      "size": 22,
+                      "fontWeight": "semibold",
+                      "color": "text"
+                    },
+                    {
+                      "type": "text",
+                      "text": "{delta}",
+                      "size": 12,
+                      "fontWeight": "bold",
+                      "color": "delta",
+                      "margin": {
+                        "start": 4
+                      },
+                      "showIf": "delta"
+                    },
+                    {
+                      "type": "text",
+                      "text": "· {serversLabel}",
+                      "size": 10,
+                      "color": "text2",
+                      "weight": 1,
+                      "margin": {
+                        "start": 4
+                      },
+                      "showIf": "servers"
+                    }
+                  ]
+                },
+                {
+                  "type": "spacer",
+                  "weight": 1
+                },
+                {
+                  "type": "row",
+                  "gap": 6,
+                  "align": "start",
+                  "padding": {
+                    "end": 6
+                  },
+                  "margin": {
+                    "bottom": 7
+                  },
+                  "children": [
+                    {
+                      "type": "column",
+                      "weight": 1,
+                      "showIf": "slot.1",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.1.label}",
+                          "size": 10,
+                          "color": "text2"
+                        },
+                        {
+                          "type": "row",
+                          "align": "baseline",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{slot.1.value}",
+                              "size": 12,
+                              "fontWeight": "semibold",
+                              "color": "text"
+                            },
+                            {
+                              "type": "text",
+                              "text": "{slot.1.delta}",
+                              "size": 8.5,
+                              "fontWeight": "bold",
+                              "margin": {
+                                "start": 3
+                              },
+                              "showIf": "slot.1.delta"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "weight": 1,
+                      "showIf": "slot.2",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.2.label}",
+                          "size": 10,
+                          "color": "text2"
+                        },
+                        {
+                          "type": "row",
+                          "align": "baseline",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{slot.2.value}",
+                              "size": 12,
+                              "fontWeight": "semibold",
+                              "color": "text"
+                            },
+                            {
+                              "type": "text",
+                              "text": "{slot.2.delta}",
+                              "size": 8.5,
+                              "fontWeight": "bold",
+                              "margin": {
+                                "start": 3
+                              },
+                              "showIf": "slot.2.delta"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "row",
+                  "gap": 6,
+                  "align": "start",
+                  "padding": {
+                    "end": 6
+                  },
+                  "children": [
+                    {
+                      "type": "column",
+                      "weight": 1,
+                      "showIf": "slot.3",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.3.label}",
+                          "size": 10,
+                          "color": "text2"
+                        },
+                        {
+                          "type": "row",
+                          "align": "baseline",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{slot.3.value}",
+                              "size": 12,
+                              "fontWeight": "semibold",
+                              "color": "text"
+                            },
+                            {
+                              "type": "text",
+                              "text": "{slot.3.delta}",
+                              "size": 8.5,
+                              "fontWeight": "bold",
+                              "margin": {
+                                "start": 3
+                              },
+                              "showIf": "slot.3.delta"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "weight": 1,
+                      "showIf": "slot.4",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{slot.4.label}",
+                          "size": 10,
+                          "color": "text2"
+                        },
+                        {
+                          "type": "row",
+                          "align": "baseline",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{slot.4.value}",
+                              "size": 12,
+                              "fontWeight": "semibold",
+                              "color": "text"
+                            },
+                            {
+                              "type": "text",
+                              "text": "{slot.4.delta}",
+                              "size": 8.5,
+                              "fontWeight": "bold",
+                              "margin": {
+                                "start": 3
+                              },
+                              "showIf": "slot.4.delta"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "column",
+              "weight": 1,
+              "padding": {
+                "end": 6
+              },
               "margin": {
                 "top": 4
               },
+              "showIf": "!slot.1",
               "children": [
                 {
-                  "type": "text",
-                  "text": "{ccu}",
-                  "size": 22,
-                  "fontWeight": "semibold",
-                  "color": "text"
-                },
-                {
-                  "type": "text",
-                  "text": "{delta}",
-                  "size": 12,
-                  "fontWeight": "bold",
-                  "color": "delta",
+                  "type": "row",
+                  "gap": 4,
+                  "align": "center",
                   "margin": {
-                    "start": 4
+                    "bottom": 2
                   },
-                  "showIf": "delta"
+                  "showIf": "allGames",
+                  "children": [
+                    {
+                      "type": "column",
+                      "showIf": "games.0.id",
+                      "tap": "toggle:games.0",
+                      "children": [
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.0.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.0.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.0.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "showIf": "games.1.id",
+                      "tap": "toggle:games.1",
+                      "children": [
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.1.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.1.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.1.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "showIf": "games.2.id",
+                      "tap": "toggle:games.2",
+                      "children": [
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.2.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.2.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.2.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "showIf": "games.3.id",
+                      "tap": "toggle:games.3",
+                      "children": [
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.3.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.3.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.3.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32
+                        }
+                      ]
+                    }
+                  ]
                 },
                 {
-                  "type": "text",
-                  "text": "· {serversLabel}",
-                  "size": 10,
-                  "color": "text2",
+                  "type": "column",
                   "weight": 1,
                   "margin": {
-                    "start": 4
+                    "bottom": 2
                   },
-                  "showIf": "servers"
-                }
-              ]
-            },
-            {
-              "type": "spacer",
-              "weight": 1
-            },
-            {
-              "type": "row",
-              "gap": 6,
-              "align": "start",
-              "padding": {
-                "end": 6
-              },
-              "margin": {
-                "bottom": 7
-              },
-              "children": [
-                {
-                  "type": "column",
-                  "weight": 1,
-                  "showIf": "slot.1",
+                  "showIf": "releases.days.59.bg",
                   "children": [
                     {
-                      "type": "text",
-                      "text": "{slot.1.label}",
-                      "size": 10,
-                      "color": "text2"
+                      "type": "svg",
+                      "svg": "<svg viewBox=\"0 0 105 87\"><rect x='0' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.30.bg|r0})'/><path d='M14.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.30.tri|rnone})'/><rect x='18' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.31.bg|r0})'/><path d='M32.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.31.tri|rnone})'/><rect x='36' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.32.bg|r0})'/><path d='M50.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.32.tri|rnone})'/><rect x='54' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.33.bg|r0})'/><path d='M68.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.33.tri|rnone})'/><rect x='72' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.34.bg|r0})'/><path d='M86.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.34.tri|rnone})'/><rect x='90' y='0' width='15' height='15' rx='3' fill='var(--{releases.days.35.bg|r0})'/><path d='M104.12,0.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.35.tri|rnone})'/><rect x='0' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.36.bg|r0})'/><path d='M14.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.36.tri|rnone})'/><rect x='18' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.37.bg|r0})'/><path d='M32.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.37.tri|rnone})'/><rect x='36' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.38.bg|r0})'/><path d='M50.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.38.tri|rnone})'/><rect x='54' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.39.bg|r0})'/><path d='M68.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.39.tri|rnone})'/><rect x='72' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.40.bg|r0})'/><path d='M86.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.40.tri|rnone})'/><rect x='90' y='18' width='15' height='15' rx='3' fill='var(--{releases.days.41.bg|r0})'/><path d='M104.12,18.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.41.tri|rnone})'/><rect x='0' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.42.bg|r0})'/><path d='M14.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.42.tri|rnone})'/><rect x='18' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.43.bg|r0})'/><path d='M32.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.43.tri|rnone})'/><rect x='36' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.44.bg|r0})'/><path d='M50.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.44.tri|rnone})'/><rect x='54' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.45.bg|r0})'/><path d='M68.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.45.tri|rnone})'/><rect x='72' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.46.bg|r0})'/><path d='M86.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.46.tri|rnone})'/><rect x='90' y='36' width='15' height='15' rx='3' fill='var(--{releases.days.47.bg|r0})'/><path d='M104.12,36.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.47.tri|rnone})'/><rect x='0' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.48.bg|r0})'/><path d='M14.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.48.tri|rnone})'/><rect x='18' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.49.bg|r0})'/><path d='M32.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.49.tri|rnone})'/><rect x='36' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.50.bg|r0})'/><path d='M50.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.50.tri|rnone})'/><rect x='54' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.51.bg|r0})'/><path d='M68.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.51.tri|rnone})'/><rect x='72' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.52.bg|r0})'/><path d='M86.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.52.tri|rnone})'/><rect x='90' y='54' width='15' height='15' rx='3' fill='var(--{releases.days.53.bg|r0})'/><path d='M104.12,54.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.53.tri|rnone})'/><rect x='0' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.54.bg|r0})'/><path d='M14.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.54.tri|rnone})'/><rect x='18' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.55.bg|r0})'/><path d='M32.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.55.tri|rnone})'/><rect x='36' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.56.bg|r0})'/><path d='M50.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.56.tri|rnone})'/><rect x='54' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.57.bg|r0})'/><path d='M68.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.57.tri|rnone})'/><rect x='72' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.58.bg|r0})'/><path d='M86.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.58.tri|rnone})'/><rect x='90' y='72' width='15' height='15' rx='3' fill='var(--{releases.days.59.bg|r0})'/><path d='M104.12,72.88a3,3 0 0 1 0.88,2.12v9a3,3 0 0 1 -3,3h-9a3,3 0 0 1 -2.12,-0.88z' fill='var(--{releases.days.59.tri|rnone})'/><rect x='90.75' y='72.75' width='13.5' height='13.5' rx='2.25' fill='none' stroke='var(--text)' stroke-opacity='0.8' stroke-width='1.5'/></svg>",
+                      "fit": "contain",
+                      "weight": 1,
+                      "margin": {
+                        "bottom": 5
+                      }
                     },
                     {
                       "type": "row",
@@ -421,140 +1088,69 @@
                       "children": [
                         {
                           "type": "text",
-                          "text": "{slot.1.value}",
-                          "size": 12,
-                          "fontWeight": "semibold",
-                          "color": "text"
+                          "text": "{releases.prod30}",
+                          "size": 13,
+                          "fontWeight": "bold",
+                          "color": "rg3"
                         },
                         {
                           "type": "text",
-                          "text": "{slot.1.delta}",
-                          "size": 8.5,
-                          "fontWeight": "bold",
+                          "text": "prod",
+                          "size": 10,
+                          "color": "text2",
                           "margin": {
                             "start": 3
-                          },
-                          "showIf": "slot.1.delta"
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "text": "{releases.dev30}",
+                          "size": 13,
+                          "fontWeight": "bold",
+                          "color": "rb3",
+                          "margin": {
+                            "start": 8
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "text": "dev",
+                          "size": 10,
+                          "color": "text2",
+                          "margin": {
+                            "start": 3
+                          }
+                        },
+                        {
+                          "type": "spacer",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "30 d",
+                          "size": 10,
+                          "color": "text2"
                         }
                       ]
                     }
                   ]
                 },
                 {
-                  "type": "column",
+                  "type": "stack",
                   "weight": 1,
-                  "showIf": "slot.2",
+                  "showIf": "!releases.days.59.bg",
                   "children": [
                     {
                       "type": "text",
-                      "text": "{slot.2.label}",
-                      "size": 10,
-                      "color": "text2"
-                    },
-                    {
-                      "type": "row",
-                      "align": "baseline",
-                      "children": [
-                        {
-                          "type": "text",
-                          "text": "{slot.2.value}",
-                          "size": 12,
-                          "fontWeight": "semibold",
-                          "color": "text"
-                        },
-                        {
-                          "type": "text",
-                          "text": "{slot.2.delta}",
-                          "size": 8.5,
-                          "fontWeight": "bold",
-                          "margin": {
-                            "start": 3
-                          },
-                          "showIf": "slot.2.delta"
-                        }
-                      ]
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "type": "row",
-              "gap": 6,
-              "align": "start",
-              "padding": {
-                "end": 6
-              },
-              "children": [
-                {
-                  "type": "column",
-                  "weight": 1,
-                  "showIf": "slot.3",
-                  "children": [
-                    {
-                      "type": "text",
-                      "text": "{slot.3.label}",
-                      "size": 10,
-                      "color": "text2"
-                    },
-                    {
-                      "type": "row",
-                      "align": "baseline",
-                      "children": [
-                        {
-                          "type": "text",
-                          "text": "{slot.3.value}",
-                          "size": 12,
-                          "fontWeight": "semibold",
-                          "color": "text"
-                        },
-                        {
-                          "type": "text",
-                          "text": "{slot.3.delta}",
-                          "size": 8.5,
-                          "fontWeight": "bold",
-                          "margin": {
-                            "start": 3
-                          },
-                          "showIf": "slot.3.delta"
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  "type": "column",
-                  "weight": 1,
-                  "showIf": "slot.4",
-                  "children": [
-                    {
-                      "type": "text",
-                      "text": "{slot.4.label}",
-                      "size": 10,
-                      "color": "text2"
-                    },
-                    {
-                      "type": "row",
-                      "align": "baseline",
-                      "children": [
-                        {
-                          "type": "text",
-                          "text": "{slot.4.value}",
-                          "size": 12,
-                          "fontWeight": "semibold",
-                          "color": "text"
-                        },
-                        {
-                          "type": "text",
-                          "text": "{slot.4.delta}",
-                          "size": 8.5,
-                          "fontWeight": "bold",
-                          "margin": {
-                            "start": 3
-                          },
-                          "showIf": "slot.4.delta"
-                        }
-                      ]
+                      "text": "Loading releases…",
+                      "size": 11,
+                      "color": "text2",
+                      "align": "center",
+                      "margin": {
+                        "start": 8,
+                        "end": 8
+                      },
+                      "gravity": "center"
                     }
                   ]
                 }
@@ -589,7 +1185,8 @@
                   "placeholder": "divider",
                   "margin": {
                     "end": 7
-                  }
+                  },
+                  "showIf": "!allGames"
                 },
                 {
                   "type": "text",
@@ -600,13 +1197,104 @@
                   "weight": 1
                 },
                 {
+                  "type": "row",
+                  "gap": 2,
+                  "align": "center",
+                  "margin": {
+                    "start": 4,
+                    "end": 10
+                  },
+                  "showIf": "allGames",
+                  "children": [
+                    {
+                      "type": "column",
+                      "showIf": "games.0.id",
+                      "tap": "toggle:games.0",
+                      "children": [
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.0.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.0.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.0.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "showIf": "games.1.id",
+                      "tap": "toggle:games.1",
+                      "children": [
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.1.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.1.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.1.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "showIf": "games.2.id",
+                      "tap": "toggle:games.2",
+                      "children": [
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.2.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.2.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.2.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "showIf": "games.3.id",
+                      "tap": "toggle:games.3",
+                      "children": [
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.3.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.3.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.3.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "showIf": "games.4.id",
+                      "tap": "toggle:games.4",
+                      "children": [
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.4.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.4.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.4.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32
+                        }
+                      ]
+                    },
+                    {
+                      "type": "column",
+                      "showIf": "games.5.id",
+                      "tap": "toggle:games.5",
+                      "children": [
+                        {
+                          "type": "svg",
+                          "svg": "<svg viewBox=\"0 0 32 32\"><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{games.5.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{games.5.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{games.5.picked|0}'/></svg>",
+                          "width": 32,
+                          "height": 32
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
                   "type": "text",
                   "text": "{status}",
                   "size": 10,
                   "color": "text2",
                   "margin": {
                     "start": 6
-                  }
+                  },
+                  "showIf": "!allGames"
                 },
                 {
                   "type": "icon",
@@ -624,6 +1312,7 @@
               "padding": {
                 "end": 6
               },
+              "showIf": "slot.1",
               "children": [
                 {
                   "type": "column",
@@ -819,6 +1508,111 @@
                   ]
                 }
               ]
+            },
+            {
+              "type": "column",
+              "weight": 1,
+              "padding": {
+                "end": 6
+              },
+              "showIf": "!slot.1",
+              "children": [
+                {
+                  "type": "row",
+                  "align": "stretch",
+                  "weight": 1,
+                  "showIf": "releases.days.59.bg",
+                  "children": [
+                    {
+                      "type": "svg",
+                      "svg": "<svg viewBox=\"0 0 258 37\"><rect x='0' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.0.bg|r0})'/><path d='M10.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.0.tri|rnone})'/><rect x='13' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.1.bg|r0})'/><path d='M23.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.1.tri|rnone})'/><rect x='26' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.2.bg|r0})'/><path d='M36.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.2.tri|rnone})'/><rect x='39' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.3.bg|r0})'/><path d='M49.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.3.tri|rnone})'/><rect x='52' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.4.bg|r0})'/><path d='M62.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.4.tri|rnone})'/><rect x='65' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.5.bg|r0})'/><path d='M75.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.5.tri|rnone})'/><rect x='78' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.6.bg|r0})'/><path d='M88.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.6.tri|rnone})'/><rect x='91' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.7.bg|r0})'/><path d='M101.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.7.tri|rnone})'/><rect x='104' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.8.bg|r0})'/><path d='M114.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.8.tri|rnone})'/><rect x='117' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.9.bg|r0})'/><path d='M127.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.9.tri|rnone})'/><rect x='130' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.10.bg|r0})'/><path d='M140.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.10.tri|rnone})'/><rect x='143' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.11.bg|r0})'/><path d='M153.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.11.tri|rnone})'/><rect x='156' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.12.bg|r0})'/><path d='M166.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.12.tri|rnone})'/><rect x='169' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.13.bg|r0})'/><path d='M179.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.13.tri|rnone})'/><rect x='182' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.14.bg|r0})'/><path d='M192.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.14.tri|rnone})'/><rect x='195' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.15.bg|r0})'/><path d='M205.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.15.tri|rnone})'/><rect x='208' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.16.bg|r0})'/><path d='M218.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.16.tri|rnone})'/><rect x='221' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.17.bg|r0})'/><path d='M231.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.17.tri|rnone})'/><rect x='234' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.18.bg|r0})'/><path d='M244.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.18.tri|rnone})'/><rect x='247' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.19.bg|r0})'/><path d='M257.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.19.tri|rnone})'/><rect x='0' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.20.bg|r0})'/><path d='M10.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.20.tri|rnone})'/><rect x='13' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.21.bg|r0})'/><path d='M23.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.21.tri|rnone})'/><rect x='26' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.22.bg|r0})'/><path d='M36.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.22.tri|rnone})'/><rect x='39' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.23.bg|r0})'/><path d='M49.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.23.tri|rnone})'/><rect x='52' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.24.bg|r0})'/><path d='M62.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.24.tri|rnone})'/><rect x='65' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.25.bg|r0})'/><path d='M75.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.25.tri|rnone})'/><rect x='78' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.26.bg|r0})'/><path d='M88.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.26.tri|rnone})'/><rect x='91' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.27.bg|r0})'/><path d='M101.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.27.tri|rnone})'/><rect x='104' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.28.bg|r0})'/><path d='M114.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.28.tri|rnone})'/><rect x='117' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.29.bg|r0})'/><path d='M127.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.29.tri|rnone})'/><rect x='130' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.30.bg|r0})'/><path d='M140.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.30.tri|rnone})'/><rect x='143' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.31.bg|r0})'/><path d='M153.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.31.tri|rnone})'/><rect x='156' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.32.bg|r0})'/><path d='M166.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.32.tri|rnone})'/><rect x='169' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.33.bg|r0})'/><path d='M179.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.33.tri|rnone})'/><rect x='182' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.34.bg|r0})'/><path d='M192.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.34.tri|rnone})'/><rect x='195' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.35.bg|r0})'/><path d='M205.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.35.tri|rnone})'/><rect x='208' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.36.bg|r0})'/><path d='M218.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.36.tri|rnone})'/><rect x='221' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.37.bg|r0})'/><path d='M231.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.37.tri|rnone})'/><rect x='234' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.38.bg|r0})'/><path d='M244.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.38.tri|rnone})'/><rect x='247' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.39.bg|r0})'/><path d='M257.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.39.tri|rnone})'/><rect x='0' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.40.bg|r0})'/><path d='M10.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.40.tri|rnone})'/><rect x='13' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.41.bg|r0})'/><path d='M23.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.41.tri|rnone})'/><rect x='26' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.42.bg|r0})'/><path d='M36.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.42.tri|rnone})'/><rect x='39' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.43.bg|r0})'/><path d='M49.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.43.tri|rnone})'/><rect x='52' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.44.bg|r0})'/><path d='M62.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.44.tri|rnone})'/><rect x='65' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.45.bg|r0})'/><path d='M75.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.45.tri|rnone})'/><rect x='78' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.46.bg|r0})'/><path d='M88.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.46.tri|rnone})'/><rect x='91' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.47.bg|r0})'/><path d='M101.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.47.tri|rnone})'/><rect x='104' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.48.bg|r0})'/><path d='M114.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.48.tri|rnone})'/><rect x='117' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.49.bg|r0})'/><path d='M127.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.49.tri|rnone})'/><rect x='130' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.50.bg|r0})'/><path d='M140.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.50.tri|rnone})'/><rect x='143' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.51.bg|r0})'/><path d='M153.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.51.tri|rnone})'/><rect x='156' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.52.bg|r0})'/><path d='M166.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.52.tri|rnone})'/><rect x='169' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.53.bg|r0})'/><path d='M179.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.53.tri|rnone})'/><rect x='182' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.54.bg|r0})'/><path d='M192.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.54.tri|rnone})'/><rect x='195' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.55.bg|r0})'/><path d='M205.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.55.tri|rnone})'/><rect x='208' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.56.bg|r0})'/><path d='M218.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.56.tri|rnone})'/><rect x='221' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.57.bg|r0})'/><path d='M231.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.57.tri|rnone})'/><rect x='234' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.58.bg|r0})'/><path d='M244.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.58.tri|rnone})'/><rect x='247' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.59.bg|r0})'/><path d='M257.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.59.tri|rnone})'/><rect x='247.55' y='26.55' width='9.9' height='9.9' rx='1.45' fill='none' stroke='var(--text)' stroke-opacity='0.8' stroke-width='1.1'/></svg>",
+                      "fit": "contain",
+                      "weight": 1,
+                      "margin": {
+                        "top": 1,
+                        "bottom": 3
+                      }
+                    },
+                    {
+                      "type": "column",
+                      "gap": 1,
+                      "align": "end",
+                      "justify": "center",
+                      "margin": {
+                        "start": 10
+                      },
+                      "children": [
+                        {
+                          "type": "row",
+                          "align": "baseline",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{releases.prod}",
+                              "size": 13,
+                              "fontWeight": "bold",
+                              "color": "rg3"
+                            },
+                            {
+                              "type": "text",
+                              "text": "prod",
+                              "size": 10,
+                              "color": "text2",
+                              "margin": {
+                                "start": 3
+                              }
+                            },
+                            {
+                              "type": "text",
+                              "text": "{releases.dev}",
+                              "size": 13,
+                              "fontWeight": "bold",
+                              "color": "rb3",
+                              "margin": {
+                                "start": 8
+                              }
+                            },
+                            {
+                              "type": "text",
+                              "text": "dev",
+                              "size": 10,
+                              "color": "text2",
+                              "margin": {
+                                "start": 3
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "text": "last prod {releases.lastProd|none}",
+                          "size": 10,
+                          "color": "text2"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "stack",
+                  "weight": 1,
+                  "showIf": "!releases.days.59.bg",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Loading releases…",
+                      "size": 11,
+                      "color": "text2",
+                      "align": "center",
+                      "margin": {
+                        "start": 8,
+                        "end": 8
+                      },
+                      "gravity": "center"
+                    }
+                  ]
+                }
+              ]
             }
           ]
         },
@@ -849,7 +1643,19 @@
                   "placeholder": "divider",
                   "margin": {
                     "end": 7
-                  }
+                  },
+                  "showIf": "!allGames"
+                },
+                {
+                  "type": "text",
+                  "text": "Releases ·",
+                  "size": 12,
+                  "fontWeight": "semibold",
+                  "color": "text",
+                  "margin": {
+                    "end": 4
+                  },
+                  "showIf": "allGames"
                 },
                 {
                   "type": "text",
@@ -878,150 +1684,256 @@
               ]
             },
             {
-              "type": "spacer",
-              "weight": 1
-            },
-            {
-              "type": "row",
-              "align": "center",
-              "padding": {
-                "end": 6
-              },
+              "type": "column",
+              "weight": 1,
+              "showIf": "slot.1",
               "children": [
                 {
-                  "type": "text",
-                  "text": "{ccu}",
-                  "size": 22,
-                  "fontWeight": "semibold",
-                  "color": "text"
+                  "type": "spacer",
+                  "weight": 1
                 },
                 {
-                  "type": "text",
-                  "text": "{delta}",
-                  "size": 12,
-                  "fontWeight": "bold",
-                  "color": "delta",
-                  "margin": {
-                    "start": 4
-                  },
-                  "showIf": "delta"
-                },
-                {
-                  "type": "column",
-                  "gap": 1,
-                  "align": "end",
-                  "weight": 1,
-                  "margin": {
-                    "start": 8
+                  "type": "row",
+                  "align": "center",
+                  "padding": {
+                    "end": 6
                   },
                   "children": [
                     {
-                      "type": "row",
-                      "align": "baseline",
-                      "showIf": "slot.1",
-                      "children": [
-                        {
-                          "type": "text",
-                          "text": "{slot.1.label}",
-                          "size": 10,
-                          "color": "text2",
-                          "align": "end",
-                          "weight": 1
-                        },
-                        {
-                          "type": "text",
-                          "text": "{slot.1.value:short}",
-                          "size": 11,
-                          "fontWeight": "semibold",
-                          "color": "text",
-                          "margin": {
-                            "start": 4
-                          }
-                        }
-                      ]
+                      "type": "text",
+                      "text": "{ccu}",
+                      "size": 22,
+                      "fontWeight": "semibold",
+                      "color": "text"
                     },
                     {
-                      "type": "row",
-                      "align": "baseline",
-                      "showIf": "slot.2",
-                      "children": [
-                        {
-                          "type": "text",
-                          "text": "{slot.2.label}",
-                          "size": 10,
-                          "color": "text2",
-                          "align": "end",
-                          "weight": 1
-                        },
-                        {
-                          "type": "text",
-                          "text": "{slot.2.value:short}",
-                          "size": 11,
-                          "fontWeight": "semibold",
-                          "color": "text",
-                          "margin": {
-                            "start": 4
-                          }
-                        }
-                      ]
+                      "type": "text",
+                      "text": "{delta}",
+                      "size": 12,
+                      "fontWeight": "bold",
+                      "color": "delta",
+                      "margin": {
+                        "start": 4
+                      },
+                      "showIf": "delta"
                     },
                     {
-                      "type": "row",
-                      "align": "baseline",
-                      "showIf": "slot.3",
+                      "type": "column",
+                      "gap": 1,
+                      "align": "end",
+                      "weight": 1,
+                      "margin": {
+                        "start": 8
+                      },
                       "children": [
                         {
-                          "type": "text",
-                          "text": "{slot.3.label}",
-                          "size": 10,
-                          "color": "text2",
-                          "align": "end",
-                          "weight": 1
+                          "type": "row",
+                          "align": "baseline",
+                          "showIf": "slot.1",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{slot.1.label}",
+                              "size": 10,
+                              "color": "text2",
+                              "align": "end",
+                              "weight": 1
+                            },
+                            {
+                              "type": "text",
+                              "text": "{slot.1.value:short}",
+                              "size": 11,
+                              "fontWeight": "semibold",
+                              "color": "text",
+                              "margin": {
+                                "start": 4
+                              }
+                            }
+                          ]
                         },
                         {
-                          "type": "text",
-                          "text": "{slot.3.value:short}",
-                          "size": 11,
-                          "fontWeight": "semibold",
-                          "color": "text",
-                          "margin": {
-                            "start": 4
-                          }
-                        }
-                      ]
-                    },
-                    {
-                      "type": "row",
-                      "align": "baseline",
-                      "showIf": "slot.4",
-                      "children": [
-                        {
-                          "type": "text",
-                          "text": "{slot.4.label}",
-                          "size": 10,
-                          "color": "text2",
-                          "align": "end",
-                          "weight": 1
+                          "type": "row",
+                          "align": "baseline",
+                          "showIf": "slot.2",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{slot.2.label}",
+                              "size": 10,
+                              "color": "text2",
+                              "align": "end",
+                              "weight": 1
+                            },
+                            {
+                              "type": "text",
+                              "text": "{slot.2.value:short}",
+                              "size": 11,
+                              "fontWeight": "semibold",
+                              "color": "text",
+                              "margin": {
+                                "start": 4
+                              }
+                            }
+                          ]
                         },
                         {
-                          "type": "text",
-                          "text": "{slot.4.value:short}",
-                          "size": 11,
-                          "fontWeight": "semibold",
-                          "color": "text",
-                          "margin": {
-                            "start": 4
-                          }
+                          "type": "row",
+                          "align": "baseline",
+                          "showIf": "slot.3",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{slot.3.label}",
+                              "size": 10,
+                              "color": "text2",
+                              "align": "end",
+                              "weight": 1
+                            },
+                            {
+                              "type": "text",
+                              "text": "{slot.3.value:short}",
+                              "size": 11,
+                              "fontWeight": "semibold",
+                              "color": "text",
+                              "margin": {
+                                "start": 4
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "row",
+                          "align": "baseline",
+                          "showIf": "slot.4",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{slot.4.label}",
+                              "size": 10,
+                              "color": "text2",
+                              "align": "end",
+                              "weight": 1
+                            },
+                            {
+                              "type": "text",
+                              "text": "{slot.4.value:short}",
+                              "size": 11,
+                              "fontWeight": "semibold",
+                              "color": "text",
+                              "margin": {
+                                "start": 4
+                              }
+                            }
+                          ]
                         }
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "spacer",
+                  "weight": 1
                 }
               ]
             },
             {
-              "type": "spacer",
-              "weight": 1
+              "type": "column",
+              "weight": 1,
+              "padding": {
+                "end": 6
+              },
+              "margin": {
+                "top": 2
+              },
+              "showIf": "!slot.1",
+              "children": [
+                {
+                  "type": "column",
+                  "weight": 1,
+                  "showIf": "releases.days.59.bg",
+                  "children": [
+                    {
+                      "type": "svg",
+                      "svg": "<svg viewBox=\"0 0 128 37\"><rect x='0' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.30.bg|r0})'/><path d='M10.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.30.tri|rnone})'/><rect x='13' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.31.bg|r0})'/><path d='M23.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.31.tri|rnone})'/><rect x='26' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.32.bg|r0})'/><path d='M36.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.32.tri|rnone})'/><rect x='39' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.33.bg|r0})'/><path d='M49.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.33.tri|rnone})'/><rect x='52' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.34.bg|r0})'/><path d='M62.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.34.tri|rnone})'/><rect x='65' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.35.bg|r0})'/><path d='M75.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.35.tri|rnone})'/><rect x='78' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.36.bg|r0})'/><path d='M88.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.36.tri|rnone})'/><rect x='91' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.37.bg|r0})'/><path d='M101.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.37.tri|rnone})'/><rect x='104' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.38.bg|r0})'/><path d='M114.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.38.tri|rnone})'/><rect x='117' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.39.bg|r0})'/><path d='M127.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.39.tri|rnone})'/><rect x='0' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.40.bg|r0})'/><path d='M10.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.40.tri|rnone})'/><rect x='13' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.41.bg|r0})'/><path d='M23.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.41.tri|rnone})'/><rect x='26' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.42.bg|r0})'/><path d='M36.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.42.tri|rnone})'/><rect x='39' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.43.bg|r0})'/><path d='M49.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.43.tri|rnone})'/><rect x='52' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.44.bg|r0})'/><path d='M62.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.44.tri|rnone})'/><rect x='65' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.45.bg|r0})'/><path d='M75.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.45.tri|rnone})'/><rect x='78' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.46.bg|r0})'/><path d='M88.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.46.tri|rnone})'/><rect x='91' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.47.bg|r0})'/><path d='M101.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.47.tri|rnone})'/><rect x='104' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.48.bg|r0})'/><path d='M114.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.48.tri|rnone})'/><rect x='117' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.49.bg|r0})'/><path d='M127.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.49.tri|rnone})'/><rect x='0' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.50.bg|r0})'/><path d='M10.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.50.tri|rnone})'/><rect x='13' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.51.bg|r0})'/><path d='M23.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.51.tri|rnone})'/><rect x='26' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.52.bg|r0})'/><path d='M36.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.52.tri|rnone})'/><rect x='39' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.53.bg|r0})'/><path d='M49.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.53.tri|rnone})'/><rect x='52' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.54.bg|r0})'/><path d='M62.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.54.tri|rnone})'/><rect x='65' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.55.bg|r0})'/><path d='M75.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.55.tri|rnone})'/><rect x='78' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.56.bg|r0})'/><path d='M88.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.56.tri|rnone})'/><rect x='91' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.57.bg|r0})'/><path d='M101.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.57.tri|rnone})'/><rect x='104' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.58.bg|r0})'/><path d='M114.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.58.tri|rnone})'/><rect x='117' y='26' width='11' height='11' rx='2' fill='var(--{releases.days.59.bg|r0})'/><path d='M127.41,26.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.59.tri|rnone})'/><rect x='117.55' y='26.55' width='9.9' height='9.9' rx='1.45' fill='none' stroke='var(--text)' stroke-opacity='0.8' stroke-width='1.1'/></svg>",
+                      "fit": "contain",
+                      "weight": 1,
+                      "margin": {
+                        "bottom": 4
+                      }
+                    },
+                    {
+                      "type": "row",
+                      "align": "baseline",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{releases.prod30}",
+                          "size": 12,
+                          "fontWeight": "bold",
+                          "color": "rg3"
+                        },
+                        {
+                          "type": "text",
+                          "text": "prod",
+                          "size": 10,
+                          "color": "text2",
+                          "margin": {
+                            "start": 3
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "text": "{releases.dev30}",
+                          "size": 12,
+                          "fontWeight": "bold",
+                          "color": "rb3",
+                          "margin": {
+                            "start": 8
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "text": "dev",
+                          "size": 10,
+                          "color": "text2",
+                          "margin": {
+                            "start": 3
+                          }
+                        },
+                        {
+                          "type": "spacer",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "30 d",
+                          "size": 10,
+                          "color": "text2"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "stack",
+                  "weight": 1,
+                  "showIf": "!releases.days.59.bg",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Loading releases…",
+                      "size": 11,
+                      "color": "text2",
+                      "align": "center",
+                      "margin": {
+                        "start": 8,
+                        "end": 8
+                      },
+                      "gravity": "center"
+                    }
+                  ]
+                }
+              ]
             }
           ]
         },
@@ -1052,7 +1964,19 @@
                   "placeholder": "divider",
                   "margin": {
                     "end": 7
-                  }
+                  },
+                  "showIf": "!allGames"
+                },
+                {
+                  "type": "text",
+                  "text": "Releases ·",
+                  "size": 12,
+                  "fontWeight": "semibold",
+                  "color": "text",
+                  "margin": {
+                    "end": 4
+                  },
+                  "showIf": "allGames"
                 },
                 {
                   "type": "text",
@@ -1081,125 +2005,231 @@
               ]
             },
             {
-              "type": "spacer",
-              "weight": 1
-            },
-            {
-              "type": "row",
-              "align": "center",
-              "padding": {
-                "end": 6
-              },
+              "type": "column",
+              "weight": 1,
+              "showIf": "slot.1",
               "children": [
                 {
-                  "type": "text",
-                  "text": "{ccu}",
-                  "size": 22,
-                  "fontWeight": "semibold",
-                  "color": "text"
+                  "type": "spacer",
+                  "weight": 1
                 },
                 {
-                  "type": "text",
-                  "text": "{delta}",
-                  "size": 12,
-                  "fontWeight": "bold",
-                  "color": "delta",
-                  "margin": {
-                    "start": 4
-                  },
-                  "showIf": "delta"
-                },
-                {
-                  "type": "column",
-                  "gap": 1,
-                  "align": "end",
-                  "weight": 1,
-                  "margin": {
-                    "start": 8
+                  "type": "row",
+                  "align": "center",
+                  "padding": {
+                    "end": 6
                   },
                   "children": [
                     {
-                      "type": "row",
-                      "align": "baseline",
-                      "showIf": "slot.1",
-                      "children": [
-                        {
-                          "type": "text",
-                          "text": "{slot.1.label}",
-                          "size": 10,
-                          "color": "text2",
-                          "align": "end",
-                          "weight": 1
-                        },
-                        {
-                          "type": "text",
-                          "text": "{slot.1.value:short}",
-                          "size": 11,
-                          "fontWeight": "semibold",
-                          "color": "text",
-                          "margin": {
-                            "start": 4
-                          }
-                        }
-                      ]
+                      "type": "text",
+                      "text": "{ccu}",
+                      "size": 22,
+                      "fontWeight": "semibold",
+                      "color": "text"
                     },
                     {
-                      "type": "row",
-                      "align": "baseline",
-                      "showIf": "slot.2",
-                      "children": [
-                        {
-                          "type": "text",
-                          "text": "{slot.2.label}",
-                          "size": 10,
-                          "color": "text2",
-                          "align": "end",
-                          "weight": 1
-                        },
-                        {
-                          "type": "text",
-                          "text": "{slot.2.value:short}",
-                          "size": 11,
-                          "fontWeight": "semibold",
-                          "color": "text",
-                          "margin": {
-                            "start": 4
-                          }
-                        }
-                      ]
+                      "type": "text",
+                      "text": "{delta}",
+                      "size": 12,
+                      "fontWeight": "bold",
+                      "color": "delta",
+                      "margin": {
+                        "start": 4
+                      },
+                      "showIf": "delta"
                     },
                     {
-                      "type": "row",
-                      "align": "baseline",
-                      "showIf": "slot.3",
+                      "type": "column",
+                      "gap": 1,
+                      "align": "end",
+                      "weight": 1,
+                      "margin": {
+                        "start": 8
+                      },
                       "children": [
                         {
-                          "type": "text",
-                          "text": "{slot.3.label}",
-                          "size": 10,
-                          "color": "text2",
-                          "align": "end",
-                          "weight": 1
+                          "type": "row",
+                          "align": "baseline",
+                          "showIf": "slot.1",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{slot.1.label}",
+                              "size": 10,
+                              "color": "text2",
+                              "align": "end",
+                              "weight": 1
+                            },
+                            {
+                              "type": "text",
+                              "text": "{slot.1.value:short}",
+                              "size": 11,
+                              "fontWeight": "semibold",
+                              "color": "text",
+                              "margin": {
+                                "start": 4
+                              }
+                            }
+                          ]
                         },
                         {
-                          "type": "text",
-                          "text": "{slot.3.value:short}",
-                          "size": 11,
-                          "fontWeight": "semibold",
-                          "color": "text",
-                          "margin": {
-                            "start": 4
-                          }
+                          "type": "row",
+                          "align": "baseline",
+                          "showIf": "slot.2",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{slot.2.label}",
+                              "size": 10,
+                              "color": "text2",
+                              "align": "end",
+                              "weight": 1
+                            },
+                            {
+                              "type": "text",
+                              "text": "{slot.2.value:short}",
+                              "size": 11,
+                              "fontWeight": "semibold",
+                              "color": "text",
+                              "margin": {
+                                "start": 4
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "row",
+                          "align": "baseline",
+                          "showIf": "slot.3",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{slot.3.label}",
+                              "size": 10,
+                              "color": "text2",
+                              "align": "end",
+                              "weight": 1
+                            },
+                            {
+                              "type": "text",
+                              "text": "{slot.3.value:short}",
+                              "size": 11,
+                              "fontWeight": "semibold",
+                              "color": "text",
+                              "margin": {
+                                "start": 4
+                              }
+                            }
+                          ]
                         }
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "spacer",
+                  "weight": 1
                 }
               ]
             },
             {
-              "type": "spacer",
-              "weight": 1
+              "type": "column",
+              "weight": 1,
+              "padding": {
+                "end": 6
+              },
+              "margin": {
+                "top": 2
+              },
+              "showIf": "!slot.1",
+              "children": [
+                {
+                  "type": "column",
+                  "weight": 1,
+                  "showIf": "releases.days.59.bg",
+                  "children": [
+                    {
+                      "type": "svg",
+                      "svg": "<svg viewBox=\"0 0 193 24\"><rect x='0' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.30.bg|r0})'/><path d='M10.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.30.tri|rnone})'/><rect x='13' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.31.bg|r0})'/><path d='M23.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.31.tri|rnone})'/><rect x='26' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.32.bg|r0})'/><path d='M36.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.32.tri|rnone})'/><rect x='39' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.33.bg|r0})'/><path d='M49.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.33.tri|rnone})'/><rect x='52' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.34.bg|r0})'/><path d='M62.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.34.tri|rnone})'/><rect x='65' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.35.bg|r0})'/><path d='M75.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.35.tri|rnone})'/><rect x='78' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.36.bg|r0})'/><path d='M88.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.36.tri|rnone})'/><rect x='91' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.37.bg|r0})'/><path d='M101.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.37.tri|rnone})'/><rect x='104' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.38.bg|r0})'/><path d='M114.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.38.tri|rnone})'/><rect x='117' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.39.bg|r0})'/><path d='M127.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.39.tri|rnone})'/><rect x='130' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.40.bg|r0})'/><path d='M140.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.40.tri|rnone})'/><rect x='143' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.41.bg|r0})'/><path d='M153.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.41.tri|rnone})'/><rect x='156' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.42.bg|r0})'/><path d='M166.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.42.tri|rnone})'/><rect x='169' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.43.bg|r0})'/><path d='M179.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.43.tri|rnone})'/><rect x='182' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.44.bg|r0})'/><path d='M192.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.44.tri|rnone})'/><rect x='0' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.45.bg|r0})'/><path d='M10.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.45.tri|rnone})'/><rect x='13' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.46.bg|r0})'/><path d='M23.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.46.tri|rnone})'/><rect x='26' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.47.bg|r0})'/><path d='M36.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.47.tri|rnone})'/><rect x='39' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.48.bg|r0})'/><path d='M49.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.48.tri|rnone})'/><rect x='52' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.49.bg|r0})'/><path d='M62.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.49.tri|rnone})'/><rect x='65' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.50.bg|r0})'/><path d='M75.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.50.tri|rnone})'/><rect x='78' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.51.bg|r0})'/><path d='M88.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.51.tri|rnone})'/><rect x='91' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.52.bg|r0})'/><path d='M101.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.52.tri|rnone})'/><rect x='104' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.53.bg|r0})'/><path d='M114.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.53.tri|rnone})'/><rect x='117' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.54.bg|r0})'/><path d='M127.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.54.tri|rnone})'/><rect x='130' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.55.bg|r0})'/><path d='M140.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.55.tri|rnone})'/><rect x='143' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.56.bg|r0})'/><path d='M153.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.56.tri|rnone})'/><rect x='156' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.57.bg|r0})'/><path d='M166.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.57.tri|rnone})'/><rect x='169' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.58.bg|r0})'/><path d='M179.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.58.tri|rnone})'/><rect x='182' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.59.bg|r0})'/><path d='M192.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.59.tri|rnone})'/><rect x='182.55' y='13.55' width='9.9' height='9.9' rx='1.45' fill='none' stroke='var(--text)' stroke-opacity='0.8' stroke-width='1.1'/></svg>",
+                      "fit": "contain",
+                      "weight": 1,
+                      "margin": {
+                        "bottom": 3
+                      }
+                    },
+                    {
+                      "type": "row",
+                      "align": "baseline",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{releases.prod30}",
+                          "size": 12,
+                          "fontWeight": "bold",
+                          "color": "rg3"
+                        },
+                        {
+                          "type": "text",
+                          "text": "prod",
+                          "size": 10,
+                          "color": "text2",
+                          "margin": {
+                            "start": 3
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "text": "{releases.dev30}",
+                          "size": 12,
+                          "fontWeight": "bold",
+                          "color": "rb3",
+                          "margin": {
+                            "start": 8
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "text": "dev",
+                          "size": 10,
+                          "color": "text2",
+                          "margin": {
+                            "start": 3
+                          }
+                        },
+                        {
+                          "type": "spacer",
+                          "weight": 1
+                        },
+                        {
+                          "type": "text",
+                          "text": "30 d",
+                          "size": 10,
+                          "color": "text2"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "stack",
+                  "weight": 1,
+                  "showIf": "!releases.days.59.bg",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Loading releases…",
+                      "size": 11,
+                      "color": "text2",
+                      "align": "center",
+                      "margin": {
+                        "start": 8,
+                        "end": 8
+                      },
+                      "gravity": "center"
+                    }
+                  ]
+                }
+              ]
             }
           ]
         },
@@ -1230,7 +2260,19 @@
                   "placeholder": "divider",
                   "margin": {
                     "end": 7
-                  }
+                  },
+                  "showIf": "!allGames"
+                },
+                {
+                  "type": "text",
+                  "text": "Releases ·",
+                  "size": 12,
+                  "fontWeight": "semibold",
+                  "color": "text",
+                  "margin": {
+                    "end": 4
+                  },
+                  "showIf": "allGames"
                 },
                 {
                   "type": "text",
@@ -1247,7 +2289,41 @@
                   "color": "text2",
                   "margin": {
                     "start": 6
-                  }
+                  },
+                  "showIf": "slot.1"
+                },
+                {
+                  "type": "column",
+                  "showIf": "!slot.1",
+                  "children": [
+                    {
+                      "type": "row",
+                      "align": "baseline",
+                      "margin": {
+                        "start": 6
+                      },
+                      "showIf": "releases.days.59.bg",
+                      "children": [
+                        {
+                          "type": "text",
+                          "text": "{releases.prod30}",
+                          "size": 12,
+                          "fontWeight": "bold",
+                          "color": "rg3"
+                        },
+                        {
+                          "type": "text",
+                          "text": "{releases.dev30}",
+                          "size": 12,
+                          "fontWeight": "bold",
+                          "color": "rb3",
+                          "margin": {
+                            "start": 5
+                          }
+                        }
+                      ]
+                    }
+                  ]
                 },
                 {
                   "type": "icon",
@@ -1259,100 +2335,146 @@
               ]
             },
             {
-              "type": "spacer",
-              "weight": 1
-            },
-            {
-              "type": "row",
-              "align": "center",
-              "padding": {
-                "end": 6
-              },
+              "type": "column",
+              "weight": 1,
+              "showIf": "slot.1",
               "children": [
                 {
-                  "type": "text",
-                  "text": "{ccu}",
-                  "size": 22,
-                  "fontWeight": "semibold",
-                  "color": "text"
+                  "type": "spacer",
+                  "weight": 1
                 },
                 {
-                  "type": "text",
-                  "text": "{delta}",
-                  "size": 12,
-                  "fontWeight": "bold",
-                  "color": "delta",
-                  "margin": {
-                    "start": 4
-                  },
-                  "showIf": "delta"
-                },
-                {
-                  "type": "column",
-                  "gap": 1,
-                  "align": "end",
-                  "weight": 1,
-                  "margin": {
-                    "start": 8
+                  "type": "row",
+                  "align": "center",
+                  "padding": {
+                    "end": 6
                   },
                   "children": [
                     {
-                      "type": "row",
-                      "align": "baseline",
-                      "showIf": "slot.1",
-                      "children": [
-                        {
-                          "type": "text",
-                          "text": "{slot.1.label}",
-                          "size": 10,
-                          "color": "text2",
-                          "align": "end",
-                          "weight": 1
-                        },
-                        {
-                          "type": "text",
-                          "text": "{slot.1.value:short}",
-                          "size": 11,
-                          "fontWeight": "semibold",
-                          "color": "text",
-                          "margin": {
-                            "start": 4
-                          }
-                        }
-                      ]
+                      "type": "text",
+                      "text": "{ccu}",
+                      "size": 22,
+                      "fontWeight": "semibold",
+                      "color": "text"
                     },
                     {
-                      "type": "row",
-                      "align": "baseline",
-                      "showIf": "slot.2",
+                      "type": "text",
+                      "text": "{delta}",
+                      "size": 12,
+                      "fontWeight": "bold",
+                      "color": "delta",
+                      "margin": {
+                        "start": 4
+                      },
+                      "showIf": "delta"
+                    },
+                    {
+                      "type": "column",
+                      "gap": 1,
+                      "align": "end",
+                      "weight": 1,
+                      "margin": {
+                        "start": 8
+                      },
                       "children": [
                         {
-                          "type": "text",
-                          "text": "{slot.2.label}",
-                          "size": 10,
-                          "color": "text2",
-                          "align": "end",
-                          "weight": 1
+                          "type": "row",
+                          "align": "baseline",
+                          "showIf": "slot.1",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{slot.1.label}",
+                              "size": 10,
+                              "color": "text2",
+                              "align": "end",
+                              "weight": 1
+                            },
+                            {
+                              "type": "text",
+                              "text": "{slot.1.value:short}",
+                              "size": 11,
+                              "fontWeight": "semibold",
+                              "color": "text",
+                              "margin": {
+                                "start": 4
+                              }
+                            }
+                          ]
                         },
                         {
-                          "type": "text",
-                          "text": "{slot.2.value:short}",
-                          "size": 11,
-                          "fontWeight": "semibold",
-                          "color": "text",
-                          "margin": {
-                            "start": 4
-                          }
+                          "type": "row",
+                          "align": "baseline",
+                          "showIf": "slot.2",
+                          "children": [
+                            {
+                              "type": "text",
+                              "text": "{slot.2.label}",
+                              "size": 10,
+                              "color": "text2",
+                              "align": "end",
+                              "weight": 1
+                            },
+                            {
+                              "type": "text",
+                              "text": "{slot.2.value:short}",
+                              "size": 11,
+                              "fontWeight": "semibold",
+                              "color": "text",
+                              "margin": {
+                                "start": 4
+                              }
+                            }
+                          ]
                         }
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "spacer",
+                  "weight": 1
                 }
               ]
             },
             {
-              "type": "spacer",
-              "weight": 1
+              "type": "column",
+              "weight": 1,
+              "padding": {
+                "end": 6
+              },
+              "margin": {
+                "top": 2
+              },
+              "showIf": "!slot.1",
+              "children": [
+                {
+                  "type": "svg",
+                  "svg": "<svg viewBox=\"0 0 193 24\"><rect x='0' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.30.bg|r0})'/><path d='M10.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.30.tri|rnone})'/><rect x='13' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.31.bg|r0})'/><path d='M23.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.31.tri|rnone})'/><rect x='26' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.32.bg|r0})'/><path d='M36.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.32.tri|rnone})'/><rect x='39' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.33.bg|r0})'/><path d='M49.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.33.tri|rnone})'/><rect x='52' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.34.bg|r0})'/><path d='M62.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.34.tri|rnone})'/><rect x='65' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.35.bg|r0})'/><path d='M75.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.35.tri|rnone})'/><rect x='78' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.36.bg|r0})'/><path d='M88.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.36.tri|rnone})'/><rect x='91' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.37.bg|r0})'/><path d='M101.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.37.tri|rnone})'/><rect x='104' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.38.bg|r0})'/><path d='M114.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.38.tri|rnone})'/><rect x='117' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.39.bg|r0})'/><path d='M127.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.39.tri|rnone})'/><rect x='130' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.40.bg|r0})'/><path d='M140.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.40.tri|rnone})'/><rect x='143' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.41.bg|r0})'/><path d='M153.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.41.tri|rnone})'/><rect x='156' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.42.bg|r0})'/><path d='M166.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.42.tri|rnone})'/><rect x='169' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.43.bg|r0})'/><path d='M179.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.43.tri|rnone})'/><rect x='182' y='0' width='11' height='11' rx='2' fill='var(--{releases.days.44.bg|r0})'/><path d='M192.41,0.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.44.tri|rnone})'/><rect x='0' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.45.bg|r0})'/><path d='M10.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.45.tri|rnone})'/><rect x='13' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.46.bg|r0})'/><path d='M23.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.46.tri|rnone})'/><rect x='26' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.47.bg|r0})'/><path d='M36.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.47.tri|rnone})'/><rect x='39' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.48.bg|r0})'/><path d='M49.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.48.tri|rnone})'/><rect x='52' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.49.bg|r0})'/><path d='M62.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.49.tri|rnone})'/><rect x='65' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.50.bg|r0})'/><path d='M75.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.50.tri|rnone})'/><rect x='78' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.51.bg|r0})'/><path d='M88.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.51.tri|rnone})'/><rect x='91' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.52.bg|r0})'/><path d='M101.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.52.tri|rnone})'/><rect x='104' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.53.bg|r0})'/><path d='M114.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.53.tri|rnone})'/><rect x='117' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.54.bg|r0})'/><path d='M127.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.54.tri|rnone})'/><rect x='130' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.55.bg|r0})'/><path d='M140.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.55.tri|rnone})'/><rect x='143' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.56.bg|r0})'/><path d='M153.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.56.tri|rnone})'/><rect x='156' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.57.bg|r0})'/><path d='M166.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.57.tri|rnone})'/><rect x='169' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.58.bg|r0})'/><path d='M179.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.58.tri|rnone})'/><rect x='182' y='13' width='11' height='11' rx='2' fill='var(--{releases.days.59.bg|r0})'/><path d='M192.41,13.59a2,2 0 0 1 0.59,1.41v7a2,2 0 0 1 -2,2h-7a2,2 0 0 1 -1.41,-0.59z' fill='var(--{releases.days.59.tri|rnone})'/><rect x='182.55' y='13.55' width='9.9' height='9.9' rx='1.45' fill='none' stroke='var(--text)' stroke-opacity='0.8' stroke-width='1.1'/></svg>",
+                  "fit": "contain",
+                  "weight": 1,
+                  "showIf": "releases.days.59.bg"
+                },
+                {
+                  "type": "stack",
+                  "weight": 1,
+                  "showIf": "!releases.days.59.bg",
+                  "children": [
+                    {
+                      "type": "text",
+                      "text": "Loading releases…",
+                      "size": 11,
+                      "color": "text2",
+                      "align": "center",
+                      "margin": {
+                        "start": 8,
+                        "end": 8
+                      },
+                      "gravity": "center"
+                    }
+                  ]
+                }
+              ]
             }
           ]
         },
@@ -1496,7 +2618,16 @@
       "divider": "#1F000000",
       "unitTime": "#FFE2700F",
       "unitPercent": "#FF1F6FD1",
-      "unitRobux": "#FF1F8A4C"
+      "unitRobux": "#FF1F8A4C",
+      "r0": "#FFEBEDF0",
+      "rg1": "#FF9BE9A8",
+      "rg2": "#FF40C463",
+      "rg3": "#FF216E39",
+      "rb1": "#FFB3D1FA",
+      "rb2": "#FF4A8FE0",
+      "rb3": "#FF1D5CB3",
+      "rnone": "#00000000",
+      "chip": "#FFECECF0"
     },
     "night": {
       "bg": "#FF1C1C20",
@@ -1508,7 +2639,16 @@
       "divider": "#33FFFFFF",
       "unitTime": "#FFFB923C",
       "unitPercent": "#FF5AA9FF",
-      "unitRobux": "#FF4CC27A"
+      "unitRobux": "#FF4CC27A",
+      "r0": "#FF2B2B31",
+      "rg1": "#FF1F6F45",
+      "rg2": "#FF2FA463",
+      "rg3": "#FF4CC27A",
+      "rb1": "#FF24508A",
+      "rb2": "#FF3A7FD0",
+      "rb3": "#FF5AA9FF",
+      "rnone": "#00000000",
+      "chip": "#FF2B2B31"
     }
   },
   "strings": {

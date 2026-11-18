@@ -508,7 +508,7 @@ class Compiler {
 
 	private reportAttrs(el: HtmlElement, known: string[]) {
 		for (const k of Object.keys(el.attrs)) {
-			if (k === "style" || k === "data-show-if" || k === "class" || k === "id" || k === "title" || known.includes(k)) continue;
+			if (k === "style" || k === "data-show-if" || k === "data-tap" || k === "class" || k === "id" || k === "title" || known.includes(k)) continue;
 			this.warnAt(el.line, `<${el.tag}>: unknown attribute "${k}" ignored`);
 		}
 		if (el.attrs.class != null) this.warnAt(el.line, `<${el.tag}>: class="…" has no effect (only inline style is read)`);
@@ -587,6 +587,13 @@ class Compiler {
 
 		const showIf = el.attrs["data-show-if"];
 		if (showIf != null && showIf.trim()) out.showIf = showIf.trim();
+
+		const tap = el.attrs["data-tap"];
+		if (tap != null) {
+			const t = tap.trim();
+			if (/^(open|refresh|toggle:games\.\d{1,2})$/.test(t)) out.tap = t;
+			else w(`data-tap="${tap}" (open, refresh or toggle:games.N): left out`);
+		}
 	}
 
 	/** Inherited properties read from a container's style. */

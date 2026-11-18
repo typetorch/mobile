@@ -45,8 +45,9 @@ details pre { max-height: 420px; overflow: auto; font-size: 11px; margin: 6px 0 
 <header>
 	<h1>Widget preview</h1>
 	<label>Sample <select id="sample"></select></label>
+	<label>Style <select id="style"><option value="stats">Stats</option><option value="releases">Releases</option><option value="releasesLoading">Releases (no data yet)</option></select></label>
 	<label>Zoom <select id="zoom"><option value="1">1×</option><option value="1.5" selected>1.5×</option><option value="2">2×</option></select></label>
-	<label><input type="checkbox" id="hit"> refresh hit areas</label>
+	<label><input type="checkbox" id="hit"> hit areas</label>
 	<label>Custom <input id="cw" type="number" min="40" max="600" placeholder="w"> × <input id="ch" type="number" min="40" max="600" placeholder="h"> dp</label>
 </header>
 <main>
@@ -200,6 +201,111 @@ const SAMPLES = [
         },
     },
 ];
+// ---------------------------------------------------------------------------------------------------------------------
+// Release garden sample (docs/WIDGET_RELEASES.md: the answer's top-level `releases`, flattened into path bindings)
+/** level(n): 0 for 0, 1 for 1, 2 for 2–3, 3 for 4+. */
+const level = (n) => (n === 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : 3);
+/** 60 days of made-up releases (seeded, so the page looks the same each time). */
+function releaseDays(seed, prodRate, devRate) {
+    let x = seed;
+    const rnd = () => {
+        x = (x * 16807) % 2147483647;
+        return x / 2147483647;
+    };
+    const out = [];
+    for (let i = 0; i < 60; i++) {
+        const p = rnd() < prodRate ? 1 + Math.floor(rnd() * 3) : 0;
+        const d = rnd() < devRate ? 1 + Math.floor(rnd() * 5) : 0;
+        out.push({ p, d });
+    }
+    return out;
+}
+/** The days as the widget's bindings (`releases.prod`, `releases.days.N.bg`, …), counts and tokens by the backend's rule. */
+function releaseValues(days, lastProdGame) {
+    const out = {};
+    let prod = 0;
+    let dev = 0;
+    let prod30 = 0;
+    let dev30 = 0;
+    let last = -1;
+    days.forEach(({ p, d }, i) => {
+        prod += p;
+        dev += d;
+        if (i >= 30) {
+            prod30 += p;
+            dev30 += d;
+        }
+        if (p)
+            last = i;
+        out[`releases.days.${i}.p`] = String(p);
+        out[`releases.days.${i}.d`] = String(d);
+        out[`releases.days.${i}.bg`] = p ? `rg${level(p)}` : d ? `rb${level(d)}` : "r0";
+        out[`releases.days.${i}.tri`] = p && d ? `rb${level(d)}` : "rnone";
+    });
+    out["releases.value"] = String(prod);
+    out["releases.prod"] = String(prod);
+    out["releases.dev"] = String(dev);
+    out["releases.prod30"] = String(prod30);
+    out["releases.dev30"] = String(dev30);
+    out["releases.lastProd"] = last < 0 ? null : last === 59 ? "today" : `${59 - last} d ago`;
+    out["releases.lastProdLabel"] = last < 0 ? null : `#${100 + prod} · v0.9.${prod % 10}`;
+    if (lastProdGame)
+        out["releases.lastProdGame"] = last < 0 ? null : lastProdGame(last);
+    return out;
+}
+// Each sample gets its own release history (the sparse one: no prod release in 60 days).
+const RELEASE_SAMPLES = [releaseDays(7, 0.28, 0.55), releaseDays(11, 0.12, 0.35), releaseDays(5, 0, 0.12)];
+SAMPLES.forEach((s, i) => Object.assign(s.values, releaseValues(RELEASE_SAMPLES[i] ?? [])));
+/** A made-up game icon (an SVG data URL), so the svg `<image>`s have something to draw. */
+function icon(initials, from, to) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><defs><linearGradient id="g" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="40" height="40" fill="url(#g)"/><text x="20" y="26" font-size="16" font-weight="700" font-family="sans-serif" text-anchor="middle" fill="#fff">${initials}</text></svg>`;
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+/** The all-games sample (docs/WIDGET_SPEC.md, All games): four games, merged releases, `games.N`, the pick. */
+const GAMES = [
+    { id: "prison", name: "The Prison", iconUrl: icon("TP", "#e0803a", "#7a2f12"), days: releaseDays(11, 0.18, 0.35) },
+    { id: "zomvival", name: "Zomvival", iconUrl: icon("Z", "#5aa060", "#1d4a2a"), days: releaseDays(13, 0.12, 0.3) },
+    { id: "cart", name: "Cart Ride", iconUrl: null, days: releaseDays(17, 0.08, 0.25) },
+    { id: "slime", name: "Slime", iconUrl: icon("S", "#7a6ad8", "#2c2266"), days: releaseDays(19, 0.1, 0.2) },
+];
+function allGamesValues(pick) {
+    const shown = pick === null ? GAMES : [GAMES[pick]];
+    const days = Array.from({ length: 60 }, (_, i) => ({
+        p: shown.reduce((n, g) => n + g.days[i].p, 0),
+        d: shown.reduce((n, g) => n + g.days[i].d, 0),
+    }));
+    const values = {
+        allGames: "1",
+        filter: pick === null ? null : GAMES[pick].id,
+        game: pick === null ? "All games" : GAMES[pick].name,
+        backend: pick === null ? "All games" : GAMES[pick].name,
+        "game.iconUrl": pick === null ? null : GAMES[pick].iconUrl,
+        updated: "12:04",
+        status: "12:04",
+        state: "fresh",
+        "slot.4": "releases",
+        ...releaseValues(days, (day) => [...shown].reverse().find((g) => g.days[day].p > 0)?.name ?? null),
+    };
+    GAMES.forEach((g, n) => {
+        values[`games.${n}.id`] = g.id;
+        values[`games.${n}.name`] = g.name;
+        values[`games.${n}.iconUrl`] = g.iconUrl;
+        values[`games.${n}.picked`] = pick === n ? "1" : "";
+        values[`games.${n}.alpha`] = pick === null || pick === n ? "1" : "0.4";
+    });
+    return values;
+}
+SAMPLES.push({ label: "All games (4 games; tap a chip)", deltaUp: true, series: [], values: allGamesValues(null), allGames: true });
+function styled(sample, style) {
+    if (style === "stats")
+        return sample;
+    const values = { ...sample.values, "slot.1": null, "slot.2": null, "slot.3": null, "slot.4": "releases", "slot.4.label": "Releases" };
+    if (style === "releasesLoading")
+        for (const k of Object.keys(values))
+            if (k.startsWith("releases."))
+                delete values[k];
+    return { ...sample, values };
+}
 const BASE = {
     day: {
         bg: "#F7FFFFFF",
@@ -269,7 +375,7 @@ class Ctx {
 // ---------------------------------------------------------------------------------------------------------------------
 // Templates
 const FORMATS = new Set(["count", "grouped", "delta", "duration", "hours", "raw", "seconds", "percent", "robux", "unit", "short", "plain"]);
-const TEXTY = /^(game|backend|status|updated|state|serversLabel|slot\.\d|slot\.\d\.label)$/;
+const TEXTY = /^(game|backend|status|updated|state|serversLabel|slot\.\d|slot\.\d\.label|allGames|filter|games\.\d+\.\w+|releases\.lastProd\w*)$/;
 /** Fills a text template: `{name}`, `{name:format}`, `{name|fallback}`, `{{` / `}}`. */
 function fill(template, ctx, plain = false) {
     const out = [];
@@ -359,10 +465,20 @@ const GRAVITY = {
     bottomEnd: ["end", "end"],
     fill: ["stretch", "stretch"],
 };
+/** What a tap area does in the preview (set by mount: `toggle:games.N` picks / clears game N of the all-games sample). */
+let onTap = null;
 function render(e, parent, ctx) {
     if (!ctx.showIf(e.showIf))
         return null;
     const el = document.createElement("div");
+    if (e.tap) {
+        const tap = e.tap;
+        el.title = `tap: ${tap}`;
+        el.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            onTap?.(tap);
+        });
+    }
     let css = `box-sizing:border-box;padding:${edges(e.padding)};margin:${edges(e.margin)};${background(e.background, ctx, 16)}`;
     const weight = e.weight ?? (e.type === "chart" && e.height == null ? 1 : 0);
     if (weight > 0 && parent !== "stack")
@@ -459,7 +575,7 @@ function render(e, parent, ctx) {
         default:
             return null;
     }
-    el.setAttribute("style", css);
+    el.setAttribute("style", e.tap ? `${css}cursor:pointer;` : css);
     return el;
 }
 // ---------------------------------------------------------------------------------------------------------------------
@@ -641,6 +757,10 @@ function widget(spec, state, w, h, mode, sample, hit) {
             root.style.minHeight = "0";
             box.appendChild(root);
         }
+        // The elements' own tap areas (data-tap → tap; Android 12+).
+        if (hit)
+            for (const a of box.querySelectorAll('[title^="tap:"]'))
+                a.style.outline = "1px dashed rgba(0,160,255,.9)";
         const corner = state === "signedOut" || state === "pick" ? "none" : (layout.refresh ?? "topEnd");
         if (hit && corner !== "none") {
             const a = document.createElement("div");
@@ -699,6 +819,7 @@ function mount(app) {
     const $ = (sel) => app.querySelector(sel);
     const source = $("#source");
     const sampleSel = $("#sample");
+    const styleSel = $("#style");
     const hit = $("#hit");
     const zoom = $("#zoom");
     const customW = $("#cw");
@@ -711,6 +832,7 @@ function mount(app) {
     source.value = edited ?? default_widget_1.DEFAULT_WIDGET_HTML.trim();
     $("#edited").hidden = edited == null;
     let spec = null;
+    let pickedGame = null;
     const draw = () => {
         const r = (0, compile_1.compileWidgetHtml)(source.value);
         spec = r.spec;
@@ -719,7 +841,9 @@ function mount(app) {
             : "No warnings.";
         warn.className = r.warnings.length ? "warn bad" : "warn ok";
         json.textContent = JSON.stringify(r.spec, null, 2);
-        const sample = SAMPLES[Number(sampleSel.value) || 0];
+        const base = SAMPLES[Number(sampleSel.value) || 0];
+        // All-games widgets are always the Releases style.
+        const sample = base.allGames ? { ...base, values: allGamesValues(pickedGame) } : styled(base, (styleSel.value || "stats"));
         const sizes = [...SIZES];
         const cw = Number(customW.value);
         const ch = Number(customH.value);
@@ -758,6 +882,16 @@ function mount(app) {
         }
         requestAnimationFrame(() => paint(out));
     };
+    onTap = (tap) => {
+        const m = /^toggle:games\.(\d+)$/.exec(tap);
+        if (!m || !SAMPLES[Number(sampleSel.value) || 0].allGames)
+            return;
+        const n = Number(m[1]);
+        if (n >= GAMES.length)
+            return;
+        pickedGame = pickedGame === n ? null : n;
+        draw();
+    };
     let t;
     source.addEventListener("input", () => {
         clearTimeout(t);
@@ -767,7 +901,7 @@ function mount(app) {
             draw();
         }, 250);
     });
-    for (const c of [sampleSel, hit, zoom, customW, customH])
+    for (const c of [sampleSel, styleSel, hit, zoom, customW, customH])
         c.addEventListener("input", draw);
     $("#reset").addEventListener("click", () => {
         source.value = default_widget_1.DEFAULT_WIDGET_HTML.trim();
@@ -1289,7 +1423,7 @@ class Compiler {
     }
     reportAttrs(el, known) {
         for (const k of Object.keys(el.attrs)) {
-            if (k === "style" || k === "data-show-if" || k === "class" || k === "id" || k === "title" || known.includes(k))
+            if (k === "style" || k === "data-show-if" || k === "data-tap" || k === "class" || k === "id" || k === "title" || known.includes(k))
                 continue;
             this.warnAt(el.line, `<${el.tag}>: unknown attribute "${k}" ignored`);
         }
@@ -1386,6 +1520,14 @@ class Compiler {
         const showIf = el.attrs["data-show-if"];
         if (showIf != null && showIf.trim())
             out.showIf = showIf.trim();
+        const tap = el.attrs["data-tap"];
+        if (tap != null) {
+            const t = tap.trim();
+            if (/^(open|refresh|toggle:games\.\d{1,2})$/.test(t))
+                out.tap = t;
+            else
+                w(`data-tap="${tap}" (open, refresh or toggle:games.N): left out`);
+        }
     }
     /** Inherited properties read from a container's style. */
     inherit(el, style, from) {
@@ -2037,30 +2179,118 @@ exports.DEFAULT_WIDGET_HTML = void 0;
  * four stats), 4x2 (CCU, the 6-hour line and four stat rows). Keep WidgetSpec.kt's DEFAULT_JSON in step at the next APK
  * (`bun scripts/widgets/check.ts --print`).
  */
+/**
+ * The release garden (docs/WIDGET_RELEASES.md, docs/WIDGET_HTML.md "The release garden"): a widget whose slot 1 is empty
+ * (Settings → Widgets, style Releases: slots ["", "", "", "releases"]) draws the last 60 / 30 days of releases instead of
+ * the stats. The data: the live answer's top-level `releases` (the backend sends it with every answer, so the APKs that
+ * keep only a metric's value / prev still have it; an all-games widget gets it merged over the games). 60 days, oldest
+ * first, the last one today; each day's `bg` / `tri` are the colour tokens below.
+ */
+const R = "releases";
+/** Shown when the release data is there (the newest day has its colour). */
+const HAS_RELEASES = `${R}.days.59.bg`;
+const n2 = (n) => String(Math.round(n * 100) / 100);
+/**
+ * One `<svg>` with the last cols × rows days (oldest top left, row by row, today bottom right, outlined): per day a
+ * rounded square in the day's `bg` token and over its bottom-right half (below the top-right → bottom-left diagonal,
+ * following the rounded corners) the `tri` token (`rnone`, transparent, unless the day has prod and dev releases).
+ * Fixed cell geometry in viewBox units; `data-fit="contain"` scales it uniformly into the element's box (the svg
+ * templates have no arithmetic, so the cells can't be laid out from {w} / {h}).
+ */
+function garden(cols, rows, cell, gap, radius, style) {
+    const count = cols * rows;
+    const first = 60 - count;
+    const w = cols * cell + (cols - 1) * gap;
+    const h = rows * cell + (rows - 1) * gap;
+    const r = radius;
+    const a = r * (1 - Math.SQRT1_2); // where the diagonal meets a rounded corner
+    const side = cell - 2 * r;
+    const out = [];
+    let todayX = 0;
+    let todayY = 0;
+    for (let k = 0; k < count; k++) {
+        const day = first + k;
+        const x = (k % cols) * (cell + gap);
+        const y = Math.floor(k / cols) * (cell + gap);
+        out.push(`<rect x='${n2(x)}' y='${n2(y)}' width='${cell}' height='${cell}' rx='${r}' fill='var(--{${R}.days.${day}.bg|r0})'/>`);
+        out.push(`<path d='M${n2(x + cell - a)},${n2(y + a)}a${r},${r} 0 0 1 ${n2(a)},${n2(r - a)}v${n2(side)}a${r},${r} 0 0 1 -${r},${r}h-${n2(side)}a${r},${r} 0 0 1 -${n2(r - a)},-${n2(a)}z' fill='var(--{${R}.days.${day}.tri|rnone})'/>`);
+        todayX = x;
+        todayY = y;
+    }
+    const sw = Math.max(1, Math.round(cell * 0.1 * 10) / 10);
+    out.push(`<rect x='${n2(todayX + sw / 2)}' y='${n2(todayY + sw / 2)}' width='${n2(cell - sw)}' height='${n2(cell - sw)}' rx='${n2(Math.max(0, r - sw / 2))}' fill='none' stroke='var(--text)' stroke-opacity='0.8' stroke-width='${sw}'/>`);
+    return `<svg viewBox="0 0 ${n2(w)} ${n2(h)}" data-fit="contain" style="${style}">${out.join("")}</svg>`;
+}
+/** "Loading releases…" in the garden's place until the release data is there. */
+const GARDEN_LOADING = `<div style="display: grid; flex: 1" data-show-if="!${HAS_RELEASES}">
+			<p style="place-self: center; margin: 0 8px; font-size: 11px; color: var(--text2); text-align: center">Loading releases…</p>
+		</div>`;
+/**
+ * All-games widgets (docs/WIDGET_SPEC.md, All games): game N's icon chip, a 32 dp tap target that picks the game (or
+ * clears the pick). The icon is dimmed by `games.N.alpha` (0.4 when another game is picked) and ringed when
+ * `games.N.picked` ("1"; "" → the ring's opacity falls back to 0).
+ */
+function chipIcon(n, show = "") {
+    const g = `games.${n}`;
+    return `<svg viewBox="0 0 32 32" style="width: 32px; height: 32px"${show ? ` data-show-if="${show}"` : ""}><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{${g}.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{${g}.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{${g}.picked|0}'/></svg>`;
+}
+/** The first [count] games' chips in a row (each hidden when there is no such game); [named]: the picked one as a pill with its name. */
+function chips(count, named, style) {
+    const out = [];
+    for (let n = 0; n < count; n++) {
+        const g = `games.${n}`;
+        const inner = named
+            ? `<div style="display: flex; align-items: center; padding-right: 9px; background: var(--chip); border-radius: 16px" data-show-if="${g}.picked">${chipIcon(n)}<span style="width: 70px; font-size: 10.5px; font-weight: 500; color: var(--text)">{${g}.name}</span></div>${chipIcon(n, `!${g}.picked`)}`
+            : chipIcon(n);
+        out.push(`<div data-show-if="${g}.id" data-tap="toggle:${g}">${inner}</div>`);
+    }
+    return `<div style="display: flex; align-items: center; ${style}" data-show-if="allGames">${out.join("")}</div>`;
+}
+/** "Releases ·" before the game's name in an all-games widget's header ({game}: "All games" or the picked game). */
+const ALL_GAMES_TITLE = `<span style="margin-right: 4px; font-size: 12px; font-weight: 600; color: var(--text)" data-show-if="allGames">Releases ·</span>`;
+/** Counts under a 30-day garden: prod and dev releases of the last 30 days. */
+function counts30(size) {
+    return `<div style="display: flex; align-items: baseline">
+				<span style="font-size: ${size}px; font-weight: 700; color: var(--rg3)">{${R}.prod30}</span>
+				<span style="margin-left: 3px; font-size: 10px; color: var(--text2)">prod</span>
+				<span style="margin-left: 8px; font-size: ${size}px; font-weight: 700; color: var(--rb3)">{${R}.dev30}</span>
+				<span style="margin-left: 3px; font-size: 10px; color: var(--text2)">dev</span>
+				<div style="flex: 1"></div>
+				<span style="font-size: 10px; color: var(--text2)">30 d</span>
+			</div>`;
+}
 exports.DEFAULT_WIDGET_HTML = `
-<!-- Colours: the tokens (var(--name) anywhere below), per system mode. #rrggbbaa: the last pair is the alpha. -->
+<!-- Colours: the tokens (var(--name) anywhere below), per system mode. #rrggbbaa: the last pair is the alpha.
+     r0, rg1–rg3, rb1–rb3, rnone: the release garden's days (none, prod 1 / 2–3 / 4+, dev 1 / 2–3 / 4+, transparent);
+     chip: an all-games widget's game chips. -->
 <widget-tokens mode="day" style="
 	--bg: #ffffffef; --text: #17171b; --text2: #62606a; --brand: #fb7a32; --up: #1f8a4c; --down: #c93c3c;
-	--divider: #0000001f; --unitTime: #e2700f; --unitPercent: #1f6fd1; --unitRobux: #1f8a4c">
+	--divider: #0000001f; --unitTime: #e2700f; --unitPercent: #1f6fd1; --unitRobux: #1f8a4c;
+	--r0: #ebedf0; --rg1: #9be9a8; --rg2: #40c463; --rg3: #216e39; --rb1: #b3d1fa; --rb2: #4a8fe0; --rb3: #1d5cb3; --rnone: #0000;
+	--chip: #ececf0">
 </widget-tokens>
 <widget-tokens mode="night" style="
 	--bg: #1c1c20; --text: #f2f0f5; --text2: #a7a3ad; --brand: #fb7a32; --up: #4cc27a; --down: #ef6b6b;
-	--divider: #ffffff33; --unitTime: #fb923c; --unitPercent: #5aa9ff; --unitRobux: #4cc27a">
+	--divider: #ffffff33; --unitTime: #fb923c; --unitPercent: #5aa9ff; --unitRobux: #4cc27a;
+	--r0: #2b2b31; --rg1: #1f6f45; --rg2: #2fa463; --rg3: #4cc27a; --rb1: #24508a; --rb2: #3a7fd0; --rb3: #5aa9ff; --rnone: #0000;
+	--chip: #2b2b31">
 </widget-tokens>
 <widget-strings refreshing="refreshing…" offline="offline · {updated}"></widget-strings>
 <!-- Retention as 34.25 % and its change as ▲1.12 points. -->
 <widget-format ratio-decimals="2"></widget-format>
 
-<!-- 4x2 and up: the CCU and its 6-hour line left, the four stats right. -->
+<!-- 4x2 and up: the CCU and its 6-hour line left, the four stats right. Releases style: 60 days (5 rows of 12), the
+     counts and the last prod release beside; all games: a row of game chips (tap: show only that game) above. -->
 <widget state="data" name="medium" min-width="240" min-height="120" refresh="topEnd">
 	<div style="padding: 4px 6px 10px 14px">
 		<div style="display: flex; align-items: center">
-			<img src="{game.iconUrl}" style="width: 22px; height: 22px; border-radius: 6px; background: var(--divider); margin-right: 7px">
+			<img src="{game.iconUrl}" style="width: 22px; height: 22px; border-radius: 6px; background: var(--divider); margin-right: 7px" data-show-if="!allGames">
+			${ALL_GAMES_TITLE}
 			<span style="flex: 1; font-size: 12px; font-weight: 500; color: var(--text)">{game}</span>
 			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{status}</span>
 			<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)"></tt-icon>
 		</div>
-		<div style="display: flex; flex: 1; align-items: stretch; margin-top: 4px; padding-right: 8px">
+		<div style="display: flex; flex: 1; align-items: stretch; margin-top: 4px; padding-right: 8px" data-show-if="slot.1">
 			<div style="flex: 1">
 				<div style="display: flex; align-items: baseline">
 					<span style="font-size: 34px; font-weight: 600; color: var(--text)">{ccu}</span>
@@ -2099,68 +2329,104 @@ exports.DEFAULT_WIDGET_HTML = `
 				</div>
 			</div>
 		</div>
+		<div style="flex: 1; margin-top: 6px; padding-right: 8px" data-show-if="!slot.1">
+			${chips(6, true, "gap: 4px; margin-bottom: 3px")}
+			<div style="display: flex; flex: 1; align-items: stretch" data-show-if="${HAS_RELEASES}">
+				${garden(12, 5, 15, 3, 3, "flex: 1")}
+				<div style="justify-content: center; gap: 2px; margin-left: 12px">
+					<div style="display: flex; align-items: baseline">
+						<span style="font-size: 16px; font-weight: 700; color: var(--rg3)">{${R}.prod}</span>
+						<span style="margin-left: 4px; font-size: 11px; color: var(--text2)">prod</span>
+					</div>
+					<div style="display: flex; align-items: baseline">
+						<span style="font-size: 16px; font-weight: 700; color: var(--rb3)">{${R}.dev}</span>
+						<span style="margin-left: 4px; font-size: 11px; color: var(--text2)">dev</span>
+					</div>
+					<span style="margin-top: 4px; font-size: 10px; color: var(--text2)">last prod</span>
+					<span style="font-size: 11.5px; font-weight: 600; color: var(--text)">{${R}.lastProd|none}</span>
+					<span style="font-size: 9.5px; color: var(--text2)" data-show-if="${R}.lastProdGame">{${R}.lastProdGame}</span>
+					<div data-show-if="!allGames">
+						<span style="font-size: 9.5px; color: var(--text2)" data-show-if="${R}.lastProdLabel">{${R}.lastProdLabel}</span>
+					</div>
+				</div>
+			</div>
+			${GARDEN_LOADING}
+		</div>
 	</div>
 </widget>
 
-<!-- 2x2: the CCU, then a 2x2 grid of the stats at the bottom. -->
+<!-- 2x2: the CCU, then a 2x2 grid of the stats at the bottom. Releases style: the last 30 days (5 rows of 6), counts under; all games: chips of the first 4 games above. -->
 <widget state="data" name="grid" min-width="100" min-height="115" refresh="topEnd">
 	<div style="padding: 4px 6px 10px 12px">
 		<div style="display: flex; align-items: center">
-			<img src="{game.iconUrl}" style="width: 20px; height: 20px; border-radius: 6px; background: var(--divider); margin-right: 7px">
+			<img src="{game.iconUrl}" style="width: 20px; height: 20px; border-radius: 6px; background: var(--divider); margin-right: 7px" data-show-if="!allGames">
+			${ALL_GAMES_TITLE}
 			<span style="flex: 1; font-size: 12px; font-weight: 500; color: var(--text2)">{game}</span>
 			<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)"></tt-icon>
 		</div>
-		<div style="display: flex; align-items: baseline; margin-top: 4px">
-			<span style="font-size: 22px; font-weight: 600; color: var(--text)">{ccu}</span>
-			<span style="margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
-			<span style="flex: 1; margin-left: 4px; font-size: 10px; color: var(--text2)" data-show-if="servers">· {serversLabel}</span>
+		<div style="flex: 1" data-show-if="slot.1">
+			<div style="display: flex; align-items: baseline; margin-top: 4px">
+				<span style="font-size: 22px; font-weight: 600; color: var(--text)">{ccu}</span>
+				<span style="margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
+				<span style="flex: 1; margin-left: 4px; font-size: 10px; color: var(--text2)" data-show-if="servers">· {serversLabel}</span>
+			</div>
+			<div style="flex: 1"></div>
+			<div style="display: flex; align-items: flex-start; gap: 6px; padding-right: 6px; margin-bottom: 7px">
+				<div style="flex: 1" data-show-if="slot.1">
+					<span style="font-size: 10px; color: var(--text2)">{slot.1.label}</span>
+					<div style="display: flex; align-items: baseline">
+						<span style="font-size: 12px; font-weight: 600; color: var(--text)">{slot.1.value}</span>
+						<span style="margin-left: 3px; font-size: 8.5px; font-weight: 700" data-show-if="slot.1.delta">{slot.1.delta}</span>
+					</div>
+				</div>
+				<div style="flex: 1" data-show-if="slot.2">
+					<span style="font-size: 10px; color: var(--text2)">{slot.2.label}</span>
+					<div style="display: flex; align-items: baseline">
+						<span style="font-size: 12px; font-weight: 600; color: var(--text)">{slot.2.value}</span>
+						<span style="margin-left: 3px; font-size: 8.5px; font-weight: 700" data-show-if="slot.2.delta">{slot.2.delta}</span>
+					</div>
+				</div>
+			</div>
+			<div style="display: flex; align-items: flex-start; gap: 6px; padding-right: 6px">
+				<div style="flex: 1" data-show-if="slot.3">
+					<span style="font-size: 10px; color: var(--text2)">{slot.3.label}</span>
+					<div style="display: flex; align-items: baseline">
+						<span style="font-size: 12px; font-weight: 600; color: var(--text)">{slot.3.value}</span>
+						<span style="margin-left: 3px; font-size: 8.5px; font-weight: 700" data-show-if="slot.3.delta">{slot.3.delta}</span>
+					</div>
+				</div>
+				<div style="flex: 1" data-show-if="slot.4">
+					<span style="font-size: 10px; color: var(--text2)">{slot.4.label}</span>
+					<div style="display: flex; align-items: baseline">
+						<span style="font-size: 12px; font-weight: 600; color: var(--text)">{slot.4.value}</span>
+						<span style="margin-left: 3px; font-size: 8.5px; font-weight: 700" data-show-if="slot.4.delta">{slot.4.delta}</span>
+					</div>
+				</div>
+			</div>
 		</div>
-		<div style="flex: 1"></div>
-		<div style="display: flex; align-items: flex-start; gap: 6px; padding-right: 6px; margin-bottom: 7px">
-			<div style="flex: 1" data-show-if="slot.1">
-				<span style="font-size: 10px; color: var(--text2)">{slot.1.label}</span>
-				<div style="display: flex; align-items: baseline">
-					<span style="font-size: 12px; font-weight: 600; color: var(--text)">{slot.1.value}</span>
-					<span style="margin-left: 3px; font-size: 8.5px; font-weight: 700" data-show-if="slot.1.delta">{slot.1.delta}</span>
-				</div>
+		<div style="flex: 1; margin-top: 4px; padding-right: 6px" data-show-if="!slot.1">
+			${chips(4, false, "gap: 4px; margin-bottom: 2px")}
+			<div style="flex: 1; margin-bottom: 2px" data-show-if="${HAS_RELEASES}">
+				${garden(6, 5, 15, 3, 3, "flex: 1; margin-bottom: 5px")}
+				${counts30(13)}
 			</div>
-			<div style="flex: 1" data-show-if="slot.2">
-				<span style="font-size: 10px; color: var(--text2)">{slot.2.label}</span>
-				<div style="display: flex; align-items: baseline">
-					<span style="font-size: 12px; font-weight: 600; color: var(--text)">{slot.2.value}</span>
-					<span style="margin-left: 3px; font-size: 8.5px; font-weight: 700" data-show-if="slot.2.delta">{slot.2.delta}</span>
-				</div>
-			</div>
-		</div>
-		<div style="display: flex; align-items: flex-start; gap: 6px; padding-right: 6px">
-			<div style="flex: 1" data-show-if="slot.3">
-				<span style="font-size: 10px; color: var(--text2)">{slot.3.label}</span>
-				<div style="display: flex; align-items: baseline">
-					<span style="font-size: 12px; font-weight: 600; color: var(--text)">{slot.3.value}</span>
-					<span style="margin-left: 3px; font-size: 8.5px; font-weight: 700" data-show-if="slot.3.delta">{slot.3.delta}</span>
-				</div>
-			</div>
-			<div style="flex: 1" data-show-if="slot.4">
-				<span style="font-size: 10px; color: var(--text2)">{slot.4.label}</span>
-				<div style="display: flex; align-items: baseline">
-					<span style="font-size: 12px; font-weight: 600; color: var(--text)">{slot.4.value}</span>
-					<span style="margin-left: 3px; font-size: 8.5px; font-weight: 700" data-show-if="slot.4.delta">{slot.4.delta}</span>
-				</div>
-			</div>
+			${GARDEN_LOADING}
 		</div>
 	</div>
 </widget>
 
-<!-- 4x1 (wide and short): the CCU left, the 6-hour line in the middle, the stats right. -->
+<!-- 4x1 (wide and short): the CCU left, the 6-hour line in the middle, the stats right. Releases style: 60 days (3 rows
+     of 20), the 60-day counts and the last prod release right; all games: the game chips in the header. -->
 <widget state="data" name="wide" min-width="240" min-height="60" refresh="topEnd">
 	<div style="padding: 4px 6px 8px 12px">
 		<div style="display: flex; align-items: center">
-			<img src="{game.iconUrl}" style="width: 18px; height: 18px; border-radius: 6px; background: var(--divider); margin-right: 7px">
+			<img src="{game.iconUrl}" style="width: 18px; height: 18px; border-radius: 6px; background: var(--divider); margin-right: 7px" data-show-if="!allGames">
 			<span style="flex: 1; font-size: 12px; font-weight: 500; color: var(--text2)">{game}</span>
-			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{status}</span>
+			${chips(6, false, "gap: 2px; margin: 0 10px 0 4px")}
+			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)" data-show-if="!allGames">{status}</span>
 			<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)"></tt-icon>
 		</div>
-		<div style="display: flex; flex: 1; align-items: stretch; padding-right: 6px">
+		<div style="display: flex; flex: 1; align-items: stretch; padding-right: 6px" data-show-if="slot.1">
 			<div style="justify-content: center">
 				<div style="display: flex; align-items: baseline">
 					<span style="font-size: 24px; font-weight: 600; color: var(--text)">{ccu}</span>
@@ -2196,102 +2462,151 @@ exports.DEFAULT_WIDGET_HTML = `
 				</div>
 			</div>
 		</div>
+		<div style="flex: 1; padding-right: 6px" data-show-if="!slot.1">
+			<div style="display: flex; flex: 1; align-items: stretch" data-show-if="${HAS_RELEASES}">
+				${garden(20, 3, 11, 2, 2, "flex: 1; margin: 1px 0 3px")}
+				<div style="justify-content: center; align-items: flex-end; gap: 1px; margin-left: 10px">
+					<div style="display: flex; align-items: baseline">
+						<span style="font-size: 13px; font-weight: 700; color: var(--rg3)">{${R}.prod}</span>
+						<span style="margin-left: 3px; font-size: 10px; color: var(--text2)">prod</span>
+						<span style="margin-left: 8px; font-size: 13px; font-weight: 700; color: var(--rb3)">{${R}.dev}</span>
+						<span style="margin-left: 3px; font-size: 10px; color: var(--text2)">dev</span>
+					</div>
+					<span style="font-size: 10px; color: var(--text2)">last prod {${R}.lastProd|none}</span>
+				</div>
+			</div>
+			${GARDEN_LOADING}
+		</div>
 	</div>
 </widget>
 
-<!-- 2x1 tall enough for four stats. -->
+<!-- 2x1 tall enough for four stats. Releases style: the last 30 days (3 rows of 10), counts under. -->
 <widget state="data" name="small4" min-width="100" min-height="90" refresh="topEnd">
 	<div style="padding: 4px 6px 8px 12px">
 		<div style="display: flex; align-items: center">
-			<img src="{game.iconUrl}" style="width: 18px; height: 18px; border-radius: 6px; background: var(--divider); margin-right: 7px">
+			<img src="{game.iconUrl}" style="width: 18px; height: 18px; border-radius: 6px; background: var(--divider); margin-right: 7px" data-show-if="!allGames">
+			${ALL_GAMES_TITLE}
 			<span style="flex: 1; font-size: 12px; font-weight: 500; color: var(--text2)">{game}</span>
 			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{status}</span>
 			<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)"></tt-icon>
 		</div>
-		<div style="flex: 1"></div>
-		<div style="display: flex; align-items: center; padding-right: 6px">
-			<span style="font-size: 22px; font-weight: 600; color: var(--text)">{ccu}</span>
-			<span style="margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
-			<div style="flex: 1; align-items: flex-end; gap: 1px; margin-left: 8px">
-				<div style="display: flex; align-items: baseline" data-show-if="slot.1">
-					<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.1.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.1.value:short}</span>
-				</div>
-				<div style="display: flex; align-items: baseline" data-show-if="slot.2">
-					<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.2.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.2.value:short}</span>
-				</div>
-				<div style="display: flex; align-items: baseline" data-show-if="slot.3">
-					<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.3.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.3.value:short}</span>
-				</div>
-				<div style="display: flex; align-items: baseline" data-show-if="slot.4">
-					<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.4.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.4.value:short}</span>
+		<div style="flex: 1" data-show-if="slot.1">
+			<div style="flex: 1"></div>
+			<div style="display: flex; align-items: center; padding-right: 6px">
+				<span style="font-size: 22px; font-weight: 600; color: var(--text)">{ccu}</span>
+				<span style="margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
+				<div style="flex: 1; align-items: flex-end; gap: 1px; margin-left: 8px">
+					<div style="display: flex; align-items: baseline" data-show-if="slot.1">
+						<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.1.label}</span>
+						<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.1.value:short}</span>
+					</div>
+					<div style="display: flex; align-items: baseline" data-show-if="slot.2">
+						<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.2.label}</span>
+						<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.2.value:short}</span>
+					</div>
+					<div style="display: flex; align-items: baseline" data-show-if="slot.3">
+						<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.3.label}</span>
+						<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.3.value:short}</span>
+					</div>
+					<div style="display: flex; align-items: baseline" data-show-if="slot.4">
+						<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.4.label}</span>
+						<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.4.value:short}</span>
+					</div>
 				</div>
 			</div>
+			<div style="flex: 1"></div>
 		</div>
-		<div style="flex: 1"></div>
+		<div style="flex: 1; margin-top: 2px; padding-right: 6px" data-show-if="!slot.1">
+			<div style="flex: 1" data-show-if="${HAS_RELEASES}">
+				${garden(10, 3, 11, 2, 2, "flex: 1; margin-bottom: 4px")}
+				${counts30(12)}
+			</div>
+			${GARDEN_LOADING}
+		</div>
 	</div>
 </widget>
 
-<!-- 2x1 from 72 dp: three stats. -->
+<!-- 2x1 from 72 dp: three stats. Releases style: the last 30 days (2 rows of 15), counts under. -->
 <widget state="data" name="small" min-width="100" min-height="72" refresh="topEnd">
 	<div style="padding: 4px 6px 8px 12px">
 		<div style="display: flex; align-items: center">
-			<img src="{game.iconUrl}" style="width: 18px; height: 18px; border-radius: 6px; background: var(--divider); margin-right: 7px">
+			<img src="{game.iconUrl}" style="width: 18px; height: 18px; border-radius: 6px; background: var(--divider); margin-right: 7px" data-show-if="!allGames">
+			${ALL_GAMES_TITLE}
 			<span style="flex: 1; font-size: 12px; font-weight: 500; color: var(--text2)">{game}</span>
 			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{status}</span>
 			<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)"></tt-icon>
 		</div>
-		<div style="flex: 1"></div>
-		<div style="display: flex; align-items: center; padding-right: 6px">
-			<span style="font-size: 22px; font-weight: 600; color: var(--text)">{ccu}</span>
-			<span style="margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
-			<div style="flex: 1; align-items: flex-end; gap: 1px; margin-left: 8px">
-				<div style="display: flex; align-items: baseline" data-show-if="slot.1">
-					<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.1.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.1.value:short}</span>
-				</div>
-				<div style="display: flex; align-items: baseline" data-show-if="slot.2">
-					<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.2.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.2.value:short}</span>
-				</div>
-				<div style="display: flex; align-items: baseline" data-show-if="slot.3">
-					<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.3.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.3.value:short}</span>
+		<div style="flex: 1" data-show-if="slot.1">
+			<div style="flex: 1"></div>
+			<div style="display: flex; align-items: center; padding-right: 6px">
+				<span style="font-size: 22px; font-weight: 600; color: var(--text)">{ccu}</span>
+				<span style="margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
+				<div style="flex: 1; align-items: flex-end; gap: 1px; margin-left: 8px">
+					<div style="display: flex; align-items: baseline" data-show-if="slot.1">
+						<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.1.label}</span>
+						<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.1.value:short}</span>
+					</div>
+					<div style="display: flex; align-items: baseline" data-show-if="slot.2">
+						<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.2.label}</span>
+						<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.2.value:short}</span>
+					</div>
+					<div style="display: flex; align-items: baseline" data-show-if="slot.3">
+						<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.3.label}</span>
+						<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.3.value:short}</span>
+					</div>
 				</div>
 			</div>
+			<div style="flex: 1"></div>
 		</div>
-		<div style="flex: 1"></div>
+		<div style="flex: 1; margin-top: 2px; padding-right: 6px" data-show-if="!slot.1">
+			<div style="flex: 1" data-show-if="${HAS_RELEASES}">
+				${garden(15, 2, 11, 2, 2, "flex: 1; margin-bottom: 3px")}
+				${counts30(12)}
+			</div>
+			${GARDEN_LOADING}
+		</div>
 	</div>
 </widget>
 
-<!-- anything smaller: two stats. -->
+<!-- anything smaller: two stats. Releases style: the last 30 days (2 rows of 15), the 30-day prod / dev counts in the
+     header. -->
 <widget state="data" name="tiny" min-width="0" min-height="0" refresh="topEnd">
 	<div style="padding: 4px 6px 8px 12px">
 		<div style="display: flex; align-items: center">
-			<img src="{game.iconUrl}" style="width: 18px; height: 18px; border-radius: 6px; background: var(--divider); margin-right: 7px">
+			<img src="{game.iconUrl}" style="width: 18px; height: 18px; border-radius: 6px; background: var(--divider); margin-right: 7px" data-show-if="!allGames">
+			${ALL_GAMES_TITLE}
 			<span style="flex: 1; font-size: 12px; font-weight: 500; color: var(--text2)">{game}</span>
-			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{status}</span>
-			<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)"></tt-icon>
-		</div>
-		<div style="flex: 1"></div>
-		<div style="display: flex; align-items: center; padding-right: 6px">
-			<span style="font-size: 22px; font-weight: 600; color: var(--text)">{ccu}</span>
-			<span style="margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
-			<div style="flex: 1; align-items: flex-end; gap: 1px; margin-left: 8px">
-				<div style="display: flex; align-items: baseline" data-show-if="slot.1">
-					<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.1.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.1.value:short}</span>
-				</div>
-				<div style="display: flex; align-items: baseline" data-show-if="slot.2">
-					<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.2.label}</span>
-					<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.2.value:short}</span>
+			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)" data-show-if="slot.1">{status}</span>
+			<div data-show-if="!slot.1">
+				<div style="display: flex; align-items: baseline; margin-left: 6px" data-show-if="${HAS_RELEASES}">
+					<span style="font-size: 12px; font-weight: 700; color: var(--rg3)">{${R}.prod30}</span>
+					<span style="margin-left: 5px; font-size: 12px; font-weight: 700; color: var(--rb3)">{${R}.dev30}</span>
 				</div>
 			</div>
+			<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)"></tt-icon>
 		</div>
-		<div style="flex: 1"></div>
+		<div style="flex: 1" data-show-if="slot.1">
+			<div style="flex: 1"></div>
+			<div style="display: flex; align-items: center; padding-right: 6px">
+				<span style="font-size: 22px; font-weight: 600; color: var(--text)">{ccu}</span>
+				<span style="margin-left: 4px; font-size: 12px; font-weight: 700; color: var(--delta)" data-show-if="delta">{delta}</span>
+				<div style="flex: 1; align-items: flex-end; gap: 1px; margin-left: 8px">
+					<div style="display: flex; align-items: baseline" data-show-if="slot.1">
+						<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.1.label}</span>
+						<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.1.value:short}</span>
+					</div>
+					<div style="display: flex; align-items: baseline" data-show-if="slot.2">
+						<span style="flex: 1; font-size: 10px; color: var(--text2); text-align: right">{slot.2.label}</span>
+						<span style="margin-left: 4px; font-size: 11px; font-weight: 600; color: var(--text)">{slot.2.value:short}</span>
+					</div>
+				</div>
+			</div>
+			<div style="flex: 1"></div>
+		</div>
+		<div style="flex: 1; margin-top: 2px; padding-right: 6px" data-show-if="!slot.1">
+			${garden(15, 2, 11, 2, 2, "flex: 1").replace("<svg ", `<svg data-show-if="${HAS_RELEASES}" `)}
+			${GARDEN_LOADING}
+		</div>
 	</div>
 </widget>
 

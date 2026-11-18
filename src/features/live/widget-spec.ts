@@ -98,7 +98,14 @@ type Common = {
 	/** Drawn only when this binding has a value ("series": the chart has points); "!name" for the opposite. */
 	showIf?: Binding | "series" | `!${Binding}` | "!series";
 	background?: Fill;
+	/**
+	 * What a tap on the element's box does (Android 12+, at most 8 per drawing; docs/WIDGET_SPEC.md, Tap areas): the
+	 * widget's own tap, a refresh, or (all-games widgets) pick / clear `games.N`. An older APK ignores it.
+	 */
+	tap?: WidgetTap;
 };
+
+export type WidgetTap = "open" | "refresh" | `toggle:games.${number}`;
 
 export type ContainerElement = Common & {
 	type: "column" | "row" | "stack";

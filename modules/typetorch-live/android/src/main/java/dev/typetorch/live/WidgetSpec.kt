@@ -74,6 +74,11 @@ internal class Node(
   val svg: String,
   /** `fill` (stretched), `contain` (meet) or `cover` (slice). */
   val fit: String,
+  /**
+   * What a tap on the element's box does (Android 12+): `open`, `refresh` or `toggle:games.N`; null: nothing of its
+   * own (the whole widget's tap). See [WidgetSpecs.TAP].
+   */
+  val tap: String? = null,
 )
 
 /** One size class of one state. */
@@ -105,6 +110,9 @@ internal object WidgetSpecs {
   const val PICK = "pick"
   private val STATES = listOf(DATA, LOADING, UNREACHABLE, SIGNED_OUT, PICK)
   private val CORNERS = setOf("topEnd", "topStart", "bottomEnd", "bottomStart", "none")
+
+  /** The `tap` values this build knows; anything else is ignored (a newer spec's tap degrades to no tap). */
+  val TAP = Regex("^(open|refresh|toggle:games\\.[0-9]{1,2})$")
 
   private const val MAX_DEPTH = 24
   private const val MAX_NODES = 400
@@ -368,6 +376,7 @@ internal object WidgetSpecs {
       placeholder = if (o.has("placeholder")) str(o, "placeholder") else if (type == "image") "divider" else null,
       svg = if (svgOk) svg else "",
       fit = fit,
+      tap = str(o, "tap")?.trim()?.takeIf { TAP.matches(it) },
     )
   }
 

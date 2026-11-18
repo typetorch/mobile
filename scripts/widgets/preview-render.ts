@@ -15,7 +15,7 @@ import type { ChartElement, Fill, SizeLayout, SvgElement, WidgetElement, WidgetS
 /** A text segment: the text and its colour (a token name or a CSS colour); no colour = the element's. */
 type Seg = { t: string; c?: string };
 type Val = string | Seg[] | null;
-type Sample = { label: string; values: Record<string, Val>; series: number[]; deltaUp: boolean };
+type Sample = { label: string; values: Record<string, Val>; series: number[]; deltaUp: boolean; allGames?: boolean };
 
 const u = (t: string, c: string): Seg => ({ t, c });
 const p = (t: string): Seg => ({ t });
@@ -140,6 +140,120 @@ const SAMPLES: Sample[] = [
 ];
 
 // ---------------------------------------------------------------------------------------------------------------------
+// Release garden sample (docs/WIDGET_RELEASES.md: the answer's top-level `releases`, flattened into path bindings)
+
+/** level(n): 0 for 0, 1 for 1, 2 for 2–3, 3 for 4+. */
+const level = (n: number) => (n === 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : 3);
+
+type Day = { p: number; d: number };
+
+/** 60 days of made-up releases (seeded, so the page looks the same each time). */
+function releaseDays(seed: number, prodRate: number, devRate: number): Day[] {
+	let x = seed;
+	const rnd = () => {
+		x = (x * 16807) % 2147483647;
+		return x / 2147483647;
+	};
+	const out: Day[] = [];
+	for (let i = 0; i < 60; i++) {
+		const p = rnd() < prodRate ? 1 + Math.floor(rnd() * 3) : 0;
+		const d = rnd() < devRate ? 1 + Math.floor(rnd() * 5) : 0;
+		out.push({ p, d });
+	}
+	return out;
+}
+
+/** The days as the widget's bindings (`releases.prod`, `releases.days.N.bg`, …), counts and tokens by the backend's rule. */
+function releaseValues(days: Day[], lastProdGame?: (day: number) => string | null): Record<string, Val> {
+	const out: Record<string, Val> = {};
+	let prod = 0;
+	let dev = 0;
+	let prod30 = 0;
+	let dev30 = 0;
+	let last = -1;
+	days.forEach(({ p, d }, i) => {
+		prod += p;
+		dev += d;
+		if (i >= 30) {
+			prod30 += p;
+			dev30 += d;
+		}
+		if (p) last = i;
+		out[`releases.days.${i}.p`] = String(p);
+		out[`releases.days.${i}.d`] = String(d);
+		out[`releases.days.${i}.bg`] = p ? `rg${level(p)}` : d ? `rb${level(d)}` : "r0";
+		out[`releases.days.${i}.tri`] = p && d ? `rb${level(d)}` : "rnone";
+	});
+	out["releases.value"] = String(prod);
+	out["releases.prod"] = String(prod);
+	out["releases.dev"] = String(dev);
+	out["releases.prod30"] = String(prod30);
+	out["releases.dev30"] = String(dev30);
+	out["releases.lastProd"] = last < 0 ? null : last === 59 ? "today" : `${59 - last} d ago`;
+	out["releases.lastProdLabel"] = last < 0 ? null : `#${100 + prod} · v0.9.${prod % 10}`;
+	if (lastProdGame) out["releases.lastProdGame"] = last < 0 ? null : lastProdGame(last);
+	return out;
+}
+
+// Each sample gets its own release history (the sparse one: no prod release in 60 days).
+const RELEASE_SAMPLES = [releaseDays(7, 0.28, 0.55), releaseDays(11, 0.12, 0.35), releaseDays(5, 0, 0.12)];
+SAMPLES.forEach((s, i) => Object.assign(s.values, releaseValues(RELEASE_SAMPLES[i] ?? [])));
+
+/** A made-up game icon (an SVG data URL), so the svg `<image>`s have something to draw. */
+function icon(initials: string, from: string, to: string): string {
+	const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><defs><linearGradient id="g" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="40" height="40" fill="url(#g)"/><text x="20" y="26" font-size="16" font-weight="700" font-family="sans-serif" text-anchor="middle" fill="#fff">${initials}</text></svg>`;
+	return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+/** The all-games sample (docs/WIDGET_SPEC.md, All games): four games, merged releases, `games.N`, the pick. */
+const GAMES: { id: string; name: string; iconUrl: string | null; days: Day[] }[] = [
+	{ id: "prison", name: "The Prison", iconUrl: icon("TP", "#e0803a", "#7a2f12"), days: releaseDays(11, 0.18, 0.35) },
+	{ id: "zomvival", name: "Zomvival", iconUrl: icon("Z", "#5aa060", "#1d4a2a"), days: releaseDays(13, 0.12, 0.3) },
+	{ id: "cart", name: "Cart Ride", iconUrl: null, days: releaseDays(17, 0.08, 0.25) },
+	{ id: "slime", name: "Slime", iconUrl: icon("S", "#7a6ad8", "#2c2266"), days: releaseDays(19, 0.1, 0.2) },
+];
+
+function allGamesValues(pick: number | null): Record<string, Val> {
+	const shown = pick === null ? GAMES : [GAMES[pick]];
+	const days = Array.from({ length: 60 }, (_, i) => ({
+		p: shown.reduce((n, g) => n + g.days[i].p, 0),
+		d: shown.reduce((n, g) => n + g.days[i].d, 0),
+	}));
+	const values: Record<string, Val> = {
+		allGames: "1",
+		filter: pick === null ? null : GAMES[pick].id,
+		game: pick === null ? "All games" : GAMES[pick].name,
+		backend: pick === null ? "All games" : GAMES[pick].name,
+		"game.iconUrl": pick === null ? null : GAMES[pick].iconUrl,
+		updated: "12:04",
+		status: "12:04",
+		state: "fresh",
+		"slot.4": "releases",
+		...releaseValues(days, (day) => [...shown].reverse().find((g) => g.days[day].p > 0)?.name ?? null),
+	};
+	GAMES.forEach((g, n) => {
+		values[`games.${n}.id`] = g.id;
+		values[`games.${n}.name`] = g.name;
+		values[`games.${n}.iconUrl`] = g.iconUrl;
+		values[`games.${n}.picked`] = pick === n ? "1" : "";
+		values[`games.${n}.alpha`] = pick === null || pick === n ? "1" : "0.4";
+	});
+	return values;
+}
+
+SAMPLES.push({ label: "All games (4 games; tap a chip)", deltaUp: true, series: [], values: allGamesValues(null), allGames: true });
+
+/** The widget's style (Settings → Widgets): Stats, or Releases (slots ["", "", "", "releases"]) with or without data yet. */
+type Style = "stats" | "releases" | "releasesLoading";
+
+function styled(sample: Sample, style: Style): Sample {
+	if (style === "stats") return sample;
+	const values: Record<string, Val> = { ...sample.values, "slot.1": null, "slot.2": null, "slot.3": null, "slot.4": "releases", "slot.4.label": "Releases" };
+	if (style === "releasesLoading") for (const k of Object.keys(values)) if (k.startsWith("releases.")) delete values[k];
+	return { ...sample, values };
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
 // Colours
 
 type Mode = "day" | "night";
@@ -212,7 +326,7 @@ class Ctx {
 // Templates
 
 const FORMATS = new Set(["count", "grouped", "delta", "duration", "hours", "raw", "seconds", "percent", "robux", "unit", "short", "plain"]);
-const TEXTY = /^(game|backend|status|updated|state|serversLabel|slot\.\d|slot\.\d\.label)$/;
+const TEXTY = /^(game|backend|status|updated|state|serversLabel|slot\.\d|slot\.\d\.label|allGames|filter|games\.\d+\.\w+|releases\.lastProd\w*)$/;
 
 /** Fills a text template: `{name}`, `{name:format}`, `{name|fallback}`, `{{` / `}}`. */
 function fill(template: string, ctx: Ctx, plain = false): Seg[] {
@@ -301,9 +415,20 @@ const GRAVITY: Record<string, [string, string]> = {
 	fill: ["stretch", "stretch"],
 };
 
+/** What a tap area does in the preview (set by mount: `toggle:games.N` picks / clears game N of the all-games sample). */
+let onTap: ((tap: string) => void) | null = null;
+
 function render(e: WidgetElement, parent: Parent, ctx: Ctx): HTMLElement | null {
 	if (!ctx.showIf(e.showIf)) return null;
 	const el = document.createElement("div");
+	if (e.tap) {
+		const tap = e.tap;
+		el.title = `tap: ${tap}`;
+		el.addEventListener("click", (ev) => {
+			ev.stopPropagation();
+			onTap?.(tap);
+		});
+	}
 	let css = `box-sizing:border-box;padding:${edges(e.padding)};margin:${edges(e.margin)};${background(e.background, ctx, 16)}`;
 	const weight = e.weight ?? (e.type === "chart" && e.height == null ? 1 : 0);
 	if (weight > 0 && parent !== "stack") css += `flex:${weight} 1 0px;min-width:0;min-height:0;`;
@@ -393,7 +518,7 @@ function render(e: WidgetElement, parent: Parent, ctx: Ctx): HTMLElement | null 
 		default:
 			return null;
 	}
-	el.setAttribute("style", css);
+	el.setAttribute("style", e.tap ? `${css}cursor:pointer;` : css);
 	return el;
 }
 
@@ -579,6 +704,8 @@ function widget(spec: WidgetSpec, state: WidgetState, w: number, h: number, mode
 			root.style.minHeight = "0";
 			box.appendChild(root);
 		}
+		// The elements' own tap areas (data-tap → tap; Android 12+).
+		if (hit) for (const a of box.querySelectorAll<HTMLElement>('[title^="tap:"]')) a.style.outline = "1px dashed rgba(0,160,255,.9)";
 		const corner = state === "signedOut" || state === "pick" ? "none" : (layout.refresh ?? "topEnd");
 		if (hit && corner !== "none") {
 			const a = document.createElement("div");
@@ -635,6 +762,7 @@ export function mount(app: HTMLElement) {
 	const $ = <T extends HTMLElement>(sel: string) => app.querySelector(sel) as T;
 	const source = $<HTMLTextAreaElement>("#source");
 	const sampleSel = $<HTMLSelectElement>("#sample");
+	const styleSel = $<HTMLSelectElement>("#style");
 	const hit = $<HTMLInputElement>("#hit");
 	const zoom = $<HTMLSelectElement>("#zoom");
 	const customW = $<HTMLInputElement>("#cw");
@@ -649,6 +777,7 @@ export function mount(app: HTMLElement) {
 	$<HTMLElement>("#edited").hidden = edited == null;
 
 	let spec: WidgetSpec | null = null;
+	let pickedGame: number | null = null;
 	const draw = () => {
 		const r = compileWidgetHtml(source.value);
 		spec = r.spec;
@@ -657,7 +786,9 @@ export function mount(app: HTMLElement) {
 			: "No warnings.";
 		warn.className = r.warnings.length ? "warn bad" : "warn ok";
 		json.textContent = JSON.stringify(r.spec, null, 2);
-		const sample = SAMPLES[Number(sampleSel.value) || 0];
+		const base = SAMPLES[Number(sampleSel.value) || 0];
+		// All-games widgets are always the Releases style.
+		const sample = base.allGames ? { ...base, values: allGamesValues(pickedGame) } : styled(base, (styleSel.value || "stats") as Style);
 		const sizes = [...SIZES];
 		const cw = Number(customW.value);
 		const ch = Number(customH.value);
@@ -696,6 +827,15 @@ export function mount(app: HTMLElement) {
 		requestAnimationFrame(() => paint(out));
 	};
 
+	onTap = (tap) => {
+		const m = /^toggle:games\.(\d+)$/.exec(tap);
+		if (!m || !SAMPLES[Number(sampleSel.value) || 0].allGames) return;
+		const n = Number(m[1]);
+		if (n >= GAMES.length) return;
+		pickedGame = pickedGame === n ? null : n;
+		draw();
+	};
+
 	let t: ReturnType<typeof setTimeout> | undefined;
 	source.addEventListener("input", () => {
 		clearTimeout(t);
@@ -705,7 +845,7 @@ export function mount(app: HTMLElement) {
 			draw();
 		}, 250);
 	});
-	for (const c of [sampleSel, hit, zoom, customW, customH]) c.addEventListener("input", draw);
+	for (const c of [sampleSel, styleSel, hit, zoom, customW, customH]) c.addEventListener("input", draw);
 	$<HTMLButtonElement>("#reset").addEventListener("click", () => {
 		source.value = DEFAULT_WIDGET_HTML.trim();
 		save("tt-widget-html", null);

@@ -37,6 +37,7 @@ internal object Store {
   private const val K_WIDGET = "widget:"
   private const val K_WIDGET_SPEC = "widgetSpec"
   private const val K_WIDGET_SLOTS = "widgetSlots:"
+  private const val K_WIDGET_FILTER = "widgetFilter:"
   private const val K_DEFAULT_SLOTS = "defaultSlots"
   private const val K_SNAP = "snap:"
   private const val K_DEAD = "dead:"
@@ -193,14 +194,44 @@ internal object Store {
 
   // region widgets
 
+  /** The backend id of an all-games widget (docs/WIDGET_SPEC.md, All games): every signed-in backend, merged. */
+  const val ALL = "*"
+
+  /** The slots of an all-games widget: the Releases style (slot 1 empty is its marker; docs/WIDGET_RELEASES.md). */
+  val RELEASES_SLOTS = listOf("", "", "", "releases")
+
   fun widgetBackend(ctx: Context, widgetId: Int): String? = prefs(ctx).getString(K_WIDGET + widgetId, null)
 
+  /** Sets the widget's backend ([ALL] for all games); another backend than before clears the game filter. */
   fun setWidgetBackend(ctx: Context, widgetId: Int, backendId: String) {
-    prefs(ctx).edit().putString(K_WIDGET + widgetId, backendId).apply()
+    synchronized(lock) {
+      val p = prefs(ctx)
+      val edit = p.edit().putString(K_WIDGET + widgetId, backendId)
+      if (p.getString(K_WIDGET + widgetId, null) != backendId) edit.remove(K_WIDGET_FILTER + widgetId)
+      edit.apply()
+    }
   }
 
   fun removeWidget(ctx: Context, widgetId: Int) {
-    prefs(ctx).edit().remove(K_WIDGET + widgetId).remove(K_WIDGET_SLOTS + widgetId).apply()
+    prefs(ctx).edit()
+      .remove(K_WIDGET + widgetId)
+      .remove(K_WIDGET_SLOTS + widgetId)
+      .remove(K_WIDGET_FILTER + widgetId)
+      .apply()
+  }
+
+  /** The game an all-games widget is filtered to (a backend id), or null: all games. */
+  fun widgetFilter(ctx: Context, widgetId: Int): String? =
+    prefs(ctx).getString(K_WIDGET_FILTER + widgetId, null)?.takeIf { it.isNotEmpty() }
+
+  /** A tap on game [backendId] of an all-games widget: picks it, or clears the filter when it is already picked. */
+  fun toggleWidgetFilter(ctx: Context, widgetId: Int, backendId: String) {
+    synchronized(lock) {
+      val p = prefs(ctx)
+      val key = K_WIDGET_FILTER + widgetId
+      if (backendId.isEmpty() || p.getString(key, null) == backendId) p.edit().remove(key).apply()
+      else p.edit().putString(key, backendId).apply()
+    }
   }
 
   /** The stat slots new widgets get until the app sets others (docs/WIDGET_STATS.md). */
@@ -256,11 +287,16 @@ internal object Store {
     prefs(ctx).edit().putString(K_WIDGET_SLOTS + widgetId, JSONArray(sanitizeSlots(slots)).toString()).apply()
   }
 
-  /** The metric ids to ask [backendId] for: the union of the slots of its widgets among [widgetIds], at most 12. */
+  /**
+   * The metric ids to ask [backendId] for: the union of the slots of its widgets among [widgetIds], at most 12. An
+   * all-games widget counts for every backend and adds `releases`.
+   */
   fun metricsFor(ctx: Context, backendId: String, widgetIds: IntArray): List<String> {
     val out = LinkedHashSet<String>()
     for (id in widgetIds.distinct()) {
-      if (widgetBackend(ctx, id) != backendId) continue
+      val w = widgetBackend(ctx, id)
+      if (w != backendId && w != ALL) continue
+      if (w == ALL) out.add("releases")
       for (slot in widgetSlots(ctx, id)) if (slot.isNotEmpty()) out.add(slot)
     }
     return out.take(MAX_METRICS)
@@ -315,8 +351,24 @@ internal object Store {
         series = LiveData.mergeSeries(prev?.series.orEmpty(), data.series, SERIES_WINDOW_MS),
         metrics = if (askedMetrics) data.metrics else (prev?.metrics ?: data.metrics),
         iconUrl = data.iconUrl ?: prev?.iconUrl,
+        extra = keepReleases(data.extra, prev?.extra),
       )
       writeSnapshotLocked(ctx, id, Snapshot(merged, now, 0L), clearDead = true)
+    }
+  }
+
+  /**
+   * The answer's unknown top-level fields (kept for path bindings: `releases`, the release garden); an answer without
+   * `releases` (an older backend, a failed part) keeps the cached one.
+   */
+  private fun keepReleases(now: JSONObject?, prev: JSONObject?): JSONObject? {
+    if (now != null && now.has("releases") && !now.isNull("releases")) return now
+    val old = prev?.opt("releases") ?: return now
+    if (old == JSONObject.NULL) return now
+    return try {
+      JSONObject((now ?: JSONObject()).toString()).put("releases", old)
+    } catch (t: Throwable) {
+      now
     }
   }
 

@@ -15,13 +15,15 @@ up and where) therefore ships as an **OTA update** (`eas update`, JS only), not 
 | Bindings, rich text | `.../WidgetValues.kt` (templates, slots, paths), `.../Units.kt` (unit formats, deltas, the metric catalog) |
 | Pictures | `.../WidgetImages.kt` (download, disk cache, decode) |
 | Widget plumbing | `.../WidgetUpdater.kt` (state, sizes, bitmaps, taps, the metrics to fetch), `res/layout{,-night}/ttl_widget_canvas.xml` |
+| All games | `.../AllGames.kt` (the merged live object), `.../TypeTorchWidgetProvider.kt` (the game toggle), `.../WidgetConfigureActivity.kt` ("All games") |
 | Stat slots | `.../Store.kt` (per widget and the defaults), the app's Settings → Widgets (`src/features/live/WidgetSettings.tsx`) |
 
 ## How it is drawn
 
 - **One bitmap per size and mode.** The widget layout (`ttl_widget_canvas.xml`) is a FrameLayout with an ImageView for
   the day drawing, one for the night drawing (`layout-night/` shows the night one, so the system's dark mode switch
-  needs no redraw), and four transparent corner hit areas for refresh.
+  needs no redraw), a pool of 8 transparent tap areas (section Tap areas) and four transparent corner hit areas for
+  refresh.
 - **Size.** Android 12+: the sizes the launcher reports (`OPTION_APPWIDGET_SIZES`, up to 2, typically portrait and
   landscape); each is drawn and the launcher picks. Older: min/max width/height by orientation (portrait: min width x
   max height). A resize (`onAppWidgetOptionsChanged`) redraws from the cache.
@@ -33,9 +35,10 @@ up and where) therefore ships as an **OTA update** (`eas update`, JS only), not 
 - **Never blank.** A sent spec that fails to parse is rejected by `setWidgetSpec` (the saved one stays). A saved spec
   that fails to draw falls back to the built-in default (`DEFAULT_JSON`, the same as `WIDGET_SPEC`); if even that fails,
   a plain text widget (`ttl_widget_message.xml`). Errors go to logcat (`adb logcat -s TypeTorchLive`).
-- **Taps.** The whole widget opens the game (the backend's `link`; the pick state opens the game picker, signed out
-  opens the app). The refresh hit area is a fixed 36 dp square in the corner the size layout names (`refresh`); draw a
-  refresh icon there yourself.
+- **Taps.** The whole widget opens the game (the backend's `link`; an all-games widget the picked game, else the app;
+  the pick state opens the game picker, signed out opens the app). The refresh hit area is a fixed 36 dp square in the
+  corner the size layout names (`refresh`); draw a refresh icon there yourself. Android 12+: elements with a `tap`
+  get their own tap areas on top (section Tap areas).
 
 ## Format
 
@@ -99,6 +102,7 @@ Every element takes these (all optional):
 | `gravity` | placement inside a `stack`: `topStart` (default), `top`, `topEnd`, `start`, `center`, `end`, `bottomStart`, `bottom`, `bottomEnd`, `fill` |
 | `showIf` | a binding name: drawn only when it has a value (`series`: the chart has points); `!name` for the opposite |
 | `background` | a colour, or `{ color, radius }` (radius in dp or `"system"`) |
+| `tap` | what a tap on the element's box does (Android 12+): `open`, `refresh` or `toggle:games.N` (section Tap areas) |
 
 | Type | Fields |
 |---|---|
@@ -189,6 +193,96 @@ DOCTYPE / entities (the whole svg is skipped), animation.
 template characters (a longer one is dropped when the spec is read: the element draws nothing), 200,000 after filling,
 2,000 elements and text runs, 32 levels, 4,000 drawn elements (with `use`). Problems go to logcat once each
 (`adb logcat -s TypeTorchLive`, `svg: …`).
+
+### Tap areas
+
+Any element can have a `tap`:
+
+| `tap` | A tap on the element's box |
+|---|---|
+| `open` | the widget's own tap: the game (the backend's `link`), an all-games widget's picked game (else the app) |
+| `refresh` | a refresh, like the corner area (nothing in the signedOut / pick states) |
+| `toggle:games.N` | all-games widgets: picks `games.N` (N from 0), or clears the pick when it is already picked; the widget redraws from the cache (no fetch) and the pick is saved per widget (it survives restarts). Nothing on a per-game widget or when there is no `games.N` |
+
+Anything else is ignored (an unknown value from a newer spec: no tap area).
+
+```jsonc
+{ "type": "row", "gap": 6, "children": [
+  { "type": "image", "bind": "games.0.iconUrl", "size": 18, "tap": "toggle:games.0", "showIf": "games.0.id" },
+  { "type": "image", "bind": "games.1.iconUrl", "size": 18, "tap": "toggle:games.1", "showIf": "games.1.id" }
+] }
+```
+
+How it works: while drawing, the renderer records each drawn element's box (margins excluded, padding included) in dp
+from the drawing's top left; elements hidden by `showIf` (or an empty text) get none. On Android 12+ the widget layout
+places one transparent view of a pool of **8** per box (`RemoteViews.setViewLayoutMargin` / `setViewLayoutWidth` /
+`setViewLayoutHeight`, in dp, `top|left`), each with its own PendingIntent (a toggle: a broadcast to the widget provider
+with a request code and data per widget and area) and a TalkBack label (the texts drawn inside it, else the game's name,
+"Open" or "Refresh"). Unused views stay gone.
+
+- **Stacking.** Boxes are taken in drawing order, a parent before its children: a child's area (a toggle inside an
+  `open` row) and a later sibling lie on top. The refresh corner lies above every tap area; the whole widget's tap is
+  below them all.
+- **At most 8** per drawing (the first 8 in that order); boxes under 1 dp are skipped.
+- **Per element, not per SVG shape.** A `tap` on an `svg` element covers its whole box. For several targets drawn in
+  one svg (game chips), lay elements over it in a `stack`: e.g. a `row` of `spacer`s with a `width` / `height` and a
+  `tap` each (a spacer draws nothing but still gets its box).
+- **Android 11 and older:** RemoteViews can't move views there, so there are no tap areas: only the whole widget's tap
+  and the refresh corner. Put anything essential on the whole-widget tap or in the app.
+- **Off by a little.** The boxes are in the drawn size's dp; the bitmap is stretched to the widget's real size, which can
+  differ by a few dp from the size the launcher reported (Android 12+ picks one of up to 2 drawings by size). Keep tap
+  targets at least ~32 dp and a few dp apart.
+
+### All games
+
+A widget whose backend is `*` (picked as "All games", the first row of the configure screen, or set by the app with
+`setWidgetConfig(id, { backendId: "*" })`) shows every signed-in backend (one whose token isn't dead) at once. Docs:
+docs/WIDGET_RELEASES.md, section 3.
+
+- **Slots.** Picking "All games" sets the Releases slots `["", "", "", "releases"]` (also `setWidgetConfig` with `*` and
+  no `slots`), so the data layouts' Releases variant (`showIf: "!slot.1"`) draws it. Picking a single game again
+  brings back the default slots.
+- **Fetching.** A refresh of an all-games widget fetches every signed-in backend in parallel (the same worker thread and
+  25 s deadline as one backend; one failing or timing out doesn't stop the others) and caches each answer on its own,
+  exactly like a per-game widget. Every backend is asked `metrics=releases` plus the slots of its own widgets (the
+  union, at most 12 ids), so a per-game widget's refresh keeps `releases` in the cache too. Then the game icons
+  (`games.N.iconUrl`) and the pictures the spec shows with the merged values are downloaded (inside the same deadline).
+- **Drawing** merges the cached answers at every draw (no network): the live watch's polls of any game and a game
+  toggle redraw it from the cache.
+- **States.** No signed-in backend: `signedOut`. No backend answered yet: `loading` (`unreachable` once a fetch failed).
+  Otherwise `data`, also when the picked game has no answer yet (its numbers are missing, the toggles still work).
+
+**The merged live object** (what the bindings and paths see):
+
+| Path | Value |
+|---|---|
+| `game.name` (`{game}`) | `All games`, or the picked game's name |
+| `game.iconUrl` | the picked game's icon, else null |
+| `backend` | `All games`, or the picked backend's name |
+| `allGames` | `"1"` (only on all-games widgets: `showIf: "allGames"`) |
+| `filter` | the picked backend id; absent when all games show (`showIf: "filter"` / `"!filter"`) |
+| `games` | up to 6 signed-in backends in the app's order: `{ id, name, iconUrl, picked: "1" \| "", alpha: "1" \| "0.4" }` (`picked` is empty and `alpha` 1 for every game when none is picked; with a pick the others get 0.4). `{games.N.name}`, `showIf: "games.N.picked"`, `opacity='{games.N.alpha}'` in an svg |
+| `releases`, `metrics.releases` | the same merged object at both paths, the shape of one backend's (docs/WIDGET_RELEASES.md, section 1): below. Read `releases.*` (every answer carries it, the live watch's polls too; older APKs drop a metric's extra fields) |
+| `metrics.*` (others) | the picked game's metrics; none when all games show |
+| `ccu`, `servers`, `delta` | summed over the games (or the picked game's) |
+| `peakToday`, `lastHour.*`, `series` (the CCU line) | the picked game's; missing / empty when all games show |
+| `updated`, `status` | the oldest of the merged answers' times; `offline` when any of them is stale |
+
+**`releases` merged** over all games (or only the picked one), from each game's top-level `releases` (else its
+`metrics.releases`): the axis is the 60 `days` of the game whose last
+day is the newest; every game's days are added to it by `date` (a day without a date: by its position from the end),
+`p` and `d` summed per day. From those days: `prod` / `dev` (all days), `prod30` / `dev30` (the last 30), `value` =
+`prod`, `prev` null, `unit` `count`; `lastProd` (`today`, `1 d ago`, `12 d ago`; null when no prod day) from the
+newest day with `p > 0`; `lastProdLabel` the label of the game that made that release, and `lastProdGame` its name
+(new, merged only); the cell tokens recomputed with the backend's rule (`level(n)`: 0, 1, 2 for 2–3, 3 for 4+; p > 0:
+`bg = "rg" + level(p)`, `tri = d > 0 ? "rb" + level(d) : "rnone"`; only d: `bg = "rb" + level(d)`; neither: `r0`). A
+game without `days` (an older backend) adds nothing per day; when no game has days, the counts are the games' own
+counts summed and `days` is empty. No game with the metric: `metrics.releases` is missing.
+
+A per-game widget reads the backend's own top-level `releases` (`{releases.days.59.bg}`): unknown top-level fields
+are kept in the cache (each up to 16,000 characters as JSON; 60 days are about 4,000), and an answer without
+`releases` keeps the cached one. Metric entries keep their other fields in the cache too (`days`, `prod`, `lastProd`,
+…), so `{metrics.releases.days.59.bg}` also works on this build.
 
 ### Bindings (text templates)
 
@@ -345,9 +439,10 @@ pasted between the `"""` marks, and check that the JSON holds no `$`, which a Ko
 
 ## Limits
 
-- One bitmap: no per-element taps (only the whole widget and the corner refresh area), no text selection, and
-  TalkBack reads the widget as one image with its `description`.
-- The refresh area is a fixed 36 dp corner square; it can't follow an icon placed elsewhere.
+- One bitmap: per-element taps only on Android 12+ and at most 8 (section Tap areas; older: the whole widget and the
+  corner refresh area), no text selection, and TalkBack reads the widget as one image with its `description` (plus
+  the tap areas' labels).
+- The refresh corner is a fixed 36 dp square; an icon placed elsewhere needs `tap: "refresh"` (Android 12+ only).
 - Laid out left to right (`start` = left) even in RTL languages.
 - The widget is redrawn only on updates (30 minutes, refresh, the app, live watch polls, resizes), so text shows the
   clock time, never a relative "3 min ago".

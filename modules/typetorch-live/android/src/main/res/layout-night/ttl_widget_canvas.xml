@@ -19,6 +19,58 @@
     android:layout_height="match_parent"
     android:scaleType="fitXY" />
 
+  <!-- The spec's tap areas (an element's `tap`): positioned per drawing on Android 12+ (setViewLayoutMargin / Width /
+       Height in dp from the top left), gone when unused and on older Android. Before the refresh corners, so a
+       corner stays on top. -->
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_0"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
+    android:visibility="gone" />
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_1"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
+    android:visibility="gone" />
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_2"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
+    android:visibility="gone" />
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_3"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
+    android:visibility="gone" />
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_4"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
+    android:visibility="gone" />
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_5"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
+    android:visibility="gone" />
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_6"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
+    android:visibility="gone" />
+  <FrameLayout
+    android:id="@+id/ttl_w_tap_7"
+    android:layout_width="0dp"
+    android:layout_height="0dp"
+    android:layout_gravity="top|left"
+    android:visibility="gone" />
+
   <FrameLayout
     android:id="@+id/ttl_w_hit_top_end"
     android:layout_width="@dimen/ttl_widget_hit"

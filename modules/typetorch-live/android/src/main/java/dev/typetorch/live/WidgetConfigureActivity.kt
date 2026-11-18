@@ -10,8 +10,9 @@ import android.widget.ListView
 import android.widget.SimpleAdapter
 
 /**
- * Picks the game of a widget: lists the backends saved by setBackends (the stats it shows are picked in the app,
- * Settings → Widgets). Started by the launcher when the widget is
+ * Picks the game of a widget: "All games" first (backend id [Store.ALL]: the releases of every signed-in backend), then
+ * the backends saved by setBackends (the stats it shows are picked in the app, Settings → Widgets). Started by the
+ * launcher when the widget is
  * placed (and on reconfigure), or by the widget's own "Tap to pick a game". Dialog theme, dark in dark mode.
  */
 class WidgetConfigureActivity : Activity() {
@@ -47,7 +48,13 @@ class WidgetConfigureActivity : Activity() {
         return
       }
       val current = Store.widgetBackend(this, widgetId)
-      val rows: List<Map<String, String>> = backends.map { b ->
+      val allSubtitle = getString(R.string.ttl_configure_all_subtitle)
+      val rows: List<Map<String, String>> = listOf(
+        mapOf(
+          "title" to getString(R.string.ttl_configure_all),
+          "subtitle" to (if (current == Store.ALL) "$allSubtitle · current" else allSubtitle),
+        ),
+      ) + backends.map { b ->
         val host = WatchNotifications.hostOf(b.url)
         mapOf(
           "title" to b.name.ifBlank { host },
@@ -61,7 +68,9 @@ class WidgetConfigureActivity : Activity() {
         arrayOf("title", "subtitle"),
         intArrayOf(android.R.id.text1, android.R.id.text2),
       )
-      list.setOnItemClickListener { _, _, position, _ -> backends.getOrNull(position)?.let { pick(it) } }
+      list.setOnItemClickListener { _, _, position, _ ->
+        if (position == 0) pickAll() else backends.getOrNull(position - 1)?.let { pick(it) }
+      }
     } catch (t: Throwable) {
       Log.w("configure failed", t)
       finish()
@@ -70,15 +79,33 @@ class WidgetConfigureActivity : Activity() {
 
   private fun pick(b: Backend) {
     try {
+      // From all games back to one game: the Releases slots go (they were set for all games), the defaults come.
+      val wasAll = Store.widgetBackend(this, widgetId) == Store.ALL
       Store.setWidgetBackend(this, widgetId, b.id)
       // A new widget gets the default stat slots (the app's, else the built-in ones); a reconfigure keeps its own.
-      if (!Store.hasWidgetSlots(this, widgetId)) Store.setWidgetSlots(this, widgetId, Store.defaultSlots(this))
-      // The configure activity owns the first draw (the launcher sends no update for it).
-      WidgetUpdater.refresh(this, intArrayOf(widgetId), null, true)
-      setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
+      if (wasAll || !Store.hasWidgetSlots(this, widgetId)) Store.setWidgetSlots(this, widgetId, Store.defaultSlots(this))
+      done()
     } catch (t: Throwable) {
       Log.w("pick failed", t)
     }
     finish()
+  }
+
+  /** All games: the Releases style (an all-games widget shows the merged release garden). */
+  private fun pickAll() {
+    try {
+      Store.setWidgetBackend(this, widgetId, Store.ALL)
+      Store.setWidgetSlots(this, widgetId, Store.RELEASES_SLOTS)
+      done()
+    } catch (t: Throwable) {
+      Log.w("pick failed", t)
+    }
+    finish()
+  }
+
+  private fun done() {
+    // The configure activity owns the first draw (the launcher sends no update for it).
+    WidgetUpdater.refresh(this, intArrayOf(widgetId), null, true)
+    setResult(RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
   }
 }

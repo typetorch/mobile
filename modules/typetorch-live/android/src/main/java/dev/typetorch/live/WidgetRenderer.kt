@@ -25,8 +25,11 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
-/** A drawn widget: the bitmap and the text TalkBack reads. */
-internal class Rendered(val bitmap: Bitmap, val description: String)
+/** A tappable element's box ([Node.tap]) in dp from the drawing's top left; [label]: its text, for TalkBack. */
+internal class TapBox(val tap: String, val x: Float, val y: Float, val w: Float, val h: Float, val label: String)
+
+/** A drawn widget: the bitmap, the text TalkBack reads and the tappable boxes (in draw order). */
+internal class Rendered(val bitmap: Bitmap, val description: String, val taps: List<TapBox> = emptyList())
 
 /**
  * Draws a [SizeLayout] into one bitmap at the widget's size: a small flex layout (column / row / stack with weights,
@@ -48,7 +51,12 @@ internal object WidgetRenderer {
     val palette: Map<String, Int>,
     val values: WidgetValues,
     val texts: MutableList<String>,
+    /** In pre-order (a parent before its children, earlier siblings first): later boxes lie on top. */
+    val taps: MutableList<TapBox?> = ArrayList(),
   )
+
+  /** Tappable boxes recorded per drawing at most (the layout's pool of hit areas holds 8). */
+  private const val MAX_TAPS = 8
 
   fun isNight(ctx: Context): Boolean =
     (ctx.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
@@ -81,7 +89,7 @@ internal object WidgetRenderer {
       draw(r, c, layout.root, 0f, 0f, wPx.toFloat(), hPx.toFloat())
       val desc = layout.description?.let { values.template(it) }?.takeIf { it.isNotBlank() }
         ?: r.texts.joinToString(", ")
-      return Rendered(bmp, desc)
+      return Rendered(bmp, desc, r.taps.filterNotNull())
     } catch (t: Throwable) {
       bmp.recycle()
       throw t
@@ -333,6 +341,10 @@ internal object WidgetRenderer {
     val cw = iw - n.padding.horizontal * s
     val ch = ih - n.padding.vertical * s
     if (cw <= 0f || ch <= 0f) return
+    // A tappable element takes its place in the list before its children, so theirs lie on top of it.
+    val tap = n.tap
+    val tapAt = if (tap != null && r.taps.size < MAX_TAPS) r.taps.size.also { r.taps.add(null) } else -1
+    val tapFrom = r.texts.size
     val save = c.save()
     try {
       c.clipRect(ix, iy, ix + iw, iy + ih)
@@ -356,6 +368,20 @@ internal object WidgetRenderer {
     } finally {
       c.restoreToCount(save)
     }
+    if (tap != null && tapAt >= 0) {
+      r.taps[tapAt] = tapBox(r, tap, ix, iy, iw, ih, r.texts.subList(tapFrom, r.texts.size).joinToString(" "))
+    }
+  }
+
+  /** The element's box (px, margins excluded, padding included) in dp, clipped at the top left; null when tiny. */
+  private fun tapBox(r: Pass, tap: String, x: Float, y: Float, w: Float, h: Float, label: String): TapBox? {
+    val s = r.s
+    val left = max(0f, x / s)
+    val top = max(0f, y / s)
+    val right = (x + w) / s
+    val bottom = (y + h) / s
+    if (right - left < 1f || bottom - top < 1f) return null
+    return TapBox(tap, left, top, right - left, bottom - top, label)
   }
 
   private fun drawText(r: Pass, c: Canvas, n: Node, x: Float, y: Float, w: Float) {

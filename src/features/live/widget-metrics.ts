@@ -99,3 +99,19 @@ export function slotTitle(id: string): string {
 export function fourSlots(slots: readonly string[]): string[] {
 	return [0, 1, 2, 3].map((i) => slots[i] ?? "");
 }
+
+/**
+ * A widget's style (docs/WIDGET_RELEASES.md): Stats (the four slots above) or Releases, the release garden. Releases is
+ * stored as the slots ["", "", "", "releases"]: slot 1 empty is the marker the widget HTML shows the garden on
+ * (`!slot.1`), slot 4 makes the native side fetch the `releases` metric. `releases` is therefore not in METRICS (it
+ * isn't a stat a slot shows).
+ */
+export type WidgetStyle = "stats" | "releases";
+
+export const RELEASES_METRIC = "releases";
+export const RELEASES_SLOTS: readonly string[] = ["", "", "", RELEASES_METRIC];
+
+/** What the widget draws: the garden whenever slot 1 is empty (as the widget HTML decides). */
+export function widgetStyle(slots: readonly string[]): WidgetStyle {
+	return slots[0] ? "stats" : "releases";
+}

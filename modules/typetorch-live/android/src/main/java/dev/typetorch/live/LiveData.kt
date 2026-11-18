@@ -19,22 +19,61 @@ internal data class LastHour(
 
 /**
  * One entry of `metrics` (docs/WIDGET_STATS.md): [value] in [unit] (`count`, `ratio`, `robux`, `seconds`, `hours`, or
- * something newer), [prev] the same for the window before; any field may be null.
+ * something newer), [prev] the same for the window before; any field may be null. [extra]: the entry's other fields
+ * (`releases`: `prod`, `dev`, `lastProd`, `days[]`, …), kept in the cache so the spec's path bindings reach them
+ * (`{metrics.releases.days.59.bg}`).
  */
-internal data class Metric(val value: Double?, val prev: Double?, val unit: String?, val label: String?) {
-  fun toJson(): JSONObject = JSONObject()
-    .put("value", value ?: JSONObject.NULL)
-    .put("prev", prev ?: JSONObject.NULL)
-    .put("unit", unit ?: JSONObject.NULL)
-    .put("label", label ?: JSONObject.NULL)
+internal data class Metric(
+  val value: Double?,
+  val prev: Double?,
+  val unit: String?,
+  val label: String?,
+  val extra: JSONObject? = null,
+) {
+  fun toJson(): JSONObject {
+    val o = JSONObject()
+    val x = extra
+    if (x != null) {
+      val keys = x.keys()
+      while (keys.hasNext()) {
+        val k = keys.next()
+        if (k !in KNOWN) o.put(k, x.opt(k))
+      }
+    }
+    o.put("value", value ?: JSONObject.NULL)
+    o.put("prev", prev ?: JSONObject.NULL)
+    o.put("unit", unit ?: JSONObject.NULL)
+    o.put("label", label ?: JSONObject.NULL)
+    return o
+  }
 
   companion object {
-    fun fromJson(o: JSONObject): Metric = Metric(
-      value = o.numOrNull("value"),
-      prev = o.numOrNull("prev"),
-      unit = o.strOrNull("unit")?.takeIf { it.isNotBlank() },
-      label = o.strOrNull("label")?.takeIf { it.isNotBlank() },
-    )
+    private val KNOWN = setOf("value", "prev", "unit", "label")
+
+    /** A field bigger than this (as JSON text) isn't kept (60 `days` are about 3,500 characters). */
+    private const val MAX_EXTRA_CHARS = 16_000
+
+    fun fromJson(o: JSONObject): Metric {
+      var extra: JSONObject? = null
+      val keys = o.keys()
+      while (keys.hasNext()) {
+        val k = keys.next()
+        if (k in KNOWN) continue
+        val v = o.opt(k) ?: continue
+        if (v == JSONObject.NULL) continue
+        if ((v is JSONObject || v is JSONArray) && v.toString().length > MAX_EXTRA_CHARS) continue
+        if (v is String && v.length > MAX_EXTRA_CHARS) continue
+        val e = extra ?: JSONObject().also { extra = it }
+        e.put(k, v)
+      }
+      return Metric(
+        value = o.numOrNull("value"),
+        prev = o.numOrNull("prev"),
+        unit = o.strOrNull("unit")?.takeIf { it.isNotBlank() },
+        label = o.strOrNull("label")?.takeIf { it.isNotBlank() },
+        extra = extra,
+      )
+    }
   }
 }
 
@@ -113,7 +152,10 @@ internal data class LiveData(
   companion object {
     private val KNOWN = setOf("game", "ccu", "servers", "delta", "peakToday", "series", "lastHour", "metrics")
 
-    /** An unknown field bigger than this (as JSON text) isn't kept in the cache. */
+    /**
+     * An unknown field bigger than this (as JSON text) isn't kept in the cache. The top-level `releases` (60 days) is
+     * about 3,500–4,000 characters.
+     */
     private const val MAX_EXTRA_CHARS = 16_000
     private const val MAX_METRICS = 32
 
