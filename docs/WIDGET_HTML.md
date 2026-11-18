@@ -166,7 +166,7 @@ about 155k of the 200k characters.
 | Size class | Weeks (cols) | Typical grid box → cell | Beside / under | All games |
 |---|---|---|---|---|
 | medium (4×2) | 14 | 225 × 117 dp → 13.6 dp | prod / dev, last prod, its label (its game on all games) | 6 chips above the grid, the picked one with its name |
-| wide (4×1) | 22 | 250 × 75 dp (380 × 115 widget) → 9.3 dp; 205 × 39 (330 × 78) → 4.8 dp | prod / dev, last prod | 6 chips in the header (no status) |
+| wide (4×1) | 12 | the full height (380 × 115 widget: 95 dp → cells ≈ 12 dp), right-aligned (`gardenRight`) | no title row; a 168 dp column right of the grid: icon, name, ↻; prod / dev; last prod and its label | the same column: up to 5 chips (28 dp) and ↻; a line per game (up to 3: icon, name, its prod / dev, its last prod, from the program's `games.N.prod` / `dev` / `lastProd`); the totals |
 | grid (2×2) | 11 | 144 × 93 dp → 11 dp | prod30 / dev30 under | the first 4 games' chips above |
 | small4 (2×1 tall) | 24 | 144 × 41 dp → 5 dp | prod30 / dev30 under | no chips |
 | small (2×1) | 26 | 176 × 41 dp → 5 dp | prod30 / dev30 in the header (in place of the status) | no chips |
@@ -174,6 +174,14 @@ about 155k of the 200k characters.
 
 An older backend that sends 60 days: the cell indices count from 182, so its days don't reach the grid (no arithmetic
 to align them to today): the grid stays blank, the counts show.
+
+**The 4×1** draws the grid with `gardenRight(cols, style)`: `viewBox="0 0 {w} {h}"` (the box in dp, fit fill) and the
+grid moved to the right edge and scaled to the box's height with `transform='translate({w}) scale({h}) scale(1/82)
+translate(-gridWidth)'` (the svg templates have no arithmetic, but transforms compose), so it fills the height and sits
+next to the side column on any widget size; a box narrower than 12 weeks cuts the oldest columns. The side column's
+middle (the game lines, or one game's prod / dev) has `flex: 1`, so on a short 4×1 (330 × 78) the chips and the totals
+keep their place and the lines are clipped (one fits). The game lines need the widget program (`games.N.prod` is only in
+its games[]); without it (an older APK) they are hidden.
 
 **All games** (backend `*`, docs/WIDGET_SPEC.md, All games; the next APK): the merged live object has `allGames: "1"`,
 `game` = "All games" or the picked game, the merged top-level `releases` (plus `lastProdGame`) and `games.N`. The header

@@ -3,7 +3,7 @@
  * merged into one live object, filtered to the picked game (the program state's `filter`).
  */
 import { answerFor, liveRequest, metricIds } from "./answers";
-import { isObj, metric, metrics, num, rounded, text, webUrl } from "./json";
+import { cleanName, isObj, metric, metrics, num, rounded, text, webUrl } from "./json";
 import { mergeReleases } from "./releases";
 import type { Backend, Json, JsonObject, Responses, Widget } from "./types";
 
@@ -21,10 +21,42 @@ export function allRequest(widget: Widget, backend: string) {
 	return liveRequest(backend, metricIds(widget.slots, RELEASES));
 }
 
-/** The game's name: the answer's, else the backend's, else "All games". */
+/** The game's name (emoji stripped): the answer's, else the backend's, else "All games". */
 function gameName(d: JsonObject | undefined, b: Backend): string {
 	const g = d && isObj(d.game) ? d.game : null;
-	return text(g && g.name) || text(b.name) || NAME;
+	return cleanName(g && g.name) || cleanName(b.name) || NAME;
+}
+
+/** A non-negative whole count (as the merge counts). */
+function whole(v: Json | undefined): number {
+	const d = num(v);
+	return d == null || d <= 0 ? 0 : Math.trunc(d);
+}
+
+/**
+ * One game's own numbers for games[] (the 4x1 all-games list): prod / dev over all its days (the history the backend
+ * sends, 182 days), and its last prod ("today", "1 d ago", counted from its own last day); from the totals when it has
+ * no days (an older backend). Nulls when the game has no releases.
+ */
+function ownReleases(m: JsonObject | null): { prod: number | null; dev: number | null; lastProd: string | null } {
+	if (!m) return { prod: null, dev: null, lastProd: null };
+	const days = Array.isArray(m.days) ? m.days : null;
+	if (!days || !days.length) {
+		return { prod: m.prod != null ? whole(m.prod) : whole(m.value), dev: whole(m.dev), lastProd: text(m.lastProd) };
+	}
+	let prod = 0;
+	let dev = 0;
+	let last = -1;
+	for (let i = 0; i < days.length; i++) {
+		const o = days[i];
+		if (!isObj(o)) continue;
+		const p = whole(o.p);
+		prod += p;
+		dev += whole(o.d);
+		if (p > 0) last = i;
+	}
+	const ago = days.length - 1 - last;
+	return { prod, dev, lastProd: last < 0 ? null : ago === 0 ? "today" : `${ago} d ago` };
 }
 
 function iconOf(d: JsonObject | undefined): string | null {
@@ -108,7 +140,17 @@ export function allGames(
 	const arr: Json[] = games.map((g) => {
 		const d = has(g.id) ? datas[g.id] : undefined;
 		const on = picked != null && picked.id === g.id;
-		return { id: g.id, name: gameName(d, g), iconUrl: iconOf(d), picked: on ? "1" : "", alpha: picked == null || on ? "1" : "0.4" };
+		const own = ownReleases(d ? releasesOf(d) : null);
+		return {
+			id: g.id,
+			name: gameName(d, g),
+			iconUrl: iconOf(d),
+			picked: on ? "1" : "",
+			alpha: picked == null || on ? "1" : "0.4",
+			prod: own.prod,
+			dev: own.dev,
+			lastProd: own.lastProd,
+		};
 	});
 
 	// metrics: the picked game's, with `releases` merged (recomputed) in either case.

@@ -3,13 +3,14 @@
  * Bundled by scripts/widgets/build-program.ts into one self-contained script (program.generated.ts); ES2020, no
  * imports at run time, no I/O.
  *
- *  - per-game widgets: one `/v1/mobile/live` request (360 minutes, the slots' metrics), the answer passed through;
+ *  - per-game widgets: one `/v1/mobile/live` request (360 minutes, the slots' metrics), the answer passed through (the
+ *    game's name without emoji);
  *  - all-games widgets ("*"): one request per signed-in backend (`releases` + the slots), merged (all-games.ts);
  *  - taps: `action:toggle:<backend id>` picks a game of an all-games widget, or clears the pick when it's picked.
  */
 import { ALL, MAX_REQUESTS, allGames, allRequest } from "./all-games";
 import { answerFor, liveRequest, metricIds } from "./answers";
-import { isObj } from "./json";
+import { cleanName, isObj } from "./json";
 import type { Backend, JsonObject, PlanInput, PlanOutput, ShapeInput, ShapeOutput, TapInput, TapOutput, Widget } from "./types";
 
 function stateOf(widget: Widget): JsonObject {
@@ -36,6 +37,14 @@ export function plan(input: PlanInput): PlanOutput {
 	return { requests: [liveRequest(widget.backendId, metricIds(widget.slots))] };
 }
 
+/** The answer with its game's name stripped of emoji (a copy, only when that changes anything). */
+function withCleanName(live: JsonObject | null): JsonObject | null {
+	if (!live || !isObj(live.game) || typeof live.game.name !== "string") return live;
+	const name = cleanName(live.game.name);
+	if (name == null || name === live.game.name) return live;
+	return { ...live, game: { ...live.game, name } };
+}
+
 export function shape(input: ShapeInput): ShapeOutput {
 	const widget = input.widget;
 	const backends = backendsOf(input.backends);
@@ -44,7 +53,7 @@ export function shape(input: ShapeInput): ShapeOutput {
 	if (widget.backendId === ALL) return allGames(widget, backends, responses, state);
 	if (!backends.some((b) => b.id === widget.backendId)) return { live: null, state };
 	const live = answerFor(responses[widget.backendId], liveRequest(widget.backendId, metricIds(widget.slots)));
-	return { live, state };
+	return { live: withCleanName(live), state };
 }
 
 /**

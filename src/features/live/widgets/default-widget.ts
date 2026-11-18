@@ -39,8 +39,7 @@ const n2 = (n: number) => String(Math.round(n * 100) / 100);
  * Fixed cell geometry in viewBox units; `data-fit="contain"` scales it uniformly into the element's box (the svg
  * templates have no arithmetic, so the cells can't be laid out from {w} / {h}): pick [cols] for the box's aspect.
  */
-function garden(cols: number, style: string): string {
-	const c = Math.min(cols, Math.floor(DAYS / ROWS));
+function gardenCells(c: number): string {
 	const step = CELL + GAP;
 	const r = RADIUS;
 	const a = r * (1 - Math.SQRT1_2); // where the diagonal meets a rounded corner
@@ -61,7 +60,27 @@ function garden(cols: number, style: string): string {
 	out.push(
 		`<rect x='${n2((c - 1) * step + sw / 2)}' y='${n2((ROWS - 1) * step + sw / 2)}' width='${CELL - sw}' height='${CELL - sw}' rx='${n2(r - sw / 2)}' fill='none' stroke='var(--text)' stroke-opacity='0.8' stroke-width='${sw}'/>`,
 	);
-	return `<svg viewBox="0 0 ${c * step - GAP} ${ROWS * step - GAP}" data-fit="contain" style="${style}">${out.join("")}</svg>`;
+	return out.join("");
+}
+
+const weeks = (cols: number) => Math.min(cols, Math.floor(DAYS / ROWS));
+
+function garden(cols: number, style: string): string {
+	const c = weeks(cols);
+	return `<svg viewBox="0 0 ${c * (CELL + GAP) - GAP} ${ROWS * (CELL + GAP) - GAP}" data-fit="contain" style="${style}">${gardenCells(c)}</svg>`;
+}
+
+/**
+ * The garden at the element's full height, right-aligned in its box (the 4x1): the viewBox is the box in dp
+ * (`0 0 {w} {h}`, fit fill), and the grid is moved to the right edge and scaled to the height with transforms
+ * (`translate({w}) scale({h}) scale(1/grid height)`), so no arithmetic is needed. A box narrower than the grid cuts its
+ * oldest (left) columns.
+ */
+function gardenRight(cols: number, style: string): string {
+	const c = weeks(cols);
+	const gw = c * (CELL + GAP) - GAP;
+	const gh = ROWS * (CELL + GAP) - GAP;
+	return `<svg viewBox="0 0 {w} {h}" style="${style}"><g transform='translate({w}) scale({h}) scale(${(1 / gh).toFixed(6)}) translate(-${gw})'>${gardenCells(c)}</g></svg>`;
 }
 
 /** "Loading releases…" in the garden's place until the release data is there. */
@@ -75,19 +94,19 @@ const GARDEN_LOADING = `<div style="display: grid; flex: 1" data-show-if="!${HAS
  * chips as `toggle:games.N` where the program doesn't run). The icon is dimmed by `games.N.alpha` (0.4 when another
  * game is picked) and ringed when `games.N.picked` ("1"; "" → the ring's opacity falls back to 0).
  */
-function chipIcon(n: number, show = ""): string {
+function chipIcon(n: number, show = "", size = 32): string {
 	const g = `games.${n}`;
-	return `<svg viewBox="0 0 32 32" style="width: 32px; height: 32px"${show ? ` data-show-if="${show}"` : ""}><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{${g}.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{${g}.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{${g}.picked|0}'/></svg>`;
+	return `<svg viewBox="0 0 32 32" style="width: ${size}px; height: ${size}px"${show ? ` data-show-if="${show}"` : ""}><defs><clipPath id='i'><circle cx='16' cy='16' r='11'/></clipPath></defs><g opacity='{${g}.alpha|1}'><circle cx='16' cy='16' r='11' fill='var(--chip)'/><image href='{${g}.iconUrl}' x='5' y='5' width='22' height='22' preserveAspectRatio='xMidYMid slice' clip-path='url(#i)'/></g><circle cx='16' cy='16' r='14.2' fill='none' stroke='var(--text)' stroke-width='1.6' stroke-opacity='{${g}.picked|0}'/></svg>`;
 }
 
 /** The first [count] games' chips in a row (each hidden when there is no such game); [named]: the picked one as a pill with its name. */
-function chips(count: number, named: boolean, style: string): string {
+function chips(count: number, named: boolean, style: string, size = 32): string {
 	const out: string[] = [];
 	for (let n = 0; n < count; n++) {
 		const g = `games.${n}`;
 		const inner = named
 			? `<div style="display: flex; align-items: center; padding-right: 9px; background: var(--chip); border-radius: 16px" data-show-if="${g}.picked">${chipIcon(n)}<span style="width: 70px; font-size: 10.5px; font-weight: 500; color: var(--text)">{${g}.name}</span></div>${chipIcon(n, `!${g}.picked`)}`
-			: chipIcon(n);
+			: chipIcon(n, "", size);
 		out.push(`<div data-show-if="${g}.id" data-tap="action:toggle:{${g}.id}">${inner}</div>`);
 	}
 	return `<div style="display: flex; align-items: center; ${style}" data-show-if="allGames">${out.join("")}</div>`;
@@ -264,15 +283,15 @@ export const DEFAULT_WIDGET_HTML = `
 	</div>
 </widget>
 
-<!-- 4x1 (wide and short): the CCU left, the 6-hour line in the middle, the stats right. Releases style: 22 weeks (7 × 22),
-     the counts (the whole history) and the last prod release right; all games: the game chips in the header. -->
+<!-- 4x1 (wide and short): the CCU left, the 6-hour line in the middle, the stats right. Releases style (no title row): the
+     last 12 weeks at the full height, right-aligned next to a 168 dp column: all games: the game chips (tap: one game) and
+     ↻, a line per game (its prod, dev, last prod), the totals; one game: icon, name and ↻, prod / dev, last prod. -->
 <widget state="data" name="wide" min-width="240" min-height="60" refresh="topEnd">
 	<div style="padding: 4px 6px 8px 12px">
-		<div style="display: flex; align-items: center">
-			<img src="{game.iconUrl}" style="width: 18px; height: 18px; border-radius: 6px; background: var(--divider); margin-right: 7px" data-show-if="!allGames">
+		<div style="display: flex; align-items: center" data-show-if="slot.1">
+			<img src="{game.iconUrl}" style="width: 18px; height: 18px; border-radius: 6px; background: var(--divider); margin-right: 7px">
 			<span style="flex: 1; font-size: 12px; font-weight: 500; color: var(--text2)">{game}</span>
-			${chips(6, false, "gap: 2px; margin: 0 10px 0 4px")}
-			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)" data-show-if="!allGames">{status}</span>
+			<span style="margin-left: 6px; font-size: 10px; color: var(--text2)">{status}</span>
 			<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)"></tt-icon>
 		</div>
 		<div style="display: flex; flex: 1; align-items: stretch; padding-right: 6px" data-show-if="slot.1">
@@ -311,20 +330,63 @@ export const DEFAULT_WIDGET_HTML = `
 				</div>
 			</div>
 		</div>
-		<div style="flex: 1; padding-right: 6px" data-show-if="!slot.1">
-			<div style="display: flex; flex: 1; align-items: stretch" data-show-if="${HAS_RELEASES}">
-				${garden(22, "flex: 1; margin: 1px 0 3px")}
-				<div style="justify-content: center; align-items: flex-end; gap: 1px; margin-left: 10px">
-					<div style="display: flex; align-items: baseline">
-						<span style="font-size: 13px; font-weight: 700; color: var(--rg3)">{${R}.prod}</span>
-						<span style="margin-left: 3px; font-size: 10px; color: var(--text2)">prod</span>
-						<span style="margin-left: 8px; font-size: 13px; font-weight: 700; color: var(--rb3)">{${R}.dev}</span>
-						<span style="margin-left: 3px; font-size: 10px; color: var(--text2)">dev</span>
+		<div style="display: flex; flex: 1; align-items: stretch; margin: 6px 8px 2px 0" data-show-if="!slot.1">
+			${gardenRight(12, "flex: 1").replace("<svg ", `<svg data-show-if="${HAS_RELEASES}" `)}
+			${GARDEN_LOADING}
+			<div style="width: 168px; margin-left: 14px">
+				<div style="flex: 1" data-show-if="allGames">
+					<div style="display: flex; align-items: center">
+						${chips(5, false, "flex: 1", 28).replace(' data-show-if="allGames"', "")}
+						<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)" data-tap="refresh"></tt-icon>
 					</div>
-					<span style="font-size: 10px; color: var(--text2)">last prod {${R}.lastProd|none}</span>
+					<div style="flex: 1; justify-content: center; gap: 1px">
+					<div style="display: flex; align-items: center" data-show-if="games.0.prod">
+						<img src="{games.0.iconUrl}" style="width: 13px; height: 13px; border-radius: 7px; background: var(--chip); margin-right: 6px">
+						<span style="flex: 1; font-size: 10.5px; color: var(--text2)">{games.0.name}</span>
+						<span style="margin-left: 4px; font-size: 10.5px; font-weight: 700; color: var(--rg3)">{games.0.prod}</span>
+						<span style="margin-left: 5px; font-size: 10.5px; font-weight: 700; color: var(--rb3)">{games.0.dev}</span>
+						<span style="width: 44px; font-size: 10px; color: var(--text2); text-align: right">{games.0.lastProd|—}</span>
+					</div>
+					<div style="display: flex; align-items: center" data-show-if="games.1.prod">
+						<img src="{games.1.iconUrl}" style="width: 13px; height: 13px; border-radius: 7px; background: var(--chip); margin-right: 6px">
+						<span style="flex: 1; font-size: 10.5px; color: var(--text2)">{games.1.name}</span>
+						<span style="margin-left: 4px; font-size: 10.5px; font-weight: 700; color: var(--rg3)">{games.1.prod}</span>
+						<span style="margin-left: 5px; font-size: 10.5px; font-weight: 700; color: var(--rb3)">{games.1.dev}</span>
+						<span style="width: 44px; font-size: 10px; color: var(--text2); text-align: right">{games.1.lastProd|—}</span>
+					</div>
+					<div style="display: flex; align-items: center" data-show-if="games.2.prod">
+						<img src="{games.2.iconUrl}" style="width: 13px; height: 13px; border-radius: 7px; background: var(--chip); margin-right: 6px">
+						<span style="flex: 1; font-size: 10.5px; color: var(--text2)">{games.2.name}</span>
+						<span style="margin-left: 4px; font-size: 10.5px; font-weight: 700; color: var(--rg3)">{games.2.prod}</span>
+						<span style="margin-left: 5px; font-size: 10.5px; font-weight: 700; color: var(--rb3)">{games.2.dev}</span>
+						<span style="width: 44px; font-size: 10px; color: var(--text2); text-align: right">{games.2.lastProd|—}</span>
+					</div>
+					</div>
+					<div style="display: flex; align-items: baseline">
+						<span style="font-size: 16px; font-weight: 700; color: var(--rg3)">{${R}.prod|0}</span>
+						<span style="margin-left: 4px; font-size: 12px; color: var(--text2)">prod</span>
+						<span style="margin-left: 10px; font-size: 16px; font-weight: 700; color: var(--rb3)">{${R}.dev|0}</span>
+						<span style="margin-left: 4px; font-size: 12px; color: var(--text2)">dev</span>
+					</div>
+				</div>
+				<div style="flex: 1" data-show-if="!allGames">
+					<div style="display: flex; align-items: center">
+						<img src="{game.iconUrl}" style="width: 20px; height: 20px; border-radius: 6px; background: var(--divider); margin-right: 7px">
+						<span style="flex: 1; font-size: 12px; font-weight: 500; color: var(--text)">{game}</span>
+						<tt-icon name="refresh" style="width: 15px; height: 15px; padding: 4px; color: var(--text2)" data-tap="refresh"></tt-icon>
+					</div>
+					<div style="display: flex; flex: 1; align-items: center">
+						<span style="font-size: 16px; font-weight: 700; color: var(--rg3)">{${R}.prod|—}</span>
+						<span style="margin-left: 4px; font-size: 12px; color: var(--text2)">prod</span>
+						<span style="margin-left: 10px; font-size: 16px; font-weight: 700; color: var(--rb3)">{${R}.dev|—}</span>
+						<span style="margin-left: 4px; font-size: 12px; color: var(--text2)">dev</span>
+					</div>
+					<div>
+						<span style="font-size: 11px; color: var(--text2)">last prod {${R}.lastProd|none}</span>
+						<span style="font-size: 10px; color: var(--text2)" data-show-if="${R}.lastProdLabel">{${R}.lastProdLabel}</span>
+					</div>
 				</div>
 			</div>
-			${GARDEN_LOADING}
 		</div>
 	</div>
 </widget>

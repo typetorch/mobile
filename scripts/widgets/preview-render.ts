@@ -244,6 +244,14 @@ function allGamesValues(pick: number | null): Record<string, Val> {
 		values[`games.${n}.iconUrl`] = g.iconUrl;
 		values[`games.${n}.picked`] = pick === n ? "1" : "";
 		values[`games.${n}.alpha`] = pick === null || pick === n ? "1" : "0.4";
+		// The game's own numbers over all its days (the program's games[]: the 4x1 list).
+		let last = -1;
+		g.days.forEach((x, i) => {
+			if (x.p > 0) last = i;
+		});
+		values[`games.${n}.prod`] = String(g.days.reduce((t, x) => t + x.p, 0));
+		values[`games.${n}.dev`] = String(g.days.reduce((t, x) => t + x.d, 0));
+		values[`games.${n}.lastProd`] = last < 0 ? null : last === DAYS - 1 ? "today" : `${DAYS - 1 - last} d ago`;
 	});
 	return values;
 }
@@ -448,7 +456,8 @@ function render(e: WidgetElement, parent: Parent, ctx: Ctx): HTMLElement | null 
 			onTap?.(tap);
 		});
 	}
-	let css = `box-sizing:border-box;padding:${edges(e.padding)};margin:${edges(e.margin)};${background(e.background, ctx, 16)}`;
+	// overflow hidden: the renderer clips every element to its box.
+	let css = `box-sizing:border-box;overflow:hidden;padding:${edges(e.padding)};margin:${edges(e.margin)};${background(e.background, ctx, 16)}`;
 	const weight = e.weight ?? (e.type === "chart" && e.height == null ? 1 : 0);
 	if (weight > 0 && parent !== "stack") css += `flex:${weight} 1 0px;min-width:0;min-height:0;`;
 	else css += e.type === "text" ? "flex:0 1 auto;min-width:0;" : "flex:0 0 auto;";
@@ -521,7 +530,10 @@ function render(e: WidgetElement, parent: Parent, ctx: Ctx): HTMLElement | null 
 				.map((x) => x[0])
 				.join("");
 			css += `width:${w}px;height:${h}px;border-radius:${r}px;overflow:hidden;`;
-			el.innerHTML = has
+			const url = ctx.sample.values[e.bind ?? "game.iconUrl"];
+			el.innerHTML = typeof url === "string" && /^(data:|https?:)/.test(url)
+				? `<img src="${esc(url)}" style="width:100%;height:100%;display:block;object-fit:cover">`
+				: has
 				? `<div style="width:100%;height:100%;display:grid;place-items:center;background:linear-gradient(135deg,#5b6b7f,#2b3340);color:#fff;font:700 ${Math.round(
 						Math.min(w, h) * 0.42,
 					)}px/1 sans-serif">${esc(initials)}</div>`
@@ -754,6 +766,7 @@ function paint(container: HTMLElement) {
 const SIZES: { label: string; w: number; h: number }[] = [
 	{ label: "4×2", w: 330, h: 160 },
 	{ label: "4×1", w: 330, h: 78 },
+	{ label: "4×1 (the user's)", w: 380, h: 115 },
 	{ label: "2×2", w: 168, h: 156 },
 	{ label: "2×1", w: 200, h: 78 },
 	{ label: "2×1 tall", w: 168, h: 96 },

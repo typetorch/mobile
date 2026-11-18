@@ -312,6 +312,20 @@ function checkReleases(rel: Obj, exp: Expected, what: string): void {
 // ---------------------------------------------------------------------------------------------------------------------
 // shape: all games, no filter
 
+/** A game's own games[] numbers, recomputed from its cells: all days, the last prod by position from its last day. */
+function own(cells: Cell[]): Obj {
+	let last = -1;
+	cells.forEach((c, i) => {
+		if (c.p > 0) last = i;
+	});
+	const ago = cells.length - 1 - last;
+	return {
+		prod: cells.reduce((n, c) => n + c.p, 0),
+		dev: cells.reduce((n, c) => n + c.d, 0),
+		lastProd: last < 0 ? null : ago === 0 ? "today" : `${ago} d ago`,
+	};
+}
+
 const GAMES = [
 	{ name: "Gnome Game", cells: A_DAYS, label: "#142 · v0.9.3" },
 	{ name: "Tower Run", cells: B_DAYS, label: "#12 · v1.2.0" },
@@ -332,12 +346,12 @@ let gameIds: Json = null;
 	eq(
 		live.games,
 		[
-			{ id: "acc-gnome", name: "Gnome Game", iconUrl: "https://img.example.com/a.png", picked: "", alpha: "1" },
-			{ id: "acc-tower", name: "Tower Run", iconUrl: "https://img.example.com/b.png", picked: "", alpha: "1" },
-			{ id: "acc-old", name: "Old account", iconUrl: null, picked: "", alpha: "1" },
-			{ id: "acc-broken", name: "Broken account", iconUrl: null, picked: "", alpha: "1" },
+			{ id: "acc-gnome", name: "Gnome Game", iconUrl: "https://img.example.com/a.png", picked: "", alpha: "1", ...own(A_DAYS) },
+			{ id: "acc-tower", name: "Tower Run", iconUrl: "https://img.example.com/b.png", picked: "", alpha: "1", ...own(B_DAYS) },
+			{ id: "acc-old", name: "Old account", iconUrl: null, picked: "", alpha: "1", ...own(C_DAYS) },
+			{ id: "acc-broken", name: "Broken account", iconUrl: null, picked: "", alpha: "1", prod: null, dev: null, lastProd: null },
 		],
-		"all: games[]",
+		"all: games[] (with each game's own prod / dev / last prod over all its days)",
 	);
 	eq(Object.keys(live.metrics as Obj), ["releases"], "all: metrics = releases only (unpicked)");
 	eq((live.metrics as Obj).releases, live.releases, "all: metrics.releases = releases");
@@ -348,6 +362,45 @@ let gameIds: Json = null;
 	ok(ds[100].bg !== "rnone", "all: the first history day (game A) isn't rnone");
 	ok(ds.slice(100).every((d) => d.bg !== "rnone"), "all: no rnone inside the history");
 	eq(ds[181].date, iso(TODAY), "all: the axis ends today (the newest game's days)");
+}
+
+// Emoji stripped from game names (games[], game.name, lastProdGame; per-game widgets too), the rest unchanged.
+{
+	const emojiBody = (b: Obj, name: string) => ({ ...b, game: { ...(b.game as Obj), name } });
+	const responses = {
+		...allResponses,
+		"acc-gnome": { [REL_KEY]: { ok: true, body: emojiBody(A_BODY, "The Prison 🔊"), at: NOW - 60000 } },
+		"acc-tower": { [REL_KEY]: { ok: true, body: emojiBody(B_BODY, "🇹🇷 Tower  Run 1️⃣ 👨‍👩‍👧"), at: NOW - 60000 } },
+	};
+	const live = call("shape", { widget: allWidget({ filter: "acc-gnome" }), backends, responses, now: NOW }).live as Obj;
+	eq(
+		(live.games as Obj[]).slice(0, 2).map((g) => g.name),
+		["The Prison", "Tower Run 1"],
+		"emoji: stripped from games[] names (flags, keycaps, ZWJ sequences; spaces collapsed)",
+	);
+	eq((live.game as Obj).name, "The Prison", "emoji: …and from the picked game's name");
+	const allEmoji = { ...responses, "acc-gnome": { [REL_KEY]: { ok: true, body: emojiBody(A_BODY, "🔊🔊"), at: NOW - 60000 } } };
+	eq(
+		((call("shape", { widget: allWidget(null), backends, responses: allEmoji, now: NOW }).live as Obj).games as Obj[])[0].name,
+		"Gnome account",
+		"emoji: a name of only emoji → the backend's name",
+	);
+	const w = { id: 1, backendId: "acc-gnome", slots: ["dau"], state: null };
+	const per = call("shape", {
+		widget: w,
+		backends,
+		responses: { "acc-gnome": { "/v1/mobile/live?minutes=360&metrics=dau": { ok: true, body: emojiBody(A_BODY, "The Prison 🔊"), at: NOW } } },
+		now: NOW,
+	}).live as Obj;
+	eq(per, emojiBody(A_BODY, "The Prison"), "emoji: per-game: only the name changes");
+}
+
+// Older backends' games[] numbers come from their totals (no days).
+{
+	const old = { ok: true, body: { game: { name: "G" }, ccu: 1, metrics: { releases: { value: 5, unit: "count", dev: 9, lastProd: "4 d ago" } } } };
+	const g = ((call("shape", { widget: allWidget(null), backends: backends.slice(0, 1), responses: { "acc-gnome": { [REL_KEY]: old } }, now: NOW }).live as Obj)
+		.games as Obj[])[0];
+	eq([g.prod, g.dev, g.lastProd], [5, 9, "4 d ago"], "games[]: an older backend's totals and last prod");
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

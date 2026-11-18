@@ -77,3 +77,16 @@ export function metrics(v: Json | undefined): JsonObject {
 	}
 	return out;
 }
+
+/**
+ * A game's name without emoji (pictographs, flags, keycaps, joiners, variation selectors), spaces collapsed: "The Prison
+ * 🔊" → "The Prison". Null when nothing is left.
+ */
+export function cleanName(v: unknown): string | null {
+	const s = text(v);
+	if (s == null) return null;
+	const out = s.replace(EMOJI, "").replace(/\s+/g, " ").trim();
+	return out ? out : null;
+}
+
+const EMOJI = /[\p{Extended_Pictographic}\u{1F1E6}-\u{1F1FF}\u{1F3FB}-\u{1F3FF}\u200D\uFE0E\uFE0F\u20E3]/gu;

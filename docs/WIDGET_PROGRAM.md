@@ -61,7 +61,9 @@ function tap({ widget, action, now }) {
   used; the program must be a string built at dev time.
 - The default program reproduces today exactly: per-game widgets pass the live answer through (asking for the slots'
   metrics); all-games widgets merge every game's releases by date with the colour rule, **keeping "rnone" for days no
-  game has history**, games[] with picked/alpha, the filter as program state (tap `action:toggle:<backend id>`).
+  game has history**, games[] with picked/alpha and each game's own `prod` / `dev` (all its days) and `lastProd` (the
+  4×1 list), the filter as program state (tap `action:toggle:<backend id>`). Game names lose their emoji ("The Prison
+  🔊" → "The Prison"; per-game widgets' `game.name` too).
 - A check script runs the program in node/bun against recorded answers (fixtures) and compares `live` with today's
   native output for the same input.
 
