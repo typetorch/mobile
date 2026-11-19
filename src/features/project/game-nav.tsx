@@ -6,9 +6,11 @@
  * header's label and a thin line under the header say which side you're on.
  *
  * Tapping another tab goes back to the game's home on that tab and, when you left that tab on a page, opens that page
- * again. Tapping the lit tab goes to its list. Long-press: All projects, Settings. The TypeTorch tab's badge counts the
- * errors of the last hour (or the open alerts) from GET /v1/mobile/live.
+ * again. Tapping the lit tab goes to its list. Long-press: All projects, Settings, Backends. The TypeTorch tab's badge
+ * counts what's new since you last looked (errors of the last hour and open alerts from GET /v1/mobile/live, above what
+ * they were when you were last on a TypeTorch screen of this game, or their lowest since); being on one marks it read.
  */
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useGlobalSearchParams, usePathname } from "expo-router";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -83,6 +85,41 @@ export function goGameTab(universeId: number, tab: GameTab, current: GameTab) {
 	if (page) router.push(page as never);
 }
 
+// What the badge has shown as read, per game ---------------------------------------------------------------------------
+
+const SEEN_KEY = "tt.game-badge.seen.v1";
+type Seen = { errors: number; alerts: number };
+const seen = new Map<number, Seen>();
+let seenLoaded = false;
+void AsyncStorage.getItem(SEEN_KEY)
+	.then((raw) => {
+		const obj = raw ? (JSON.parse(raw) as Record<string, Seen>) : {};
+		for (const [k, v] of Object.entries(obj)) if (!seen.has(Number(k))) seen.set(Number(k), v);
+	})
+	.catch(() => undefined)
+	.finally(() => {
+		seenLoaded = true;
+		emit();
+	});
+const saveSeen = () => void AsyncStorage.setItem(SEEN_KEY, JSON.stringify(Object.fromEntries(seen))).catch(() => undefined);
+
+/**
+ * The badge for these live numbers: what rose above the read baseline. The baseline follows the numbers down (an
+ * error leaving the hour, an alert resolved), and `read` moves it to now. A game seen for the first time starts read.
+ */
+function badgeOf(universeId: number, errors: number, alerts: number, read: boolean): number {
+	const b = seen.get(universeId);
+	if (!b || read || errors < b.errors || alerts < b.alerts) {
+		const next = read || !b ? { errors, alerts } : { errors: Math.min(errors, b.errors), alerts: Math.min(alerts, b.alerts) };
+		if (!b || next.errors !== b.errors || next.alerts !== b.alerts) {
+			seen.set(universeId, next);
+			saveSeen();
+		}
+		return Math.max(0, errors - next.errors) + Math.max(0, alerts - next.alerts);
+	}
+	return Math.max(0, errors - b.errors) + Math.max(0, alerts - b.alerts);
+}
+
 /** The game's TypeTorch backend (the first connected one for this universe), or null. */
 export function useGameBackend(universeId: number) {
 	const { backendForUniverse } = useAccounts();
@@ -126,7 +163,9 @@ export function GameBar({ universeId, active, isHome }: { universeId: number; ac
 	}, [universeId, active, isHome, pathname, params]);
 
 	const h = live.data?.health;
-	const badge = h ? (h.errors1h ?? 0) || (h.alertsOpen ?? 0) : 0;
+	useSyncExternalStore(subscribe, () => version);
+	// On a TypeTorch screen of this game everything counts as read.
+	const badge = h && seenLoaded ? badgeOf(universeId, h.errors1h ?? 0, h.alertsOpen ?? 0, active === "typetorch") : 0;
 	const tabs = TABS.filter((t) => t.tab !== "typetorch" || backend);
 	return (
 		<View style={{ flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, borderColor: p.border, backgroundColor: p.background, paddingBottom: insets.bottom }}>
