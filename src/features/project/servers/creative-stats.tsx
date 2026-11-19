@@ -17,7 +17,8 @@ import { useTheme } from "@/theme";
 
 import type { RangeSpec } from "../analytics";
 
-export const ADS_MANAGER_URL = "https://create.roblox.com/dashboard/ads";
+/** Ads Manager's "Manage ads" page (create.roblox.com/dashboard/ads is a 404). */
+export const ADS_MANAGER_URL = "https://create.roblox.com/advertise/manage";
 const STATS_RANGE: RangeSpec = { kind: "preset", days: 28 };
 
 /** Where per-ad clicks and CTR are: on the campaign pages (a saved creative has no numbers of its own). */
