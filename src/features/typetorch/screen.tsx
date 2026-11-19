@@ -19,6 +19,8 @@ import { useTheme } from "@/theme";
 
 import { SignedOutNotice } from "./components";
 import { FILTER_KEYS, hasFilterParams, readFilters, refreshFilterNow, setTTFilters } from "./filters";
+import { GameBar, headerLine } from "@/features/project/game-nav";
+
 import { ProjectPickerTitle, TTNavLeft, useCurrentPage } from "./nav";
 import { TT_PAGES } from "./pages";
 import { Sheet, SheetItem } from "./sheet";
@@ -152,6 +154,8 @@ export function TTScreen({
 	const exports = useMemo(() => createExportRegistry(), []);
 	const foreign = useForeignBackendLink(backendId, !!account);
 	const current = useCurrentPage();
+	const theme = useTheme();
+	const inGame = !!account?.universeId;
 	useLinkFilters(backendId, !!account);
 	// A screen opening moves the filter bar's "now" forward (when a minute has passed), so "1 h" means the last hour.
 	useEffect(() => {
@@ -185,6 +189,7 @@ export function TTScreen({
 	return (
 		<ViewLinkProvider registry={registry}>
 			<ExportProvider registry={exports}>
+			<View style={{ flex: 1 }}>
 			<Screen refreshing={refreshing} onRefresh={scroll ? onRefresh : undefined} scroll={scroll}>
 				<Stack.Screen
 					options={{
@@ -195,10 +200,14 @@ export function TTScreen({
 							<ProjectPickerTitle
 								account={account}
 								page={typeof title === "function" ? (TT_PAGES.find((x) => x.key === current.key)?.title ?? title(account)) : title}
+								tab={inGame ? "typetorch" : undefined}
 							/>
 						),
-						headerBackVisible: current.detail,
-						headerLeft: current.detail ? undefined : () => <TTNavLeft account={account} />,
+						// In a game: the game's bottom bar and a back arrow (to the TypeTorch tab's list); a backend without a
+						// game keeps its sidebar.
+						headerBackVisible: inGame || current.detail,
+						headerLeft: inGame || current.detail ? undefined : () => <TTNavLeft account={account} />,
+						...(inGame ? { headerBackground: headerLine(theme, "typetorch") } : {}),
 						headerRight: () => (
 							<View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
 								<HealthDot backendId={backendId} />
@@ -222,6 +231,8 @@ export function TTScreen({
 					{children({ account, api, backendId })}
 				</ErrorBoundary>
 			</Screen>
+			{inGame ? <GameBar universeId={account.universeId!} active="typetorch" /> : null}
+			</View>
 			</ExportProvider>
 		</ViewLinkProvider>
 	);

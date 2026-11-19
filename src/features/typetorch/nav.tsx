@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { GameIcon } from "@/components/ProjectRow";
 import { Icon, Txt, type IconName } from "@/components/ui";
+import { SideLabel, type GameTab } from "@/features/project/game-nav";
 import { useAddedIds } from "@/features/project/pins";
 import { useAddedProjects, useProject } from "@/features/project/projects";
 import { TOOL_SECTIONS } from "@/features/project/tools";
@@ -306,7 +307,7 @@ function ProjectSidebar({ universeId, open, onClose }: { universeId: number; ope
 
 type PickerContext = { kind: "tt"; account: BackendAccount } | { kind: "project"; universeId: number };
 
-function PickerTitle({ name, page, context }: { name: string; page: string; context: PickerContext }) {
+function PickerTitle({ name, page, context, tab }: { name: string; page: string; context: PickerContext; tab?: GameTab }) {
 	const p = useTheme();
 	const [open, setOpen] = useState(false);
 	return (
@@ -318,9 +319,12 @@ function PickerTitle({ name, page, context }: { name: string; page: string; cont
 					</Txt>
 					<Icon name="chevron-down" size={14} color={p.mutedForeground} />
 				</View>
-				<Txt variant="small" numberOfLines={1}>
-					{page}
-				</Txt>
+				<View style={{ flexDirection: "row", alignItems: "center" }}>
+					{tab ? <SideLabel tab={tab} /> : null}
+					<Txt variant="small" numberOfLines={1} style={{ flexShrink: 1 }}>
+						{page}
+					</Txt>
+				</View>
 			</Pressable>
 			<ProjectPicker context={context} open={open} onClose={() => setOpen(false)} />
 		</>
@@ -328,14 +332,14 @@ function PickerTitle({ name, page, context }: { name: string; page: string; cont
 }
 
 /** The dashboard's header title: the backend's game, the page under it. */
-export function ProjectPickerTitle({ account, page }: { account: BackendAccount; page: string }) {
-	return <PickerTitle name={account.name} page={page} context={{ kind: "tt", account }} />;
+export function ProjectPickerTitle({ account, page, tab }: { account: BackendAccount; page: string; tab?: GameTab }) {
+	return <PickerTitle name={account.name} page={page} context={{ kind: "tt", account }} tab={tab} />;
 }
 
 /** An experience page's header title: the experience, the page under it. */
-export function ProjectPagePickerTitle({ universeId, page }: { universeId: number; page: string }) {
+export function ProjectPagePickerTitle({ universeId, page, tab }: { universeId: number; page: string; tab?: GameTab }) {
 	const project = useProject(universeId);
-	return <PickerTitle name={project.data?.name ?? "Experience"} page={page} context={{ kind: "project", universeId }} />;
+	return <PickerTitle name={project.data?.name ?? "Experience"} page={page} context={{ kind: "project", universeId }} tab={tab} />;
 }
 
 /** Your projects (current one ticked), and dashboards whose game isn't on the list; home on top. */

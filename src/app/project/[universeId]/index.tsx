@@ -1,14 +1,16 @@
 /**
- * One experience: Overview, Analytics, Tools (Open Cloud), and TypeTorch (the full backend dashboard, when a
- * TypeTorch backend is connected for this universe).
+ * One game's home: the list of the tab the bottom bar has lit (features/project/game-nav): Overview (TypeTorch live
+ * numbers, ads, the Roblox overview), TypeTorch (the dashboard's pages as tiles, when a backend is connected for this
+ * universe), Analytics (Roblox analytics) and Roblox (the Creator Hub tools). The tab comes from the bar (a store) or
+ * the route's `tab` (links: `?tab=typetorch`; `roblox` = `tools`).
  */
 import { useQueryClient } from "@tanstack/react-query";
 import { router, Stack, useLocalSearchParams } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
 
 import { GameIcon } from "@/components/ProjectRow";
-import { Badge, Button, Card, Chips, ErrorState, Icon, Screen, Segmented, Skeleton, Txt } from "@/components/ui";
+import { Badge, Button, Card, Chips, ErrorState, Icon, Screen, Skeleton, Txt } from "@/components/ui";
 import { createExportRegistry, ExportProvider } from "@/features/export/context";
 import { ExportButton, slug } from "@/features/export/ExportButton";
 import { togglePin, usePins } from "@/features/project/pins";
@@ -16,7 +18,9 @@ import { AnalyticsTab } from "@/features/project/AnalyticsTab";
 import { OverviewTab } from "@/features/project/OverviewTab";
 import { useProject } from "@/features/project/projects";
 import { ToolsTab } from "@/features/project/ToolsTab";
-import { BackendHeader, TTHome, useUniverseBackends } from "@/features/typetorch/components";
+import { GameSummary, TTPagesGrid } from "@/features/project/GameHome";
+import { useHomeTab } from "@/features/project/game-nav";
+import { useUniverseBackends } from "@/features/typetorch/components";
 import { compact } from "@/lib/format";
 import { useTheme } from "@/theme";
 
@@ -29,24 +33,21 @@ export default function ProjectScreen() {
 	const pinned = usePins().includes(id);
 	const project = useProject(id);
 	const backends = useUniverseBackends(id);
-	const [tab, setTab] = useState<Tab>(initialTab ?? (backends.length ? "typetorch" : "overview"));
-	// The sidebar switches tabs through the route's `tab` param.
-	useEffect(() => {
-		if (initialTab) setTab(initialTab);
-	}, [initialTab]);
+	const wanted = useHomeTab(id, initialTab, "overview");
+	const tab: Tab = wanted === "typetorch" && !backends.length ? "overview" : wanted;
 	const [backendId, setBackendId] = useState<string | null>(null);
 	const queryClient = useQueryClient();
 	const [refreshing, setRefreshing] = useState(false);
 	const backend = backends.find((b) => b.id === backendId) ?? backends[0] ?? null;
 	const exports = useMemo(() => createExportRegistry(), []);
-	const tabLabel = (t: Tab) => (t === "overview" ? "Overview" : t === "analytics" ? "Analytics" : t === "tools" ? "Tools" : "TypeTorch");
+	const tabLabel = (t: Tab) => (t === "overview" ? "Overview" : t === "analytics" ? "Analytics" : t === "tools" ? "Creator Hub tools" : "Dashboard pages");
 	const projectName = project.data?.name ?? `Universe ${id}`;
 
 	const tabs: { value: Tab; label: string }[] = [
 		{ value: "overview", label: "Overview" },
 		{ value: "analytics", label: "Analytics" },
-		{ value: "tools", label: "Tools" },
-		...(backends.length ? [{ value: "typetorch" as const, label: "TypeTorch" }] : []),
+		{ value: "tools", label: "Creator Hub tools" },
+		...(backends.length ? [{ value: "typetorch" as const, label: "Dashboard pages" }] : []),
 	];
 
 	async function onRefresh() {
@@ -81,12 +82,15 @@ export default function ProjectScreen() {
 							<Pressable onPress={() => togglePin(id)} hitSlop={10} accessibilityRole="button" accessibilityLabel={pinned ? "Unpin this experience" : "Pin this experience"}>
 								<Icon name={pinned ? "star" : "star-outline"} size={22} color={pinned ? theme.warning : theme.mutedForeground} />
 							</Pressable>
+							<Pressable onPress={() => router.push("/app-settings")} hitSlop={10} accessibilityRole="button" accessibilityLabel="App settings">
+								<Icon name="settings-outline" size={21} color={theme.mutedForeground} />
+							</Pressable>
 						</View>
 					),
 				}}
 			/>
 			{project.error ? <ErrorState error={project.error} onRetry={() => project.refetch()} /> : null}
-			{project.data ? (
+			{tab !== "overview" ? null : project.data ? (
 				<View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
 					<GameIcon uri={project.data.icon} size={56} />
 					<View style={{ flex: 1, gap: 4 }}>
@@ -104,14 +108,7 @@ export default function ProjectScreen() {
 				<Skeleton height={56} />
 			) : null}
 
-			<Segmented
-				options={tabs}
-				value={tab}
-				onChange={(v) => {
-					setTab(v);
-					router.setParams({ tab: v });
-				}}
-			/>
+			{tab === "overview" ? <GameSummary universeId={id} backend={backend} /> : null}
 
 			<ExportProvider registry={exports}>
 				{tab === "overview" && project.data ? <OverviewTab project={project.data} /> : null}
@@ -121,8 +118,7 @@ export default function ProjectScreen() {
 			{tab === "typetorch" && backend ? (
 				<View style={{ gap: 12 }}>
 					{backends.length > 1 ? <Chips options={backends.map((b) => ({ value: b.id, label: b.name }))} value={backend.id} onChange={setBackendId} /> : null}
-					<BackendHeader account={backend} />
-					<TTHome backendId={backend.id} />
+					<TTPagesGrid account={backend} />
 				</View>
 			) : null}
 			{tab === "overview" && !backends.length && project.data ? (
