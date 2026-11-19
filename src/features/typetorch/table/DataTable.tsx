@@ -91,6 +91,8 @@ export interface DataTableProps<T> {
 	columnsMenu?: ReactNode;
 	/** Makes rows tappable. */
 	onRowPress?: (row: T) => void;
+	/** A long-press on a row (instead of the copy menu, which stays on the row's ⋯), e.g. to start selecting. */
+	onRowLongPress?: (row: T) => void;
 	isRowSelected?: (row: T) => boolean;
 	/** Rows shown first, outside sorting, filtering, paging and export (a total or an average). */
 	pinnedRows?: readonly T[];
@@ -151,6 +153,7 @@ export function DataTable<T>({
 	toolbar,
 	columnsMenu,
 	onRowPress,
+	onRowLongPress,
 	isRowSelected,
 	pinnedRows,
 	rowJson,
@@ -435,7 +438,7 @@ export function DataTable<T>({
 											<Pressable
 												key={ids[e.i] ?? String(e.i)}
 												onPress={onRowPress ? () => onRowPress(row) : undefined}
-												onLongPress={rowMenu ? () => setSheet({ kind: "row", row }) : undefined}
+												onLongPress={onRowLongPress ? () => onRowLongPress(row) : rowMenu ? () => setSheet({ kind: "row", row }) : undefined}
 												delayLongPress={400}
 												android_ripple={onRowPress ? { color: p.accent } : undefined}
 												style={({ pressed }) => [{ flexDirection: "row", borderTopWidth: StyleSheet.hairlineWidth, borderColor: p.border }, selected && { backgroundColor: `${p.brand}18` }, pressed && onRowPress && { backgroundColor: p.accent }]}

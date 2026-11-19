@@ -17,7 +17,7 @@ import { Pressable, View } from "react-native";
 import { alertBundle } from "@/api/tt/server-history";
 import type { FleetAlert, FleetReportResult, FleetReports, FleetServer, FleetServers, GameColumn, GoneServer, ServerBudget } from "@/api/tt/types";
 import { ShareBars } from "@/charts/LineChart";
-import { Badge, Button, Card, Dot, ErrorState, Field, KV, List, Row, Section, Skeleton, SkeletonList, Stat, StatGrid, Txt } from "@/components/ui";
+import { Badge, Button, Card, confirm, Dot, ErrorState, Field, KV, List, notify, Row, Section, Skeleton, SkeletonList, Stat, StatGrid, Txt } from "@/components/ui";
 import { CountryCode, countryCounts, GeoCredit, HealthBadge, LocationLabel, locationText, networkText, placeText, type CountryCount } from "@/features/typetorch/fleet-bits";
 import { useTTQuery } from "@/features/typetorch/hooks";
 import { streamLabel, useFleetStream } from "@/features/typetorch/live-feeds";
@@ -446,6 +446,114 @@ function Servers({ backendId, data, readOnly }: { backendId: string; data: Fleet
 	);
 }
 
+/**
+ * The Alerts table. Owners can acknowledge several at once: long-press an alert (or Select) to start choosing, tap to
+ * add or remove, then Acknowledge; or acknowledge every open one. One POST /v1/fleet/alerts/{id}/ack each, in turn.
+ */
+function AlertsSection({
+	backendId,
+	account,
+	alerts,
+	onOpen,
+}: {
+	backendId: string;
+	account: BackendAccount;
+	alerts: { data?: FleetAlert[]; error: unknown; refetch(): unknown };
+	onOpen(a: FleetAlert): void;
+}) {
+	const { api } = useBackend(backendId);
+	const queryClient = useQueryClient();
+	const owner = isOwner(account);
+	const [picked, setPicked] = useState<Set<number> | null>(null);
+	const [progress, setProgress] = useState<string | null>(null);
+	const open = (alerts.data ?? []).filter((a) => !a.acked);
+	const toggle = (a: FleetAlert) => {
+		if (a.acked) return;
+		setPicked((prev) => {
+			const next = new Set(prev ?? []);
+			if (next.has(a.id)) next.delete(a.id);
+			else next.add(a.id);
+			return next;
+		});
+	};
+	async function ackAll(ids: number[], what: string) {
+		if (!api || !ids.length) return;
+		if (!(await confirm(`Acknowledge ${what}?`, "They stay in the list, marked acknowledged, and stop counting as open (the badge, widgets).", "Acknowledge", false))) return;
+		let done = 0;
+		let failed = 0;
+		for (const id of ids) {
+			setProgress(`Acknowledging ${done + failed + 1} of ${ids.length}…`);
+			try {
+				await api.ackAlert(id);
+				done++;
+			} catch {
+				failed++;
+			}
+		}
+		setProgress(null);
+		setPicked(null);
+		void queryClient.invalidateQueries({ queryKey: ["tt", backendId, "alerts"] });
+		void queryClient.invalidateQueries({ queryKey: ["tt", backendId, "mobile-live"] });
+		notify(failed ? `${done} acknowledged, ${failed} failed` : `${done} acknowledged`, failed ? "Some were already acknowledged or couldn't be reached; pull to refresh." : undefined);
+	}
+	async function ackEveryOpen() {
+		if (!api) return;
+		setProgress("Finding open alerts…");
+		try {
+			const list = await api.fleetAlerts({ unacked: true, limit: 1000 });
+			setProgress(null);
+			await ackAll(
+				list.filter((a) => !a.acked).map((a) => a.id),
+				`all ${list.length} open alerts`,
+			);
+		} catch (e) {
+			setProgress(null);
+			notify("Couldn't list the open alerts", e instanceof Error ? e.message : String(e));
+		}
+	}
+	return (
+		<Section title="Alerts">
+			<Txt variant="small">
+				Newest first (kept 90 days). Tap an alert for its debug bundle, the build's errors and its server{owner ? "; long-press to select several and acknowledge them together" : ""}.
+			</Txt>
+			{owner && alerts.data ? (
+				picked ? (
+					<View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+						<Txt style={{ fontWeight: "600" }}>{picked.size} selected</Txt>
+						<Button title={`Acknowledge ${picked.size}`} small variant="brand" icon="checkmark-done-outline" disabled={!picked.size || !!progress} onPress={() => void ackAll([...picked], picked.size === 1 ? "1 alert" : `${picked.size} alerts`)} />
+						<Button title={picked.size === open.length ? "Select none" : `Select all open (${open.length})`} small variant="ghost" disabled={!!progress} onPress={() => setPicked(picked.size === open.length ? new Set() : new Set(open.map((a) => a.id)))} />
+						<Button title="Cancel" small variant="ghost" disabled={!!progress} onPress={() => setPicked(null)} />
+					</View>
+				) : open.length ? (
+					<View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+						<Button title="Select" small variant="ghost" icon="checkbox-outline" onPress={() => setPicked(new Set())} />
+						<Button title="Acknowledge all open" small variant="ghost" icon="checkmark-done-outline" disabled={!!progress} onPress={() => void ackEveryOpen()} />
+					</View>
+				) : null
+			) : null}
+			{progress ? <Txt variant="small">{progress}</Txt> : null}
+			{alerts.error ? (
+				<ErrorState error={alerts.error} onRetry={() => alerts.refetch()} />
+			) : !alerts.data ? (
+				<SkeletonList rows={3} />
+			) : (
+				<DataTable
+					id="fleet-alerts"
+					label="Alerts"
+					columns={ALERT_COLUMNS}
+					data={alerts.data}
+					rowId={(a) => String(a.id)}
+					defaultSort={[{ id: "at", desc: true }]}
+					onRowPress={picked ? toggle : onOpen}
+					onRowLongPress={owner ? (a) => (picked ? toggle(a) : !a.acked && setPicked(new Set([a.id]))) : undefined}
+					isRowSelected={picked ? (a) => picked.has(a.id) : undefined}
+					empty={<Txt variant="muted">No alerts.</Txt>}
+				/>
+			)}
+		</Section>
+	);
+}
+
 function Fleet({ backendId, account }: { backendId: string; account: BackendAccount }) {
 	const readOnly = isReadOnly(account);
 	const [branch, setBranch] = usePageParam("branch", "");
@@ -532,16 +640,7 @@ function Fleet({ backendId, account }: { backendId: string; account: BackendAcco
 				)}
 			</Section>
 
-			<Section title="Alerts">
-				<Txt variant="small">Newest first (kept 90 days). Tap an alert for its debug bundle, the build's errors and its server{isOwner(account) ? ", or to acknowledge it" : ""}.</Txt>
-				{alerts.error ? (
-					<ErrorState error={alerts.error} onRetry={() => alerts.refetch()} />
-				) : !alerts.data ? (
-					<SkeletonList rows={3} />
-				) : (
-					<DataTable id="fleet-alerts" label="Alerts" columns={ALERT_COLUMNS} data={alerts.data} rowId={(a) => String(a.id)} defaultSort={[{ id: "at", desc: true }]} onRowPress={setOpenAlert} empty={<Txt variant="muted">No alerts.</Txt>} />
-				)}
-			</Section>
+			<AlertsSection backendId={backendId} account={account} alerts={alerts} onOpen={setOpenAlert} />
 			<AlertSheet backendId={backendId} alert={openAlert} owner={isOwner(account)} onClose={() => setOpenAlert(null)} />
 
 			<Section title="Recently gone">
