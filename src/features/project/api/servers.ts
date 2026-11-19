@@ -494,6 +494,42 @@ export function updateCampaign(cloud: OpenCloud, id: string, body: UpdateCampaig
 	return cloud.request<Campaign>("PATCH", `/ads-management/v1/campaigns/${enc(id)}`, body, undefined, SERVER_SCOPES.adWrite);
 }
 
+/** One ad of a campaign: one per creative (GET /campaigns/{id}/ads, incl. paused and removed ones). Its `id` is the AdId
+ * dimension of the Analytics API's SponsoredAds* metrics. */
+export interface CampaignAd {
+	id: string;
+	creativeAssetId: string;
+	status: "ACTIVE" | "PAUSED" | "REMOVED";
+	deliveryStatus: "SERVING" | "IN_REVIEW" | "NOT_SERVING" | "REJECTED";
+	reviewStatus: "IN_REVIEW" | "APPROVED" | "REJECTED";
+	reviewIssues?: { code: string; message: string; remediation?: string }[];
+	removeTime?: string;
+}
+
+/** Every ad of a campaign (pages of 100, at most 10 pages). */
+export async function listCampaignAds(cloud: OpenCloud, campaignId: string): Promise<CampaignAd[]> {
+	const ads: CampaignAd[] = [];
+	let pageToken: string | undefined;
+	for (let i = 0; i < 10; i++) {
+		const page = await cloud.request<{ ads?: CampaignAd[]; nextPageToken?: string }>(
+			"GET",
+			`/ads-management/v1/campaigns/${enc(campaignId)}/ads${qs({ maxPageSize: 100, pageToken })}`,
+			undefined,
+			undefined,
+			SERVER_SCOPES.adRead,
+		);
+		ads.push(...(page.ads ?? []));
+		pageToken = page.nextPageToken || undefined;
+		if (!pageToken) break;
+	}
+	return ads;
+}
+
+/** Pause or resume one ad (the campaign's other ads and settings stay). */
+export function updateCampaignAd(cloud: OpenCloud, campaignId: string, adId: string, status: "ACTIVE" | "PAUSED") {
+	return cloud.request<CampaignAd>("PATCH", `/ads-management/v1/campaigns/${enc(campaignId)}/ads/${enc(adId)}`, { status }, undefined, SERVER_SCOPES.adWrite);
+}
+
 export interface CampaignStatusRow {
 	id: string;
 	status?: CampaignStatusValue;

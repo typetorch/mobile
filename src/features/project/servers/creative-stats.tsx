@@ -1,6 +1,6 @@
 /**
- * Ad creatives as images on the Ads pages, and what can be said about how they perform. Roblox's Ads API v1 has no
- * reporting (no impressions, clicks or spend per campaign or creative), so the pages say so and link to Ads Manager.
+ * Ad creatives as images on the Ads pages, and what can be said about how they perform. Per-ad numbers (impressions,
+ * clicks, spend) are in servers/ad-report.ts; a saved creative has none of its own.
  * A creative whose image is also one of the experience's homepage thumbnails (same asset id) shows that thumbnail's
  * play-through numbers from the Analytics API (the thumbnail gallery's queries, over the last 28 days): those are
  * homepage numbers, not ad numbers.
@@ -20,12 +20,12 @@ import type { RangeSpec } from "../analytics";
 export const ADS_MANAGER_URL = "https://create.roblox.com/dashboard/ads";
 const STATS_RANGE: RangeSpec = { kind: "preset", days: 28 };
 
-/** Where a CTR would be: the API doesn't give ad clicks yet. */
+/** Where per-ad clicks and CTR are: on the campaign pages (a saved creative has no numbers of its own). */
 export function CtrNote({ compact }: { compact?: boolean }) {
 	return (
 		<View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
 			<Txt variant="small" style={{ flexShrink: 1 }}>
-				CTR: Roblox doesn't share ad clicks through the API yet; see Ads Manager.
+				Clicks, CTR and spend are per ad on each campaign (they belong to a campaign's ad, not to a saved creative).
 			</Txt>
 			<Button title={compact ? "Ads Manager" : "Open Ads Manager"} icon="open-outline" small variant="ghost" onPress={() => void WebBrowser.openBrowserAsync(ADS_MANAGER_URL)} />
 		</View>

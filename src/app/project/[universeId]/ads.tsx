@@ -1,24 +1,30 @@
 /**
  * Ads Manager (ads-management v1, BETA): this experience's campaigns (or every campaign in your own or the owning
- * group's ads account) with their delivery status (refreshed through campaigns:batchGetStatus) and creative images,
- * the saved creatives, and a new campaign. The API has no reporting (impressions, clicks, spend), so CTR points to Ads
- * Manager; a creative that is also a homepage thumbnail shows that thumbnail's play-through (servers/creative-stats). ?campaign=<id> opens one campaign (pause, resume, cancel, budget, …); ?create=1 opens the new
- * campaign form. Needs ad.campaign:read; edits need ad.campaign:write.
+ * group's ads account) as a table like Ads Manager's (on / off, delivery status, spent, impressions, CTR, clicks, CPC
+ * from the Analytics API's Sponsored Ads metrics, servers/ad-report.ts; status refreshed through
+ * campaigns:batchGetStatus), the saved creatives, and a new campaign. A creative that is also a homepage thumbnail
+ * shows that thumbnail's play-through (servers/creative-stats). ?campaign=<id> opens one campaign (its ads as a table,
+ * pause, resume, cancel, budget, …); ?create=1 opens the new campaign form. Needs ad.campaign:read; edits need
+ * ad.campaign:write; the numbers need universe.analytics:read.
  */
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
-import { View } from "react-native";
+import { useState, type ReactNode } from "react";
+import { Switch, View } from "react-native";
 
 import type { OpenCloud } from "@/api/opencloud";
 import { gameDetails } from "@/api/roblox-public";
-import { Badge, Button, Chips, EmptyState, List, Row, Section, Segmented, SkeletonList, Txt } from "@/components/ui";
-import { batchCampaignStatus, fmtUsd, listCampaigns, listCreatives, microsToUsd, type CampaignListParams } from "@/features/project/api/servers";
-import { CloudError } from "@/features/project/CloudError";
+import { Badge, Button, Chips, confirm, EmptyState, List, notify, Row, Section, Segmented, SkeletonList, Txt } from "@/components/ui";
+import { batchCampaignStatus, fmtUsd, listCampaigns, listCreatives, microsToUsd, updateCampaign, type Campaign, type CampaignListParams, type CampaignStatusRow } from "@/features/project/api/servers";
+import { CloudError, cloudErrorText } from "@/features/project/CloudError";
+import type { ThumbStat } from "@/features/project/analytics/thumbnail-stats";
+import { AD_RANGES, cpc, ctr, useAdReport, type AdRange } from "@/features/project/servers/ad-report";
 import { DeliveryBadge, label } from "@/features/project/servers/ads-shared";
 import { CampaignCreate } from "@/features/project/servers/CampaignCreate";
 import { CampaignDetail } from "@/features/project/servers/CampaignDetail";
+import { DataTable, type DataColumn } from "@/features/typetorch/table";
+import { useTheme } from "@/theme";
 import { CreativeStrip, CtrNote, ThumbStatLine, useCreativeImages, useCreativeThumbnailStats } from "@/features/project/servers/creative-stats";
 import { ToolScreen } from "@/features/project/tool";
 import { fmtValue } from "@/features/project/analytics/shared";
@@ -57,6 +63,7 @@ function Campaigns({ universeId, cloud, canWrite }: { universeId: number; cloud:
 	const [account, setAccount] = useState<Account>("experience");
 	const [ended, setEnded] = useState<Ended>("all");
 	const [tab, setTab] = useState<"campaigns" | "creatives">("campaigns");
+	const [days, setDays] = useState<AdRange>(28);
 	const owner = useQuery({ queryKey: ["oc", "ads", universeId, "owner"], queryFn: async () => (await gameDetails([universeId]))[0] ?? null, staleTime: 3600_000, retry: false });
 	const groupId = owner.data?.creator?.type === "Group" ? owner.data.creator.id : null;
 
@@ -125,54 +132,25 @@ function Campaigns({ universeId, cloud, canWrite }: { universeId: number; cloud:
 				<>
 					<Chips options={[{ value: "all" as Ended, label: "All" }, { value: "running" as Ended, label: "Not ended" }, { value: "90d" as Ended, label: "Last 90 days" }]} value={ended} onChange={pickEnded} />
 					{canWrite ? <Button title="New campaign" variant="brand" icon="add" small onPress={() => router.push(`/project/${universeId}/ads?create=1`)} style={{ alignSelf: "flex-start" }} /> : null}
-					<CtrNote />
+					<Chips options={AD_RANGES} value={days} onChange={setDays} />
 					<HomepageStatsHint stats={thumbStats} />
 					{list.error ? (
 						<CloudError error={list.error} what="Ads" onRetry={() => list.refetch()} />
 					) : !list.data ? (
 						<SkeletonList rows={4} />
 					) : campaigns.length ? (
-						<Section>
-							<List>
-								{campaigns.map((c) => {
-									const s = statuses.data?.[c.id];
-									const status = s?.status ?? c.status;
-									const reasons = s?.deliveryStatusReasons ?? c.deliveryStatusReasons ?? [];
-									const ids = c.creativeAssetIds ?? [];
-									const matched = ids.map(statFor).filter((x) => x !== undefined);
-									const best = matched.reduce<(typeof matched)[number] | undefined>((a, b) => (!a || (b.ptr ?? -1) > (a.ptr ?? -1) ? b : a), undefined);
-									return (
-										<Row
-											key={c.id}
-											title={c.name}
-											subtitle={
-												<View style={{ gap: 2 }}>
-													<Txt variant="small" numberOfLines={2}>
-														{`${fmtUsd(microsToUsd(c.budget?.amountMicros))} ${c.budget?.type === "DAILY" ? "/ day" : "total"} · ${label(c.objective)} · ${fmtDate(c.schedule?.startTime)}${c.schedule?.durationInDays ? ` → ${fmtDate(c.schedule.endTime)}` : ""}${reasons.length ? ` · ${reasons.map(label).join(", ")}` : ""}${account !== "experience" && c.targetUniverseId && c.targetUniverseId !== String(universeId) ? ` · experience ${c.targetUniverseId}` : ""}`}
-													</Txt>
-													<CreativeStrip assetIds={ids} images={images.data} />
-													{best ? (
-														<Txt variant="small">
-															{matched.length === 1 ? "A creative is" : `${matched.length} creatives are`} homepage thumbnails: up to {fmtValue("rate", best.ptr)} play-through (qualified, 28 d)
-														</Txt>
-													) : null}
-												</View>
-											}
-											numberOfLines={2}
-											right={
-												<View style={{ alignItems: "flex-end", gap: 3 }}>
-													<DeliveryBadge status={s?.deliveryStatus ?? c.deliveryStatus} />
-													{status !== "ACTIVE" ? <Badge label={status.toLowerCase()} tone={status === "PAUSED" ? "warning" : "muted"} /> : null}
-												</View>
-											}
-											chevron
-											onPress={() => router.push(`/project/${universeId}/ads?campaign=${encodeURIComponent(c.id)}`)}
-										/>
-									);
-								})}
-							</List>
-							{list.hasNextPage ? <Button title="Load more" small loading={list.isFetchingNextPage} onPress={() => list.fetchNextPage()} style={{ alignSelf: "center" }} /> : null}
-						</Section>
+						<CampaignTable
+							campaigns={campaigns}
+							statuses={statuses.data}
+							universeId={universeId}
+							cloud={cloud}
+							canWrite={canWrite}
+							days={days}
+							showUniverse={account !== "experience"}
+							images={images.data}
+							statFor={statFor}
+							footer={list.hasNextPage ? <Button title="Load more" small loading={list.isFetchingNextPage} onPress={() => list.fetchNextPage()} style={{ alignSelf: "center" }} /> : null}
+						/>
 					) : (
 						<EmptyState icon="trending-up-outline" title="No campaigns" body={account === "experience" ? "No ad campaigns for this experience in the last 730 days." : "No campaigns in this ads account."} />
 					)}
@@ -213,6 +191,183 @@ function Campaigns({ universeId, cloud, canWrite }: { universeId: number; cloud:
 				<EmptyState icon="image-outline" title="No creatives" body="Images used in campaigns are saved here. Upload image assets with Open Cloud or Creator Hub, then pick them in a new campaign." />
 			)}
 		</>
+	);
+}
+
+const fmtCount = (n: number | null) => (n === null ? "–" : Math.round(n).toLocaleString());
+const fmtPct = (n: number | null) => (n === null ? "–" : `${(n * 100).toFixed(n < 0.1 ? 2 : 1)}%`);
+const fmtCpc = (n: number | null) => (n === null ? "–" : `$${n.toFixed(n < 1 ? 3 : 2)}`);
+
+interface CampaignRow {
+	c: Campaign;
+	status: Campaign["status"];
+	delivery: Campaign["deliveryStatus"];
+	reasons: string[];
+	/** null: no numbers (another experience's campaign, no analytics scope, or still loading). */
+	impressions: number | null;
+	clicks: number | null;
+	spend: number | null;
+}
+
+/**
+ * The campaigns as Ads Manager's table (a tap opens one, the switch pauses or resumes after asking). Numbers only for
+ * this experience's campaigns: the analytics belong to the experience.
+ */
+function CampaignTable({
+	campaigns,
+	statuses,
+	universeId,
+	cloud,
+	canWrite,
+	days,
+	showUniverse,
+	images,
+	statFor,
+	footer,
+}: {
+	campaigns: Campaign[];
+	statuses: Record<string, CampaignStatusRow> | undefined;
+	universeId: number;
+	cloud: OpenCloud;
+	canWrite: boolean;
+	days: AdRange;
+	showUniverse: boolean;
+	images: Record<number, string> | undefined;
+	statFor: (assetId: string) => ThumbStat | undefined;
+	footer: ReactNode;
+}) {
+	const p = useTheme();
+	const queryClient = useQueryClient();
+	const report = useAdReport(universeId, days);
+	const toggle = useMutation({
+		mutationFn: ({ c, status }: { c: Campaign; status: "ACTIVE" | "PAUSED" }) => updateCampaign(cloud, c.id, { status }),
+		onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["oc", "ads"] }),
+		onError: (e) => notify("Couldn't update the campaign", cloudErrorText(e)),
+	});
+	const rows: CampaignRow[] = campaigns.map((c) => {
+		const s = statuses?.[c.id];
+		const own = !c.targetUniverseId || c.targetUniverseId === String(universeId);
+		const n = own && report.can && !report.loading && !report.error ? (report.rows.get(c.id) ?? { impressions: 0, clicks: 0, spend: 0 }) : null;
+		return {
+			c,
+			status: s?.status ?? c.status,
+			delivery: s?.deliveryStatus ?? c.deliveryStatus,
+			reasons: s?.deliveryStatusReasons ?? c.deliveryStatusReasons ?? [],
+			impressions: n?.impressions ?? null,
+			clicks: n?.clicks ?? null,
+			spend: n?.spend ?? null,
+		};
+	});
+	const columns: DataColumn<CampaignRow>[] = [
+		{
+			id: "campaign",
+			header: "Campaign",
+			accessor: (r) => r.c.name,
+			width: 190,
+			hideable: false,
+			cell: (r) => {
+				const ids = r.c.creativeAssetIds ?? [];
+				const best = ids
+					.map(statFor)
+					.filter((x): x is ThumbStat => x !== undefined)
+					.sort((a, b) => (b.ptr ?? -1) - (a.ptr ?? -1))[0];
+				return (
+					<View style={{ gap: 2 }}>
+						<Txt style={{ fontWeight: "600" }} numberOfLines={2}>
+							{r.c.name}
+						</Txt>
+						<Txt variant="small" numberOfLines={2}>
+							{`${fmtUsd(microsToUsd(r.c.budget?.amountMicros))} ${r.c.budget?.type === "DAILY" ? "/ day" : "total"} · ${label(r.c.objective)} · ${fmtDate(r.c.schedule?.startTime)}${r.c.schedule?.durationInDays ? ` → ${fmtDate(r.c.schedule.endTime)}` : ""}${showUniverse && r.c.targetUniverseId && r.c.targetUniverseId !== String(universeId) ? ` · experience ${r.c.targetUniverseId}` : ""}`}
+						</Txt>
+						<CreativeStrip assetIds={ids} images={images} max={3} />
+						{best ? <Txt variant="small">homepage thumbnail: {fmtValue("rate", best.ptr)} play-through</Txt> : null}
+					</View>
+				);
+			},
+		},
+		{
+			id: "on",
+			header: "Off/on",
+			type: "boolean",
+			width: 72,
+			accessor: (r) => r.status === "ACTIVE",
+			cell: (r) =>
+				r.status === "CANCELLED" ? (
+					<Txt variant="small">cancelled</Txt>
+				) : (
+					<Switch
+						value={r.status === "ACTIVE"}
+						disabled={!canWrite || toggle.isPending}
+						trackColor={{ true: p.brand, false: p.muted }}
+						thumbColor="#ffffff"
+						onValueChange={async (on) => {
+							const ok = on
+								? await confirm(
+										"Resume the campaign?",
+										`It starts serving again and spends up to ${fmtUsd(microsToUsd(r.c.budget?.amountMicros))} ${r.c.budget?.type === "DAILY" ? "a day" : "in total"}.`,
+										"Resume",
+										false,
+									)
+								: await confirm("Pause the campaign?", "It stops serving ads until you resume it.", "Pause", false);
+							if (ok) toggle.mutate({ c: r.c, status: on ? "ACTIVE" : "PAUSED" });
+						}}
+					/>
+				),
+		},
+		{
+			id: "status",
+			header: "Status",
+			type: "enum",
+			width: 120,
+			accessor: (r) => label(r.delivery),
+			cell: (r) => (
+				<View style={{ gap: 2, alignItems: "flex-start" }}>
+					<DeliveryBadge status={r.delivery} />
+					{r.reasons.length ? (
+						<Txt variant="small" numberOfLines={2}>
+							{r.reasons.map(label).join(", ")}
+						</Txt>
+					) : null}
+				</View>
+			),
+		},
+		{ id: "spend", header: "Spent", hint: "USD", type: "number", align: "right", accessor: (r) => r.spend, format: (v) => (v === null || v === undefined ? "–" : fmtUsd(v as number)) },
+		{ id: "impressions", header: "Impressions", type: "number", align: "right", width: 104, accessor: (r) => r.impressions, format: (v) => fmtCount((v as number | null) ?? null) },
+		{ id: "ctr", header: "CTR", type: "number", align: "right", width: 72, accessor: (r) => ctr(r), format: (v) => fmtPct((v as number | null) ?? null), title: "Clicks per impression" },
+		{ id: "clicks", header: "Clicks", type: "number", align: "right", width: 80, accessor: (r) => r.clicks, format: (v) => fmtCount((v as number | null) ?? null) },
+		{ id: "cpc", header: "CPC", type: "number", align: "right", width: 80, accessor: (r) => cpc(r), format: (v) => fmtCpc((v as number | null) ?? null), title: "Spend per click" },
+		{
+			id: "budget",
+			header: "Budget",
+			hint: "USD",
+			type: "number",
+			align: "right",
+			accessor: (r) => microsToUsd(r.c.budget?.amountMicros) ?? null,
+			format: (v, r) => `${fmtUsd((v as number | null) ?? null)}${r.c.budget?.type === "DAILY" ? " / day" : ""}`,
+			defaultHidden: true,
+		},
+		{ id: "id", header: "Campaign id", accessor: (r) => r.c.id, mono: true, defaultHidden: true },
+	];
+	return (
+		<Section>
+			{!report.can ? (
+				<Txt variant="small">Add universe.analytics:read (for this experience) to your key to see spend, impressions, clicks and CTR.</Txt>
+			) : report.error ? (
+				<CloudError error={report.error} what="Ad reporting" onRetry={report.refetch} />
+			) : report.loading ? (
+				<Txt variant="small">Loading spend, impressions and clicks…</Txt>
+			) : null}
+			<DataTable
+				id="ads-campaigns"
+				label="Campaigns"
+				columns={columns}
+				data={rows}
+				rowId={(r) => r.c.id}
+				urlSync={false}
+				onRowPress={(r) => router.push(`/project/${universeId}/ads?campaign=${encodeURIComponent(r.c.id)}`)}
+			/>
+			{footer}
+		</Section>
 	);
 }
 

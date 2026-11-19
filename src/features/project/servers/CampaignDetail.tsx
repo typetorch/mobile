@@ -1,7 +1,8 @@
 /**
  * One ad campaign (Ads Manager, BETA): delivery status and reasons, budget (with a pending decrease), schedule,
- * objective, targeting, creatives (as images; the API has no per-creative reporting, so CTR points to Ads Manager, and
- * a creative that is also a homepage thumbnail shows that thumbnail's play-through); and its edits (PATCH /campaigns/{id}): pause / resume, cancel, budget, name,
+ * objective, targeting; its performance as Ads Manager shows it (CampaignPerformance: totals, a chart, the ads as a
+ * table with spend, impressions, CTR, clicks, CPC and each ad's on / off); the creatives (a creative that is also a
+ * homepage thumbnail shows that thumbnail's play-through); and its edits (PATCH /campaigns/{id}): pause / resume, cancel, budget, name,
  * schedule (before it starts), add creatives, video, automatic ad-credit reload. Anything that can spend money or is
  * permanent asks first.
  */
@@ -12,7 +13,8 @@ import { View } from "react-native";
 
 import type { OpenCloud } from "@/api/opencloud";
 import { Badge, Button, Card, Chips, confirm, ErrorState, Field, KV, notify, Section, Skeleton, Txt } from "@/components/ui";
-import { CtrNote, ThumbStatLine, useCreativeImages, useCreativeThumbnailStats } from "@/features/project/servers/creative-stats";
+import { CampaignPerformance } from "@/features/project/servers/CampaignPerformance";
+import { ThumbStatLine, useCreativeImages, useCreativeThumbnailStats } from "@/features/project/servers/creative-stats";
 import { fmtTime } from "@/lib/format";
 import { useTheme } from "@/theme";
 
@@ -62,6 +64,7 @@ export function CampaignDetail({ id, cloud, universeId, canWrite }: { id: string
 				<KV label="Billing account" value={c.billingAccountId ?? "–"} mono />
 				<KV label="Created" value={`${fmtTime(c.createTime)} UTC${c.creator?.userId ? ` by user ${c.creator.userId}` : ""}${c.creator?.groupId ? ` (group ${c.creator.groupId})` : ""}`} />
 			</Card>
+			<CampaignPerformance c={c} cloud={cloud} universeId={universeId} canWrite={canWrite} />
 			<CampaignCreatives c={c} cloud={cloud} universeId={universeId} />
 			{canWrite && c.status !== "CANCELLED" ? <CampaignEdits c={c} cloud={cloud} universeId={universeId} pending={update.isPending} save={(b) => update.mutateAsync(b).then(() => true, () => false)} /> : null}
 			{!canWrite ? <Txt variant="small">Read only: add ad.campaign:write to pause, resume or change the budget.</Txt> : null}
@@ -117,7 +120,6 @@ function CampaignCreatives({ c, cloud, universeId }: { c: Campaign; cloud: OpenC
 					</Card>
 				);
 			})}
-			{ids.length ? <CtrNote /> : null}
 			{stats.can && ids.length ? (
 				stats.error ? (
 					<CloudError error={stats.error} what="Homepage thumbnail stats" />
