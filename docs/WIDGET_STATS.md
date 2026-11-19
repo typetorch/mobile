@@ -37,7 +37,7 @@ Windows are `<n>h` (1..72) or `<n>d` (1..90).
 | `wau` | unique players, last 7 days | the 7 days before |
 | `mau` | unique players, last 30 days | the 30 days before |
 | `new:<w>` | new players in the window | the window before |
-| `d1` | D1 retention of the latest complete cohort (joined two UTC days ago, came back the next day) | the cohort the day before |
+| `d1` | D1 retention so far today: the share of yesterday's new players (UTC) back today (in progress, grows through the day) | the latest complete D1 (joined two UTC days ago) |
 | `d7` | D7 retention of the latest complete cohort | the cohort the day before |
 | `session:<w>` | mean session length (sessions that ended in the window), seconds | the window before |
 | `playtime:<w>` | total time played in the window (running sessions included), hours | the window before |
