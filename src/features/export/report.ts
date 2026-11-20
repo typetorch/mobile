@@ -12,7 +12,11 @@ export const PDF_TABLE_ROWS = 500;
 function table(block: Extract<ExportBlock, { kind: "table" }>): string {
 	const rows = block.rows.slice(0, PDF_TABLE_ROWS);
 	const head = `<tr>${block.columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr>`;
-	const body = rows.map((r) => `<tr>${block.columns.map((_c, i) => `<td>${esc(r[i] ?? "")}</td>`).join("")}</tr>`).join("");
+	const pics = (ri: number, ci: number) => {
+		const urls = block.images?.[ri]?.[ci] ?? [];
+		return urls.length ? `<div class="pics">${urls.map((u) => `<img src="${esc(u)}"/>`).join("")}</div>` : "";
+	};
+	const body = rows.map((r, ri) => `<tr>${block.columns.map((_c, i) => `<td>${pics(ri, i)}${esc(r[i] ?? "")}</td>`).join("")}</tr>`).join("");
 	const more = block.rows.length > rows.length ? `<p class="note">The first ${rows.length} of ${block.rows.length} rows; the table's CSV has all of them.</p>` : "";
 	return `<table>${head}${body}</table>${more}`;
 }
@@ -39,6 +43,9 @@ export function reportHtml(header: Header, blocks: ExportBlock[]): string {
 	th { text-align: left; color: ${INK.muted}; font-weight: 700; border-bottom: 1px solid ${INK.grid}; padding: 4px 5px; }
 	td { border-bottom: 1px solid #f1f1f1; padding: 3px 5px; vertical-align: top; word-break: break-word; }
 	tr:nth-child(even) td { background: #fafafa; }
+	tr { page-break-inside: avoid; }
+	.pics { display: flex; flex-wrap: wrap; gap: 3px; margin-bottom: 3px; }
+	.pics img { width: 96px; height: 54px; object-fit: cover; border-radius: 3px; background: #eee; }
 	thead { display: table-header-group; }
 	.note { color: ${INK.muted}; font-size: 9.5px; margin: 6px 0 0; }
 	footer { margin-top: 24px; color: ${INK.muted}; font-size: 9px; }

@@ -36,6 +36,8 @@ export interface DataColumn<T> {
 	header: string;
 	/** The underlying value (see above). */
 	accessor: (row: T) => unknown;
+	/** Image URLs the PDF / PNG export draws in this cell, above its text (the screen's cell shows its own). */
+	exportImages?: (row: T) => (string | null | undefined)[] | string | null | undefined;
 	/** What the cell shows. Default: the formatted accessor value. */
 	cell?: (row: T) => ReactNode;
 	/** Sorting and filtering behaviour. Default: guessed from the first values (number, boolean, Date, else text). */

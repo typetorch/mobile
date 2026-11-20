@@ -81,6 +81,7 @@ export function CampaignPerformance({ c, cloud, universeId, canWrite }: { c: Cam
 				id: "creative",
 				header: "Creative",
 				accessor: (r) => r.name,
+				exportImages: (r) => r.image,
 				searchText: (r) => r.ad.creativeAssetId,
 				width: 140,
 				cell: (r) => (

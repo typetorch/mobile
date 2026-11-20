@@ -19,6 +19,7 @@ import { shareTextFile } from "@/features/typetorch/table/export";
 import { radius, space, useTheme } from "@/theme";
 
 import type { ExportBlock, ExportRegistry } from "./context";
+import { inlineImages } from "./images";
 import { reportHtml } from "./report";
 import { blockSvg, type Header } from "./svg";
 
@@ -92,7 +93,7 @@ function usePngRenderer() {
 					setTimeout(() => {
 						if (!svg.current) return job.done(null);
 						svg.current.toDataURL((b64) => job.done(b64 || null), { width: job.width * 2, height: job.height * 2 });
-					}, 60)
+					}, job.xml.includes("<image") ? 600 : 60) // pictures decode after layout
 				}
 			>
 				<Xml ref={svg} xml={job.xml} width={job.width} height={job.height} />
@@ -127,7 +128,7 @@ export function ExportButton({ registry, header, fileBase }: { registry: ExportR
 		run("pdf", "Making the PDF…", async () => {
 			const now = registry.blocks();
 			if (!now.length) throw new Error("Nothing on this page to export yet.");
-			const result = await Print.printToFileAsync({ html: reportHtml(header(), now) });
+			const result = await Print.printToFileAsync({ html: reportHtml(header(), await inlineImages(now, true)) });
 			const file = freshFile(`${fileBase()}-${stamp()}.pdf`);
 			new File(result.uri).move(file);
 			await shareFile(file, "application/pdf", "com.adobe.pdf");
@@ -135,7 +136,8 @@ export function ExportButton({ registry, header, fileBase }: { registry: ExportR
 
 	const pngOf = (block: ExportBlock) =>
 		run(`png:${block.title}`, "Drawing the image…", async () => {
-			const drawn = blockSvg(block, 760, header());
+			const [withPics] = await inlineImages([block], false);
+			const drawn = blockSvg(withPics ?? block, 760, header());
 			const b64 = await png.render(drawn.svg, drawn.width, drawn.height);
 			if (!b64) throw new Error("The image couldn't be drawn.");
 			const file = freshFile(`${fileBase()}-${slug(block.title)}-${stamp()}.png`);

@@ -21,7 +21,16 @@ export interface SeriesData {
 
 export type ExportBlock =
 	/** A table: every row as filtered and sorted, display text; `csv` is the raw CSV the table's own export writes. */
-	| { kind: "table"; title: string; columns: string[]; rows: string[][]; csv: () => string; note?: string }
+	| {
+			kind: "table";
+			title: string;
+			columns: string[];
+			rows: string[][];
+			csv: () => string;
+			note?: string;
+			/** Pictures per row and column (an ad's creative): drawn above the cell's text in the PDF and PNG. */
+			images?: string[][][];
+	  }
 	/** Values over time. */
 	| { kind: "series"; title: string; chart: "line" | "bar"; series: SeriesData[]; format: (v: number) => string; timeLabel: (t: number) => string; note?: string }
 	/** Labelled horizontal bars (a breakdown, funnel steps): `share` 0..1 is the bar, `text` what it says. */

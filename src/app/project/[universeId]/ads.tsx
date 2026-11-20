@@ -269,6 +269,7 @@ function CampaignTable({
 			id: "campaign",
 			header: "Campaign",
 			accessor: (r) => r.c.name,
+			exportImages: (r) => (r.c.creativeAssetIds ?? []).slice(0, 4).map((id) => images?.[Number(id)]),
 			width: 190,
 			hideable: false,
 			cell: (r) => {

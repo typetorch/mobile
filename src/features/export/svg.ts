@@ -252,15 +252,26 @@ function drawTable(block: Extract<ExportBlock, { kind: "table" }>, x0: number, y
 	const cw = w / Math.max(1, cols.length);
 	const chars = Math.max(3, Math.floor(cw / 6.3));
 	const rowH = 20;
+	// Rows with pictures (ad creatives) are taller: the pictures (16:9) over the text, as many as fit the column.
+	const picH = Math.min(54, Math.floor(((cw - 8) * 9) / 16));
+	const hasPics = (ri: number) => cols.some((_c, i) => (block.images?.[ri]?.[i]?.length ?? 0) > 0);
 	const out: string[] = [];
 	cols.forEach((c, i) => out.push(text(x0 + i * cw + 4, y0 + 14, clip(c, chars), { size: 10, weight: 700, color: INK.muted })));
 	let y = y0 + rowH;
 	out.push(`<line x1="${x0}" x2="${x0 + w}" y1="${y}" y2="${y}" stroke="${INK.grid}"/>`);
 	const rows = block.rows.slice(0, IMAGE_TABLE_ROWS);
 	rows.forEach((r, ri) => {
-		if (ri % 2 === 1) out.push(`<rect x="${x0}" y="${y}" width="${w}" height="${rowH}" fill="#fafafa"/>`);
-		cols.forEach((_c, i) => out.push(text(x0 + i * cw + 4, y + 14, clip(r[i] ?? "", chars), { size: 10 })));
-		y += rowH;
+		const top = hasPics(ri) ? picH + 6 : 0;
+		const h = rowH + top;
+		if (ri % 2 === 1) out.push(`<rect x="${x0}" y="${y}" width="${w}" height="${h}" fill="#fafafa"/>`);
+		cols.forEach((_c, i) => {
+			const urls = block.images?.[ri]?.[i] ?? [];
+			const picW = Math.round((picH * 16) / 9);
+			const fit = Math.max(1, Math.floor((cw - 8 + 3) / (picW + 3)));
+			urls.slice(0, fit).forEach((u, k) => out.push(`<image x="${x0 + i * cw + 4 + k * (picW + 3)}" y="${y + 4}" width="${picW}" height="${picH}" preserveAspectRatio="xMidYMid slice" href="${esc(u)}"/>`));
+			out.push(text(x0 + i * cw + 4, y + top + 14, clip(r[i] ?? "", chars), { size: 10 }));
+		});
+		y += h;
 	});
 	if (block.rows.length > rows.length || block.columns.length > cols.length) {
 		const more = [block.rows.length > rows.length ? `${block.rows.length - rows.length} more rows` : "", block.columns.length > cols.length ? `${block.columns.length - cols.length} more columns` : ""].filter(Boolean).join(", ");

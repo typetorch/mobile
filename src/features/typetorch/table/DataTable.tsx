@@ -220,7 +220,20 @@ export function DataTable<T>({
 		const rows = sorted.map((e) => e.row);
 		const parts = [isFiltered(view) ? `${fmtInt(rows.length)} of ${fmtInt(data.length)} rows (the table's filters${view.search ? `, search "${view.search}"` : ""})` : `${fmtInt(rows.length)} rows`];
 		if (sorting.length) parts.push(`sorted by ${sorting.map((sp) => `${byId.get(sp.id)?.header ?? sp.id}${sp.desc ? " ↓" : " ↑"}`).join(", ")}`);
-		return { kind: "table", title: label ?? around ?? "Table", columns: visibleCols.map((c) => c.header), rows: rows.map((r) => visibleCols.map((c) => c.text(r))), csv: () => toCsv(visibleCols, rows), note: parts.join(" · ") };
+		const pics = (c: (typeof visibleCols)[number], r: T): string[] => {
+			const v = specs.find((s) => s.id === c.id)?.exportImages?.(r);
+			return (Array.isArray(v) ? v : [v]).filter((u): u is string => typeof u === "string" && u.length > 0);
+		};
+		const withImages = visibleCols.some((c) => specs.some((s) => s.id === c.id && s.exportImages));
+		return {
+			kind: "table",
+			title: label ?? around ?? "Table",
+			columns: visibleCols.map((c) => c.header),
+			rows: rows.map((r) => visibleCols.map((c) => c.text(r))),
+			images: withImages ? rows.map((r) => visibleCols.map((c) => pics(c, r))) : undefined,
+			csv: () => toCsv(visibleCols, rows),
+			note: parts.join(" · "),
+		};
 	});
 
 	const [pageIndex, setPageIndex] = useState(0);
