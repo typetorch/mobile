@@ -3,7 +3,9 @@
 One app for all your Roblox experiences. Expo (React Native), Android first. Most of it runs in Expo Go; the widgets, the live watch and push need the APK
 (the local native module `modules/typetorch-live` and Firebase).
 
-Part of TypeTorch. Read `../TypeTorch.md` (hub) and `../plans/07-web-mobile.md` (this repo's plan).
+Part of TypeTorch. Source: [github.com/typetorch/mobile](https://github.com/typetorch/mobile) (public, MIT, like the other
+TypeTorch repos; never commit `google-services.json`, `.env*` or signing keys, they are git-ignored). Read
+`../TypeTorch.md` (hub) and `../plans/07-web-mobile.md` (this repo's plan).
 
 ## What it does
 

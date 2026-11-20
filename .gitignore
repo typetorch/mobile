@@ -31,7 +31,8 @@ yarn-error.*
 *.pem
 
 # local env files
-.env*.local
+.env*
+!.env.example
 
 # typescript
 *.tsbuildinfo
@@ -44,3 +45,6 @@ example
 
 # Firebase (docs/FIREBASE_SETUP.md): EAS builds take it from the GOOGLE_SERVICES_JSON file variable
 google-services.json
+
+# Working notes (TypeTorch.md: CHANGELOGs stay local, as in the other public repos)
+CHANGELOG.md
