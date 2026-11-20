@@ -1,7 +1,8 @@
 /**
  * Retention (web pages/Retention.tsx + pages/RetentionLtv.tsx): two tabs over the same join-day cohorts (`view`):
  *   - Players back (query `retention`, days 1-30): the share of each cohort that played again exactly N days after
- *     joining; today (UTC) so far in orange (it can only go up until midnight UTC, and isn't in the average).
+ *     joining; today (UTC) so far in orange (it can only go up until midnight UTC, and isn't in the average). Tapping an
+ *     orange cell switches them all to the prediction for midnight UTC (gray, "~"), with how it was made under the table.
  *   - Revenue (LTV) (query `ltv`, D0/D1/D3/D7/D14/D30): what the cohort spent from its join day through that day, per new
  *     player (creator revenue after Roblox's cut, or Robux paid) or the share who had paid (`ltv` param).
  * "Explain the D1 change" opens the Explain panel (`explain=d1`).
@@ -9,7 +10,7 @@
 import { useMemo, useState } from "react";
 import { Pressable, View } from "react-native";
 
-import type { LtvCell, LtvResult, RetentionResult } from "@/api/tt/types";
+import type { LtvCell, LtvResult, RetentionForecast, RetentionResult } from "@/api/tt/types";
 import { Button, KV, Segmented, Txt } from "@/components/ui";
 import { Picker } from "@/features/typetorch/analytics-bits";
 import { Note, Panel, QueryState } from "@/features/typetorch/bits";
@@ -40,13 +41,16 @@ const alphaHex = (alpha: number) =>
 		.toString(16)
 		.padStart(2, "0");
 
-/** A heat cell: blue, darker = more; the day in progress orange with a dashed border; "–" when there's nothing yet. */
-function HeatBox({ text, share, partial }: { text: string | null; share: number; partial?: boolean }) {
+/**
+ * A heat cell: blue, darker = more; the day in progress orange with a dashed border (gray when it shows the prediction
+ * for midnight); "–" when there's nothing yet. With `onPress` the cell is a button.
+ */
+function HeatBox({ text, share, partial, predicted, onPress }: { text: string | null; share: number; partial?: boolean; predicted?: boolean; onPress?: () => void }) {
 	const p = useTheme();
 	if (text === null) return <Txt variant="small">–</Txt>;
 	const alpha = partial ? 0.1 + Math.min(1, share) * 0.8 : 0.08 + Math.min(1, share) * 0.82;
-	const color = partial ? p.serious : p.chart[0];
-	return (
+	const color = partial ? (predicted ? p.mutedForeground : p.serious) : p.chart[0];
+	const box = (
 		<View
 			style={{
 				backgroundColor: `${color}${alphaHex(alpha)}`,
@@ -62,6 +66,18 @@ function HeatBox({ text, share, partial }: { text: string | null; share: number;
 				{text}
 			</Txt>
 		</View>
+	);
+	if (!onPress) return box;
+	return (
+		<Pressable
+			onPress={onPress}
+			accessibilityRole="button"
+			accessibilityState={{ selected: !!predicted }}
+			accessibilityHint={predicted ? "Shows today so far" : "Shows the prediction for midnight UTC"}
+			hitSlop={4}
+		>
+			{box}
+		</Pressable>
 	);
 }
 
@@ -103,7 +119,15 @@ interface CohortRow {
 	kept?: Record<string, number | null>;
 	partial?: Record<string, number>;
 	partialKept?: Record<string, number>;
+	forecast?: Record<string, number>;
+	forecastKept?: Record<string, number>;
 }
+
+/** How the prediction was made, in plain words. */
+const forecastHow = (how: RetentionForecast) =>
+	how.method === "history"
+		? `on the last ${how.lookbackDays} days, ${Math.round(how.arrived * 100)}% of returners were back by this time of day`
+		: "scaled by the share of the day over (too little history for the time-of-day pattern)";
 
 const heatText = (rate: number | null, kept?: number | null) => (rate === null ? "" : `${retentionPct(rate)}${kept !== undefined && kept !== null ? ` (${kept})` : ""}`);
 
@@ -119,6 +143,8 @@ function PlayersBack({ backendId }: { backendId: string }) {
 function PlayersBody({ data }: { data: RetentionResult }) {
 	const total = data.cohorts.reduce((s, c) => s + c.size, 0);
 	const elapsed = data.todayElapsed ?? 0;
+	const how = data.forecast;
+	const [predicted, setPredicted] = useState(false);
 	const columns = useMemo<DataColumn<CohortRow>[]>(
 		() => [
 			{ id: "joined", header: "Joined (UTC)", width: 100, type: "date", accessor: (r) => (r.average ? null : r.date), cell: (r) => (r.average ? "Weighted average" : r.date), format: (_v, r) => (r.average ? "Weighted average" : r.date) },
@@ -138,17 +164,28 @@ function PlayersBody({ data }: { data: RetentionResult }) {
 					cell: (r) => {
 						const rate = r.rates[d] ?? null;
 						const partial = r.partial?.[d];
-						if (rate === null && partial !== undefined) return <HeatBox text={heatText(partial, r.partialKept?.[d] ?? 0)} share={partial} partial />;
+						if (rate === null && partial !== undefined) {
+							const f = how ? r.forecast?.[d] : undefined;
+							if (f === undefined) return <HeatBox text={heatText(partial, r.partialKept?.[d] ?? 0)} share={partial} partial />;
+							const toggle = () => setPredicted((v) => !v);
+							return predicted ? (
+								<HeatBox text={`~${heatText(f, r.forecastKept?.[d] ?? 0)}`} share={f} partial predicted onPress={toggle} />
+							) : (
+								<HeatBox text={heatText(partial, r.partialKept?.[d] ?? 0)} share={partial} partial onPress={toggle} />
+							);
+						}
 						return <HeatBox text={rate === null ? null : heatText(rate, r.kept?.[d])} share={rate ?? 0} />;
 					},
 					format: (_v, r) => {
 						const partial = r.partial?.[d];
-						return partial !== undefined && (r.rates[d] ?? null) === null ? `${heatText(partial, r.partialKept?.[d] ?? 0)} so far` : heatText(r.rates[d] ?? null, r.kept?.[d]);
+						if (partial === undefined || (r.rates[d] ?? null) !== null) return heatText(r.rates[d] ?? null, r.kept?.[d]);
+						const f = how ? r.forecast?.[d] : undefined;
+						return `${heatText(partial, r.partialKept?.[d] ?? 0)} so far${f !== undefined ? `, ~${heatText(f, r.forecastKept?.[d] ?? 0)} predicted` : ""}`;
 					},
 				}),
 			),
 		],
-		[data.days],
+		[data.days, how, predicted],
 	);
 	const rows = useMemo<CohortRow[]>(
 		() =>
@@ -159,17 +196,36 @@ function PlayersBody({ data }: { data: RetentionResult }) {
 				kept: c.keptPlayers,
 				...(c.partial ? { partial: c.partial } : {}),
 				...(c.partialPlayers ? { partialKept: c.partialPlayers } : {}),
+				...(c.forecast ? { forecast: c.forecast } : {}),
+				...(c.forecastPlayers ? { forecastKept: c.forecastPlayers } : {}),
 			})),
 		[data.cohorts],
+	);
+	// The in-progress cells in words (the phone has no hover): so far, and the prediction for midnight.
+	const inProgress = useMemo(
+		() =>
+			data.cohorts
+				.flatMap((c) => Object.entries(c.partial ?? {}).map(([d, rate]) => ({ c, d, rate })))
+				.sort((a, b) => Number(a.d) - Number(b.d))
+				.map(({ c, d, rate }) => {
+					const kept = c.partialPlayers?.[d] ?? 0;
+					const f = how ? c.forecast?.[d] : undefined;
+					const soFar = `D${d} of ${c.date}: ${plural(kept, "player")} back so far (${retentionPct(rate)})`;
+					return f === undefined ? `${soFar}.` : `${soFar}, predicted ~${retentionPct(f)} (${plural(c.forecastPlayers?.[d] ?? 0, "player")}) by midnight UTC.`;
+				}),
+		[data.cohorts, how],
 	);
 	const average = useMemo<CohortRow[]>(() => [{ date: "", size: total, average: true, rates: data.average }], [data.average, total]);
 	return (
 		<Panel
 			title="Cohorts by join day"
-			note={`${plural(data.cohorts.length, "cohort")}, ${plural(total, "new player")}. A cell = share of the cohort that played again exactly that many days after joining (players in brackets). Orange = today (UTC), so far (${elapsedText(elapsed)}); it can still go up and isn't in the average.`}
+			note={`${plural(data.cohorts.length, "cohort")}, ${plural(total, "new player")}. A cell = share of the cohort that played again exactly that many days after joining (players in brackets). Orange = today (UTC), so far (${elapsedText(elapsed)}); it can still go up and isn't in the average.${how ? " Tap an orange cell for the prediction at midnight UTC (gray, ~); tap again for so far." : ""}`}
 		>
 			<DataTable id="retention-cohorts" label="Cohorts by join day" columns={columns} data={rows} rowId={(r) => r.date} pinnedRows={average} defaultSort={[{ id: "joined", desc: true }]} />
 			<Txt variant="small">Swipe the table sideways for later days.</Txt>
+			{inProgress.length > 0 ? (
+				<Note>{`In progress, ${elapsedText(elapsed)} (UTC) over:\n${inProgress.slice(0, 3).join("\n")}${inProgress.length > 3 ? `\n+${inProgress.length - 3} more` : ""}${how ? `\nPrediction: ${forecastHow(how)}.` : ""}`}</Note>
+			) : null}
 		</Panel>
 	);
 }

@@ -103,6 +103,18 @@ export interface RetentionCohort {
 	/** The day in progress (today, UTC), so far. Only that offset (newer servers). */
 	partial?: Record<string, number>;
 	partialPlayers?: Record<string, number>;
+	/** The day in progress, predicted at midnight UTC (same offsets as `partial`; newer servers). */
+	forecast?: Record<string, number>;
+	forecastPlayers?: Record<string, number>;
+}
+
+/** How the in-progress cells are predicted: by when returners came back on the last complete days, or linearly. */
+export interface RetentionForecast {
+	method: "history" | "linear";
+	/** The share of a day's returners back by this time of day (UTC), 0-1. */
+	arrived: number;
+	samples: number;
+	lookbackDays: number;
 }
 
 export interface RetentionResult {
@@ -113,6 +125,8 @@ export interface RetentionResult {
 	/** How much of today (UTC) is over, 0-1 (newer servers). */
 	todayElapsed?: number;
 	average: Record<string, number | null>;
+	/** Newer servers. */
+	forecast?: RetentionForecast;
 }
 
 export interface FunnelStep {
