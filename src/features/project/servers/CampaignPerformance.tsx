@@ -12,6 +12,7 @@ import { Switch, View } from "react-native";
 import type { OpenCloud } from "@/api/opencloud";
 import { LineChart } from "@/charts/LineChart";
 import { Badge, Chips, confirm, notify, Section, Stat, StatGrid, Txt } from "@/components/ui";
+import { useExportLines } from "@/features/export/context";
 import { DataTable, type DataColumn } from "@/features/typetorch/table";
 import { useTheme } from "@/theme";
 
@@ -43,6 +44,7 @@ export function CampaignPerformance({ c, cloud, universeId, canWrite }: { c: Cam
 	const [chart, setChart] = useState<ChartKey>("impressions");
 	const target = Number(c.targetUniverseId) || universeId;
 	const report = useAdReport(target, days, c.id);
+	useExportLines(() => [`Campaign: ${c.name} (id ${c.id})`, `Numbers: last ${AD_RANGES.find((r) => r.value === days)?.label} (whole UTC hours)`]);
 	const ads = useQuery({ queryKey: ["oc", "ads", "campaign", c.id, "ads"], queryFn: () => listCampaignAds(cloud, c.id), retry: false, staleTime: 60_000 });
 	const groupId = c.creator?.groupId && /^\d+$/.test(c.creator.groupId) ? Number(c.creator.groupId) : undefined;
 	const saved = useQuery({
@@ -94,6 +96,7 @@ export function CampaignPerformance({ c, cloud, universeId, canWrite }: { c: Cam
 				id: "on",
 				header: "Off/on",
 				accessor: (r) => r.ad.status === "ACTIVE",
+				format: (v) => (v ? "On" : "Off"),
 				type: "boolean",
 				width: 72,
 				cell: (r) =>

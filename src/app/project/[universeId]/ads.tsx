@@ -23,6 +23,7 @@ import { AD_RANGES, cpc, ctr, useAdReport, type AdRange } from "@/features/proje
 import { DeliveryBadge, label } from "@/features/project/servers/ads-shared";
 import { CampaignCreate } from "@/features/project/servers/CampaignCreate";
 import { CampaignDetail } from "@/features/project/servers/CampaignDetail";
+import { useExportLines } from "@/features/export/context";
 import { DataTable, type DataColumn } from "@/features/typetorch/table";
 import { useTheme } from "@/theme";
 import { CreativeStrip, CtrNote, ThumbStatLine, useCreativeImages, useCreativeThumbnailStats } from "@/features/project/servers/creative-stats";
@@ -36,6 +37,7 @@ export default function AdsScreen() {
 	return (
 		<ToolScreen
 			title={campaign ? "Campaign" : create ? "New campaign" : "Ads"}
+			exportAs={campaign ? "Ad campaign" : create ? undefined : "Ads"}
 			scopes={["ad.campaign:read"]}
 			onRefresh={() => queryClient.refetchQueries({ queryKey: ["oc", "ads"], type: "active" })}
 		>
@@ -113,6 +115,10 @@ function Campaigns({ universeId, cloud, canWrite }: { universeId: number; cloud:
 		),
 	);
 	const thumbStats = useCreativeThumbnailStats(universeId, ownCreatives);
+	useExportLines(() => [
+		`Campaigns: ${account === "experience" ? "this experience" : account === "group" ? "the group's ads account" : "my ads account"}, ${ended === "all" ? "all" : ended === "running" ? "not ended" : "ended in the last 90 days"}`,
+		`Numbers: last ${AD_RANGES.find((r) => r.value === days)?.label} (whole UTC hours)`,
+	]);
 	const statFor = (assetId: string) => (ownCreatives.includes(assetId) ? thumbStats.byAsset.get(assetId) : undefined);
 
 	return (
@@ -291,6 +297,7 @@ function CampaignTable({
 			type: "boolean",
 			width: 72,
 			accessor: (r) => r.status === "ACTIVE",
+			format: (v) => (v ? "On" : "Off"),
 			cell: (r) =>
 				r.status === "CANCELLED" ? (
 					<Txt variant="small">cancelled</Txt>
